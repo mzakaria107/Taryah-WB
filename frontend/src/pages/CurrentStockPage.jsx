@@ -16,8 +16,13 @@ const COL_ITEM      = 'Item';
 const COL_QTY       = 'Ending Inv Qty On-hand';
 
 /* ── Helpers ──────────────────────────────────────────────── */
+function cleanNum(v) {
+  // Strip leading = (Excel formula artifact from NetSuite HTML export)
+  return String(v ?? '').replace(/^=/, '').replace(/,/g, '');
+}
+
 function fmtNum(v) {
-  const n = parseFloat(String(v ?? '').replace(/,/g, ''));
+  const n = parseFloat(cleanNum(v));
   if (isNaN(n)) return v || '—';
   return n.toLocaleString('en-SA', { maximumFractionDigits: 2 });
 }
@@ -136,7 +141,7 @@ function StockMatrix({ rows, typeFilter, locFilter, search, typeCol, locCol, ite
       const type   = r[typeCol] || '(بدون نوع)';
       const item   = r[itemCol] || '—';
       const region = getRegion(r[locCol]);
-      const qty    = parseFloat(String(r[qtyCol] || '0').replace(/,/g, '')) || 0;
+      const qty    = parseFloat(cleanNum(r[qtyCol] || '0')) || 0;
 
       if (!typeMap.has(type)) {
         typeMap.set(type, { locTotals: new Map(), items: new Map() });

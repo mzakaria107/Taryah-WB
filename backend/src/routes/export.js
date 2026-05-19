@@ -120,7 +120,7 @@ router.get('/excel', tokenFromQuery, verifyToken, applyRegionFilter, async (req,
          COALESCE(n.note_text,'')        AS "ملاحظات الفاتورة"
        FROM invoices i
        LEFT JOIN regions r ON r.id = i.region_id
-       LEFT JOIN (SELECT invoice_id, note_text FROM notes WHERE note_type = 'invoice' OR note_type IS NULL) n
+       LEFT JOIN (SELECT invoice_id, note_text FROM notes) n
          ON n.invoice_id = i.id
        ${joinedWhere}
        ORDER BY i.customer_id, i.invoice_date DESC

@@ -54,7 +54,7 @@ router.get('/supervisors', verifyToken, async (req, res) => {
               s.region_id, r.name_ar AS region_name_ar, r.name_en AS region_name_en
        FROM sales_supervisors s
        LEFT JOIN regions r ON r.id = s.region_id
-       WHERE 1=1 ${rw.sql.replace('$1', `$${rw.nextP === 1 ? 1 : 1}`)}
+       WHERE 1=1 ${rw.sql}
        ORDER BY r.name_ar, s.name`,
       rw.vals
     );

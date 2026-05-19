@@ -302,7 +302,7 @@ router.put('/invoice/:invoiceId', verifyToken, async (req, res) => {
     const { rows } = await client.query(
       `INSERT INTO notes (id, invoice_id, user_id, note_text, note_type, updated_at)
        VALUES ($1, $2, $3, $4, 'invoice', NOW())
-       ON CONFLICT (invoice_id) WHERE invoice_id IS NOT NULL
+       ON CONFLICT (invoice_id)
        DO UPDATE SET note_text=$4, user_id=$3, updated_at=NOW()
        RETURNING *`,
       [uuidv4(), invoiceId, req.user.id, note_text]
@@ -418,7 +418,7 @@ router.put('/:invoiceId', verifyToken, async (req, res) => {
     const { rows } = await client.query(
       `INSERT INTO notes (id, invoice_id, user_id, note_text, note_type, updated_at)
        VALUES ($1, $2, $3, $4, 'invoice', NOW())
-       ON CONFLICT (invoice_id) WHERE invoice_id IS NOT NULL
+       ON CONFLICT (invoice_id)
        DO UPDATE SET note_text=$4, user_id=$3, updated_at=NOW()
        RETURNING *`,
       [uuidv4(), invoiceId, req.user.id, note_text]

@@ -579,7 +579,7 @@ router.get('/sales-report', async (req, res) => {
   /* ── HAVING: trading filter ── */
   let havingClause = '';
   if (trading === 'active')   havingClause = 'HAVING COALESCE(MAX(sa.total_qty), 0) > 0';
-  if (trading === 'inactive') havingClause = 'HAVING COALESCE(MAX(sa.total_qty), 0) = 0';
+  if (trading === 'inactive') havingClause = 'HAVING COALESCE(MAX(sa.total_qty), 0) <= 0';
 
   try {
     const { rows } = await pool.query(

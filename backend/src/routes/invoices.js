@@ -619,7 +619,7 @@ router.get('/customer/:customerId', verifyToken, applyRegionFilter, async (req, 
       `SELECT i.*, r.name_ar AS region_name_ar, n.note_text
        FROM invoices i
        LEFT JOIN regions r ON r.id = i.region_id
-       LEFT JOIN (SELECT invoice_id, note_text FROM notes WHERE note_type = 'invoice' OR note_type IS NULL) n
+       LEFT JOIN (SELECT invoice_id, note_text FROM notes) n
          ON n.invoice_id = i.id
        ${joinedWhere}
        ORDER BY i.invoice_date DESC`,

@@ -10,15 +10,21 @@ import client from '../api/client';
 import './CurrentStockPage.css';
 
 /* ── Column names (exact from NetSuite) ───────────────────── */
-const COL_LOC       = 'Location';
-const COL_TYPE      = 'Item Type';
-const COL_ITEM      = 'Item';
-const COL_QTY       = 'Ending Inv Qty On-hand';
+const COL_LOC  = 'Location';
+const COL_TYPE = 'Item Type';
+const COL_ITEM = 'Item';
+const COL_QTY  = 'Ending Inv Qty On-hand';
 
 /* ── Helpers ──────────────────────────────────────────────── */
+/** Strip leading = sign (NetSuite HTML export uses Excel formula syntax) */
 function cleanNum(v) {
-  // Strip leading = (Excel formula artifact from NetSuite HTML export)
-  return String(v ?? '').replace(/^=/, '').replace(/,/g, '');
+  return String(v ?? '').replace(/^=/, '').replace(/,/g, '').trim();
+}
+
+function parseQty(v) {
+  if (v === null || v === undefined || v === '') return null;
+  const n = parseFloat(cleanNum(v));
+  return isNaN(n) ? null : n;
 }
 
 function fmtNum(v) {
@@ -28,7 +34,7 @@ function fmtNum(v) {
 }
 
 function fmtQty(v) {
-  if (v === null || v === undefined || v === 0) return null;
+  if (v === null || v === undefined) return null;
   return Number(v).toLocaleString('en-SA', { maximumFractionDigits: 1 });
 }
 
@@ -43,45 +49,43 @@ function fmtTime(ts) {
 function isNumericCol(rows, key) {
   const samples = rows.slice(0, 30).map(r => r[key]).filter(v => v && v !== '');
   if (samples.length < 2) return false;
-  return samples.filter(v => /^[\d,.\-+ ]+$/.test(String(v))).length >= samples.length * 0.8;
+  // Allow leading = (NetSuite formula prefix)
+  return samples.filter(v => /^=?[\d,.\-+ ]+$/.test(String(v))).length >= samples.length * 0.8;
 }
 
-/* Extract region name: "المقر الرئيسي:الرياض:شقرا - المخزن" → "الرياض" */
+/* Extract region: "المقر الرئيسي:الرياض:شقرا - المخزن" → "الرياض" */
 function getRegion(loc) {
-  if (!loc) return '—';
+  if (!loc) return null;
   const parts = loc.split(':').map(s => s.trim()).filter(Boolean);
   return parts[1] || parts[0] || loc;
 }
 
 function detectTypeCol(headers) {
-  const kw = ['item type', 'نوع', 'type', 'category', 'صنف', 'تصنيف'];
   return (
     headers.find(h => h.toLowerCase() === 'item type') ||
-    headers.find(h => kw.some(k => h.toLowerCase().includes(k))) ||
+    headers.find(h => ['نوع', 'type', 'category', 'تصنيف'].some(k => h.toLowerCase().includes(k))) ||
     headers[1] || ''
   );
 }
 function detectLocCol(headers) {
-  const kw = ['location', 'موقع', 'فرع', 'مقر', 'الوحدة', 'subsidiary'];
   return (
     headers.find(h => h.toLowerCase() === 'location') ||
-    headers.find(h => kw.some(k => h.toLowerCase().includes(k))) ||
+    headers.find(h => ['موقع', 'فرع', 'مقر', 'subsidiary'].some(k => h.toLowerCase().includes(k))) ||
     headers[0] || ''
   );
 }
 function detectItemCol(headers) {
-  const kw = ['item', 'صنف', 'اسم الصنف', 'product'];
   return (
     headers.find(h => h.toLowerCase() === 'item') ||
-    headers.find(h => kw.some(k => h.toLowerCase().includes(k) && !h.toLowerCase().includes('type'))) ||
+    headers.find(h => ['item', 'صنف', 'product'].some(k =>
+      h.toLowerCase().includes(k) && !h.toLowerCase().includes('type'))) ||
     headers[2] || ''
   );
 }
 function detectQtyCol(headers) {
-  const kw = ['ending inv', 'qty on-hand', 'on hand', 'كمية', 'مخزون'];
   return (
     headers.find(h => h.toLowerCase().includes('ending inv')) ||
-    headers.find(h => kw.some(k => h.toLowerCase().includes(k))) ||
+    headers.find(h => ['qty on-hand', 'on hand', 'كمية', 'مخزون'].some(k => h.toLowerCase().includes(k))) ||
     ''
   );
 }
@@ -112,89 +116,129 @@ function Skeleton({ cols = 7, rows = 12 }) {
    Columns = Region names (extracted from Location)
    Cells   = SUM of Ending Inv Qty On-hand
    ══════════════════════════════════════════════════════════ */
-function StockMatrix({ rows, typeFilter, locFilter, search, typeCol, locCol, itemCol, qtyCol }) {
-  const [expanded,   setExpanded]   = useState(new Set());
-  const [sortCol,    setSortCol]    = useState('__total__');
-  const [sortDir,    setSortDir]    = useState('desc');
+function StockMatrix({ rows, locFilter, search, typeCol, locCol, itemCol, qtyCol }) {
+  const [expanded,     setExpanded]     = useState(new Set());
+  const [sortCol,      setSortCol]      = useState('__total__');
+  const [sortDir,      setSortDir]      = useState('desc');
+  /* null = all types visible; Set = only these types are checked */
+  const [checkedTypes, setCheckedTypes] = useState(null);
+
+  /* ── All item types available in the unfiltered rows ── */
+  const allTypes = useMemo(() =>
+    [...new Set(rows.map(r => r[typeCol]).filter(Boolean))].sort()
+  , [rows, typeCol]);
+
+  /* ── Effective checked set (null → all) ── */
+  const activeTypes = checkedTypes === null ? new Set(allTypes) : checkedTypes;
+
+  /* ── Toggle helpers ── */
+  const toggleType = type =>
+    setCheckedTypes(prev => {
+      const cur = prev === null ? new Set(allTypes) : new Set(prev);
+      cur.has(type) ? cur.delete(type) : cur.add(type);
+      return cur.size === allTypes.length ? null : cur; // null = all = same as reset
+    });
+
+  const selectAll  = () => setCheckedTypes(null);
+  const clearAll   = () => setCheckedTypes(new Set());
 
   /* ── Build matrix data ── */
   const { regions, typeMap, grandByRegion, grandTotal, maxTypeTotal } = useMemo(() => {
-    // Apply same filters as table view
     const q = search?.toLowerCase() || '';
     let filtered = rows;
-    if (typeFilter) filtered = filtered.filter(r => r[typeCol] === typeFilter);
-    if (locFilter)  filtered = filtered.filter(r => r[locCol]  === locFilter);
+
+    // Apply page-level location filter
+    if (locFilter) filtered = filtered.filter(r => r[locCol] === locFilter);
+
+    // Apply matrix-level type filter (multi-select chips)
+    if (checkedTypes !== null && checkedTypes.size > 0) {
+      filtered = filtered.filter(r => checkedTypes.has(r[typeCol]));
+    } else if (checkedTypes !== null && checkedTypes.size === 0) {
+      filtered = [];
+    }
+
+    // Apply search
     if (q) filtered = filtered.filter(r =>
       Object.values(r).some(v => String(v ?? '').toLowerCase().includes(q))
     );
 
-    // Collect unique regions
+    /* Collect unique regions */
     const regionSet = new Set();
-    filtered.forEach(r => regionSet.add(getRegion(r[locCol])));
-    const regions = [...regionSet].filter(r => r && r !== '—').sort();
+    filtered.forEach(r => {
+      const reg = getRegion(r[locCol]);
+      if (reg) regionSet.add(reg);
+    });
+    const regions = [...regionSet].sort();
 
-    // typeMap: type → { locTotals: Map<region, qty>, items: Map<item, Map<region, qty>> }
-    const typeMap = new Map();
-    let maxTypeTotal = 1;
+    /*
+     * typeMap: type → {
+     *   locTotals : Map<region, number>   (totals per region for this type)
+     *   items     : Map<item,   Map<region, number>>
+     * }
+     */
+    const typeMap     = new Map();
+    let   maxTypeTotal = 1;
 
     filtered.forEach(r => {
       const type   = r[typeCol] || '(بدون نوع)';
       const item   = r[itemCol] || '—';
       const region = getRegion(r[locCol]);
-      const qty    = parseFloat(cleanNum(r[qtyCol] || '0')) || 0;
+      if (!region) return;
+
+      // Parse qty — use parseQty so we keep null vs 0 distinction
+      const rawQty = parseQty(r[qtyCol]);
+      const qty    = rawQty ?? 0;   // treat null as 0 for aggregation
 
       if (!typeMap.has(type)) {
         typeMap.set(type, { locTotals: new Map(), items: new Map() });
       }
       const td = typeMap.get(type);
 
-      // Type-level totals
-      td.locTotals.set(region, (td.locTotals.get(region) || 0) + qty);
+      /* Type totals */
+      td.locTotals.set(region, (td.locTotals.get(region) ?? 0) + qty);
 
-      // Item-level totals
+      /* Item totals */
       if (!td.items.has(item)) td.items.set(item, new Map());
       const im = td.items.get(item);
-      im.set(region, (im.get(region) || 0) + qty);
+      im.set(region, (im.get(region) ?? 0) + qty);
     });
 
-    // Grand totals per region
+    /* Grand totals */
     const grandByRegion = new Map();
     let grandTotal = 0;
     typeMap.forEach(td => {
       td.locTotals.forEach((qty, reg) => {
-        grandByRegion.set(reg, (grandByRegion.get(reg) || 0) + qty);
+        grandByRegion.set(reg, (grandByRegion.get(reg) ?? 0) + qty);
         grandTotal += qty;
       });
-      // Track max type total for heat coloring
       const tt = [...td.locTotals.values()].reduce((a, b) => a + b, 0);
       if (tt > maxTypeTotal) maxTypeTotal = tt;
     });
 
     return { regions, typeMap, grandByRegion, grandTotal, maxTypeTotal };
-  }, [rows, typeFilter, locFilter, search]);
+  }, [rows, locFilter, search, checkedTypes, typeCol, locCol, itemCol, qtyCol]);
 
-  /* ── Sorted types ── */
+  /* ── Sorted type rows ── */
   const sortedTypes = useMemo(() => {
     const entries = [...typeMap.entries()];
-    return entries.sort(([aT, aD], [bT, bD]) => {
+    return entries.sort(([, aD], [, bD]) => {
       if (sortCol === '__total__') {
-        const aSum = [...aD.locTotals.values()].reduce((s, v) => s + v, 0);
-        const bSum = [...bD.locTotals.values()].reduce((s, v) => s + v, 0);
-        return sortDir === 'desc' ? bSum - aSum : aSum - bSum;
+        const aS = [...aD.locTotals.values()].reduce((s, v) => s + v, 0);
+        const bS = [...bD.locTotals.values()].reduce((s, v) => s + v, 0);
+        return sortDir === 'desc' ? bS - aS : aS - bS;
       }
-      const aV = aD.locTotals.get(sortCol) || 0;
-      const bV = bD.locTotals.get(sortCol) || 0;
+      const aV = aD.locTotals.get(sortCol) ?? 0;
+      const bV = bD.locTotals.get(sortCol) ?? 0;
       return sortDir === 'desc' ? bV - aV : aV - bV;
     });
   }, [typeMap, sortCol, sortDir]);
 
-  /* ── Expand/collapse ── */
-  const toggleType = type =>
-    setExpanded(prev => {
-      const n = new Set(prev);
-      n.has(type) ? n.delete(type) : n.add(type);
-      return n;
-    });
+  /* ── Expand/collapse rows ── */
+  const toggleRow    = type => setExpanded(prev => {
+    const n = new Set(prev);
+    n.has(type) ? n.delete(type) : n.add(type);
+    return n;
+  });
   const expandAll   = () => setExpanded(new Set(typeMap.keys()));
   const collapseAll = () => setExpanded(new Set());
 
@@ -209,26 +253,88 @@ function StockMatrix({ rows, typeFilter, locFilter, search, typeCol, locCol, ite
     if (!qty || qty <= 0) return {};
     const ratio   = Math.min(qty / (max || 1), 1);
     const opacity = 0.06 + ratio * 0.55;
-    return { background: `rgba(46,125,50,${opacity.toFixed(2)})`,
-             color: ratio > 0.6 ? '#fff' : ratio > 0.3 ? '#1b5e20' : 'inherit' };
+    return {
+      background: `rgba(46,125,50,${opacity.toFixed(2)})`,
+      color: ratio > 0.6 ? '#fff' : ratio > 0.3 ? '#1b5e20' : 'inherit',
+    };
   };
 
-  if (!regions.length) return (
-    <div className="csp-empty" style={{ padding: '40px 0' }}>
-      <Warehouse size={36} />
-      <p>لا توجد بيانات للمصفوفة</p>
-    </div>
+  /* ── Cell value renderer
+       hasEntry = type/item exists in that region (even if qty=0)
+       !hasEntry = region simply has no record for this type/item → show —
+  ── */
+  const cellVal = (map, reg, max, small = false) => {
+    if (!map.has(reg)) return <span className="csp-mx-dash">—</span>;
+    const qty = map.get(reg);
+    if (qty === 0) return <span className="csp-mx-zero">0</span>;
+    const style = small ? heatBg(qty, max) : {};
+    return <span style={style}>{fmtQty(qty)}</span>;
+  };
+
+  const SortIcon = ({ col }) => (
+    sortCol !== col
+      ? <span className="csp-mx-sort-icon">⇅</span>
+      : <span className="csp-mx-sort-icon active">{sortDir === 'desc' ? '↓' : '↑'}</span>
   );
 
-  const SortIcon = ({ col }) => {
-    if (sortCol !== col) return <span className="csp-mx-sort-icon">⇅</span>;
-    return <span className="csp-mx-sort-icon active">{sortDir === 'desc' ? '↓' : '↑'}</span>;
-  };
-
+  /* ═══════════════════════ RENDER ═══════════════════════════ */
   return (
     <div className="csp-matrix-section">
 
-      {/* ── Matrix toolbar ── */}
+      {/* ── Item Type multi-select chips ─────────────────── */}
+      {allTypes.length > 0 && (
+        <div className="csp-mx-type-filter">
+          <span className="csp-mx-type-filter-label">نوع الصنف:</span>
+
+          {/* الكل */}
+          <button
+            className={`csp-mx-type-chip csp-mx-type-chip-all${checkedTypes === null ? ' active' : ''}`}
+            onClick={selectAll}
+            title="عرض جميع الأنواع"
+          >
+            الكل
+            <span className="csp-mx-type-chip-count">{allTypes.length}</span>
+          </button>
+
+          {/* لا شيء */}
+          <button
+            className={`csp-mx-type-chip csp-mx-type-chip-none${checkedTypes !== null && checkedTypes.size === 0 ? ' active-none' : ''}`}
+            onClick={clearAll}
+            title="إلغاء تحديد الكل"
+          >
+            لا شيء
+          </button>
+
+          <span className="csp-mx-type-filter-sep" />
+
+          {allTypes.map(type => {
+            const isActive = activeTypes.has(type);
+            return (
+              <button
+                key={type}
+                className={`csp-mx-type-chip${isActive ? ' active' : ' inactive'}`}
+                onClick={() => toggleType(type)}
+                title={isActive ? `استثناء: ${type}` : `إضافة: ${type}`}
+              >
+                {!isActive && <X size={10} style={{ opacity: 0.6 }} />}
+                {type}
+              </button>
+            );
+          })}
+
+          {/* Show active count hint */}
+          {checkedTypes !== null && (
+            <span className="csp-mx-type-filter-hint">
+              {checkedTypes.size === 0
+                ? 'لا شيء محدد'
+                : `${checkedTypes.size} من ${allTypes.length} نوع`
+              }
+            </span>
+          )}
+        </div>
+      )}
+
+      {/* ── Matrix toolbar ─────────────────────────────── */}
       <div className="csp-matrix-bar">
         <div className="csp-matrix-bar-right">
           <span className="csp-matrix-title">
@@ -239,141 +345,160 @@ function StockMatrix({ rows, typeFilter, locFilter, search, typeCol, locCol, ite
           </span>
           {(!typeCol || !locCol || !qtyCol) && (
             <span style={{ fontSize: 10, color: '#c00', fontWeight: 700 }}>
-              ⚠ أعمدة غير مكتشفة: نوع="{typeCol}" موقع="{locCol}" كمية="{qtyCol}"
+              ⚠ أعمدة: نوع="{typeCol}" موقع="{locCol}" كمية="{qtyCol}"
             </span>
           )}
         </div>
         <div className="csp-matrix-bar-left">
-          <button className="csp-mx-ctrl" onClick={expandAll}   title="توسيع جميع الأنواع">
+          <button className="csp-mx-ctrl" onClick={expandAll}>
             <ChevronsDown size={14} /> توسيع الكل
           </button>
-          <button className="csp-mx-ctrl" onClick={collapseAll} title="طي جميع الأنواع">
+          <button className="csp-mx-ctrl" onClick={collapseAll}>
             <ChevronsUp size={14} /> طي الكل
           </button>
         </div>
       </div>
 
-      {/* ── Matrix table ── */}
-      <div className="csp-matrix-wrap">
-        <table className="csp-matrix-table">
+      {/* ── Empty state ─────────────────────────────────── */}
+      {(!regions.length || !typeMap.size) && (
+        <div className="csp-empty" style={{ padding: '40px 0' }}>
+          <Warehouse size={36} />
+          <p>
+            {checkedTypes !== null && checkedTypes.size === 0
+              ? 'لم يتم تحديد أي نوع — اختر نوعاً واحداً على الأقل'
+              : 'لا توجد بيانات للمصفوفة'
+            }
+          </p>
+        </div>
+      )}
 
-          <thead>
-            <tr>
-              <th className="csp-mx-th-label">النوع / الصنف</th>
-              <th
-                className={`csp-mx-th-total${sortCol === '__total__' ? ' sorted' : ''}`}
-                onClick={() => handleColSort('__total__')}
-              >
-                الإجمالي <SortIcon col="__total__" />
-              </th>
-              {regions.map(reg => (
+      {/* ── Matrix table ────────────────────────────────── */}
+      {regions.length > 0 && typeMap.size > 0 && (
+        <div className="csp-matrix-wrap">
+          <table className="csp-matrix-table">
+
+            <thead>
+              <tr>
+                <th className="csp-mx-th-label">النوع / الصنف</th>
                 <th
-                  key={reg}
-                  className={`csp-mx-th-reg${sortCol === reg ? ' sorted' : ''}`}
-                  onClick={() => handleColSort(reg)}
-                  title={reg}
+                  className={`csp-mx-th-total${sortCol === '__total__' ? ' sorted' : ''}`}
+                  onClick={() => handleColSort('__total__')}
                 >
-                  <span className="csp-mx-reg-name">{reg}</span>
-                  <SortIcon col={reg} />
+                  الإجمالي <SortIcon col="__total__" />
                 </th>
-              ))}
-            </tr>
-          </thead>
-
-          <tbody>
-            {sortedTypes.map(([type, td]) => {
-              const isOpen    = expanded.has(type);
-              const typeTotal = [...td.locTotals.values()].reduce((a, b) => a + b, 0);
-
-              // Sort items by total descending
-              const sortedItems = [...td.items.entries()].sort(([, aM], [, bM]) => {
-                const aS = [...aM.values()].reduce((a, b) => a + b, 0);
-                const bS = [...bM.values()].reduce((a, b) => a + b, 0);
-                return bS - aS;
-              });
-
-              return (
-                <React.Fragment key={type}>
-
-                  {/* ── Type row (parent) ── */}
-                  <tr
-                    className={`csp-mx-type-row${isOpen ? ' open' : ''}`}
-                    onClick={() => toggleType(type)}
+                {regions.map(reg => (
+                  <th
+                    key={reg}
+                    className={`csp-mx-th-reg${sortCol === reg ? ' sorted' : ''}`}
+                    onClick={() => handleColSort(reg)}
+                    title={reg}
                   >
-                    <td className="csp-mx-td-label">
-                      <span className="csp-mx-toggle">
-                        {isOpen
-                          ? <ChevronDown  size={13} />
-                          : <ChevronRight size={13} />
+                    <span className="csp-mx-reg-name">{reg}</span>
+                    <SortIcon col={reg} />
+                  </th>
+                ))}
+              </tr>
+            </thead>
+
+            <tbody>
+              {sortedTypes.map(([type, td]) => {
+                const isOpen    = expanded.has(type);
+                const typeTotal = [...td.locTotals.values()].reduce((a, b) => a + b, 0);
+
+                const sortedItems = [...td.items.entries()].sort(([, aM], [, bM]) => {
+                  const aS = [...aM.values()].reduce((a, b) => a + b, 0);
+                  const bS = [...bM.values()].reduce((a, b) => a + b, 0);
+                  return bS - aS;
+                });
+
+                return (
+                  <React.Fragment key={type}>
+
+                    {/* ── Type row (parent) ── */}
+                    <tr
+                      className={`csp-mx-type-row${isOpen ? ' open' : ''}`}
+                      onClick={() => toggleRow(type)}
+                    >
+                      <td className="csp-mx-td-label">
+                        <span className="csp-mx-toggle">
+                          {isOpen ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+                        </span>
+                        <span className="csp-mx-type-name">{type}</span>
+                        <span className="csp-mx-count">({td.items.size})</span>
+                      </td>
+                      <td className="csp-mx-td-type-total">
+                        {typeTotal > 0
+                          ? fmtQty(typeTotal)
+                          : <span className="csp-mx-zero">0</span>
                         }
-                      </span>
-                      <span className="csp-mx-type-name">{type}</span>
-                      <span className="csp-mx-count">({td.items.size})</span>
-                    </td>
-                    <td className="csp-mx-td-type-total">
-                      {fmtQty(typeTotal) ?? '—'}
-                    </td>
-                    {regions.map(reg => {
-                      const qty = td.locTotals.get(reg) || 0;
-                      return (
+                      </td>
+                      {regions.map(reg => (
                         <td
                           key={reg}
                           className="csp-mx-td-type-cell"
-                          style={heatBg(qty, maxTypeTotal)}
+                          style={td.locTotals.has(reg) && (td.locTotals.get(reg) ?? 0) > 0
+                            ? heatBg(td.locTotals.get(reg), maxTypeTotal)
+                            : {}
+                          }
                         >
-                          {fmtQty(qty) ?? <span className="csp-mx-dash">—</span>}
+                          {cellVal(td.locTotals, reg, maxTypeTotal)}
                         </td>
-                      );
-                    })}
-                  </tr>
+                      ))}
+                    </tr>
 
-                  {/* ── Item rows (children) ── */}
-                  {isOpen && sortedItems.map(([item, itemLocs]) => {
-                    const itemTotal = [...itemLocs.values()].reduce((a, b) => a + b, 0);
-                    return (
-                      <tr key={`${type}__${item}`} className="csp-mx-item-row">
-                        <td className="csp-mx-td-item">
-                          <span className="csp-mx-item-tree">└</span>
-                          <span className="csp-mx-item-name">{item}</span>
-                        </td>
-                        <td className="csp-mx-td-item-total">
-                          {fmtQty(itemTotal) ?? '—'}
-                        </td>
-                        {regions.map(reg => {
-                          const qty = itemLocs.get(reg) || 0;
-                          return (
+                    {/* ── Item rows (children) ── */}
+                    {isOpen && sortedItems.map(([item, itemLocs]) => {
+                      const itemTotal = [...itemLocs.values()].reduce((a, b) => a + b, 0);
+                      return (
+                        <tr key={`${type}__${item}`} className="csp-mx-item-row">
+                          <td className="csp-mx-td-item">
+                            <span className="csp-mx-item-tree">└</span>
+                            <span className="csp-mx-item-name">{item}</span>
+                          </td>
+                          <td className="csp-mx-td-item-total">
+                            {itemTotal > 0
+                              ? fmtQty(itemTotal)
+                              : <span className="csp-mx-zero">0</span>
+                            }
+                          </td>
+                          {regions.map(reg => (
                             <td
                               key={reg}
                               className="csp-mx-td-item-cell"
-                              style={heatBg(qty, maxTypeTotal * 0.4)}
+                              style={itemLocs.has(reg) && (itemLocs.get(reg) ?? 0) > 0
+                                ? heatBg(itemLocs.get(reg), maxTypeTotal * 0.4)
+                                : {}
+                              }
                             >
-                              {fmtQty(qty) ?? <span className="csp-mx-dash">—</span>}
+                              {cellVal(itemLocs, reg, maxTypeTotal * 0.4)}
                             </td>
-                          );
-                        })}
-                      </tr>
-                    );
-                  })}
-                </React.Fragment>
-              );
-            })}
-          </tbody>
+                          ))}
+                        </tr>
+                      );
+                    })}
+                  </React.Fragment>
+                );
+              })}
+            </tbody>
 
-          {/* ── Grand total footer ── */}
-          <tfoot>
-            <tr className="csp-mx-grand-row">
-              <td className="csp-mx-grand-label">الإجمالي الكلي</td>
-              <td className="csp-mx-grand-total">{fmtQty(grandTotal) ?? '—'}</td>
-              {regions.map(reg => (
-                <td key={reg} className="csp-mx-grand-cell">
-                  {fmtQty(grandByRegion.get(reg) || 0) ?? '—'}
+            {/* ── Grand total footer ── */}
+            <tfoot>
+              <tr className="csp-mx-grand-row">
+                <td className="csp-mx-grand-label">الإجمالي الكلي</td>
+                <td className="csp-mx-grand-total">
+                  {grandTotal > 0 ? fmtQty(grandTotal) : <span className="csp-mx-zero">0</span>}
                 </td>
-              ))}
-            </tr>
-          </tfoot>
+                {regions.map(reg => (
+                  <td key={reg} className="csp-mx-grand-cell">
+                    {cellVal(grandByRegion, reg, maxTypeTotal)}
+                  </td>
+                ))}
+              </tr>
+            </tfoot>
 
-        </table>
-      </div>
+          </table>
+        </div>
+      )}
     </div>
   );
 }
@@ -387,23 +512,21 @@ export default function CurrentStockPage() {
   const [locFilter,  setLocFilter]  = useState('');
   const [refreshKey, setRefreshKey] = useState(0);
   const [exporting,  setExporting]  = useState(false);
-  const [view,       setView]       = useState('matrix'); // 'matrix' | 'table'
+  const [view,       setView]       = useState('matrix');
 
   /* ── Data fetch ── */
   const { data, isLoading, isError, error, isFetching } = useQuery({
     queryKey: ['current-stock', refreshKey],
     queryFn: () =>
       client
-        .get('/current-stock', {
-          params: refreshKey > 0 ? { refresh: '1' } : {},
-        })
+        .get('/current-stock', { params: refreshKey > 0 ? { refresh: '1' } : {} })
         .then(r => r.data),
     staleTime: 5 * 60 * 1000,
     retry: 1,
   });
 
-  const headers     = data?.headers ?? [];
-  const allRows     = data?.rows    ?? [];
+  const headers = data?.headers ?? [];
+  const allRows = data?.rows    ?? [];
 
   const typeColName = useMemo(() => detectTypeCol(headers), [headers]);
   const locColName  = useMemo(() => detectLocCol(headers),  [headers]);
@@ -425,7 +548,7 @@ export default function CurrentStockPage() {
     [allRows, locColName]
   );
 
-  /* ── Filtered rows (for detail table) ── */
+  /* ── Filtered rows (table view) ── */
   const filtered = useMemo(() => {
     if (!search && !typeFilter && !locFilter) return allRows;
     const q = search.toLowerCase();
@@ -438,10 +561,9 @@ export default function CurrentStockPage() {
     });
   }, [allRows, typeFilter, locFilter, search, typeColName, locColName]);
 
-  /* ── Handlers ── */
-  const handleRefresh   = () => setRefreshKey(k => k + 1);
-  const activeFilters   = [typeFilter, locFilter, search].filter(Boolean).length;
-  const clearFilters    = () => { setTypeFilter(''); setLocFilter(''); setSearch(''); };
+  const handleRefresh = () => setRefreshKey(k => k + 1);
+  const activeFilters = [typeFilter, locFilter, search].filter(Boolean).length;
+  const clearFilters  = () => { setTypeFilter(''); setLocFilter(''); setSearch(''); };
 
   const handleExport = async () => {
     setExporting(true);
@@ -469,16 +591,14 @@ export default function CurrentStockPage() {
     }
   };
 
-  /* ── Render ── */
+  /* ─────────────────────────── RENDER ────────────────────── */
   return (
     <div className="csp-page">
 
       {/* ── Page header ── */}
       <div className="csp-header">
         <div className="csp-header-left">
-          <div className="csp-icon-wrap">
-            <Warehouse size={20} />
-          </div>
+          <div className="csp-icon-wrap"><Warehouse size={20} /></div>
           <div>
             <h1 className="csp-title">المخزون الحالي</h1>
             <div className="csp-meta">
@@ -500,19 +620,16 @@ export default function CurrentStockPage() {
         </div>
 
         <div className="csp-actions">
-          {/* View toggle */}
           <div className="csp-view-toggle">
             <button
               className={`csp-view-btn${view === 'matrix' ? ' active' : ''}`}
               onClick={() => setView('matrix')}
-              title="عرض المصفوفة"
             >
               <LayoutGrid size={14} /> مصفوفة
             </button>
             <button
               className={`csp-view-btn${view === 'table' ? ' active' : ''}`}
               onClick={() => setView('table')}
-              title="عرض الجدول التفصيلي"
             >
               <List size={14} /> جدول
             </button>
@@ -551,7 +668,9 @@ export default function CurrentStockPage() {
           </div>
           <div className="csp-kpi">
             <span className="csp-kpi-val">
-              {[...new Set(allRows.map(r => getRegion(r[locColName])).filter(v => v && v !== '—'))].length}
+              {[...new Set(
+                allRows.map(r => getRegion(r[locColName])).filter(v => v && v !== '—')
+              )].length}
             </span>
             <span className="csp-kpi-lbl">المناطق</span>
           </div>
@@ -562,7 +681,7 @@ export default function CurrentStockPage() {
         </div>
       )}
 
-      {/* ── Filters ── */}
+      {/* ── Filter bar ── */}
       <div className="csp-filters">
         <div className="csp-search-wrap">
           <Search size={14} className="csp-search-icon" />
@@ -579,13 +698,15 @@ export default function CurrentStockPage() {
           )}
         </div>
 
-        <div className="csp-select-wrap">
-          <Filter size={13} className="csp-select-icon" />
-          <select className="csp-select" value={typeFilter} onChange={e => setTypeFilter(e.target.value)}>
-            <option value="">كل أنواع الأصناف</option>
-            {itemTypes.map(t => <option key={t} value={t}>{t}</option>)}
-          </select>
-        </div>
+        {view === 'table' && (
+          <div className="csp-select-wrap">
+            <Filter size={13} className="csp-select-icon" />
+            <select className="csp-select" value={typeFilter} onChange={e => setTypeFilter(e.target.value)}>
+              <option value="">كل أنواع الأصناف</option>
+              {itemTypes.map(t => <option key={t} value={t}>{t}</option>)}
+            </select>
+          </div>
+        )}
 
         <div className="csp-select-wrap">
           <Filter size={13} className="csp-select-icon" />
@@ -602,7 +723,7 @@ export default function CurrentStockPage() {
         )}
       </div>
 
-      {/* ── Active chips ── */}
+      {/* ── Active filter chips ── */}
       {activeFilters > 0 && (
         <div className="csp-chips">
           {typeFilter && (
@@ -657,7 +778,6 @@ export default function CurrentStockPage() {
           {view === 'matrix' && (
             <StockMatrix
               rows={allRows}
-              typeFilter={typeFilter}
               locFilter={locFilter}
               search={search}
               typeCol={typeColName}

@@ -837,15 +837,147 @@
   color:       var(--color-text-secondary);
 }
 
+/* ── Zero value in cell ── */
+.csp-mx-zero {
+  color:      var(--color-text-muted);
+  font-size:  10px;
+  font-style: italic;
+  font-family: var(--font-en);
+  opacity:    0.55;
+}
+
+/* ════════════════════════════════════════════════
+   Item Type multi-select filter strip
+   ════════════════════════════════════════════════ */
+.csp-mx-type-filter {
+  display:     flex;
+  align-items: center;
+  flex-wrap:   wrap;
+  gap:         6px;
+  padding:     10px 16px 10px;
+  background:  #f8f9fb;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.csp-mx-type-filter-label {
+  font-size:   11px;
+  font-weight: 700;
+  color:       var(--color-text-muted);
+  white-space: nowrap;
+  margin-left: 4px; /* RTL: gap between label and chips */
+}
+
+.csp-mx-type-filter-sep {
+  width:       1px;
+  height:      18px;
+  background:  var(--color-border);
+  flex-shrink: 0;
+  margin:      0 4px;
+}
+
+.csp-mx-type-filter-hint {
+  font-size:  10px;
+  color:      var(--color-text-muted);
+  font-weight: 600;
+  margin-right: 4px;
+}
+
+/* ── Individual chip ── */
+.csp-mx-type-chip {
+  display:       inline-flex;
+  align-items:   center;
+  gap:           4px;
+  padding:       4px 11px;
+  border-radius: var(--radius-full);
+  border:        1px solid var(--color-border);
+  background:    #fff;
+  color:         var(--color-text-secondary);
+  font-size:     11.5px;
+  font-weight:   600;
+  font-family:   inherit;
+  cursor:        pointer;
+  transition:    all 130ms;
+  white-space:   nowrap;
+  line-height:   1.3;
+}
+.csp-mx-type-chip:hover {
+  border-color: rgba(46,125,50,0.4);
+  color:        var(--color-brand-green);
+  background:   rgba(46,125,50,0.04);
+}
+
+/* Selected / active */
+.csp-mx-type-chip.active {
+  background:   var(--color-brand-green);
+  border-color: var(--color-brand-green);
+  color:        #fff;
+}
+.csp-mx-type-chip.active:hover {
+  background:   var(--color-brand-green-dark, #1b5e20);
+}
+
+/* Excluded / inactive */
+.csp-mx-type-chip.inactive {
+  background:   #f3f4f6;
+  border-color: var(--color-border);
+  color:        var(--color-text-muted);
+  text-decoration: line-through;
+  opacity:      0.7;
+}
+.csp-mx-type-chip.inactive:hover {
+  opacity:        1;
+  text-decoration: none;
+  border-color:  rgba(46,125,50,0.4);
+  color:         var(--color-brand-green);
+  background:    rgba(46,125,50,0.04);
+}
+
+/* "الكل" button — slightly wider */
+.csp-mx-type-chip-all {
+  padding: 4px 14px;
+}
+.csp-mx-type-chip-count {
+  display:       inline-flex;
+  align-items:   center;
+  justify-content: center;
+  min-width:     18px;
+  height:        16px;
+  padding:       0 4px;
+  border-radius: 8px;
+  font-size:     10px;
+  font-family:   var(--font-en);
+  background:    rgba(255,255,255,0.25);
+  color:         inherit;
+}
+.csp-mx-type-chip-all:not(.active) .csp-mx-type-chip-count {
+  background:    rgba(46,125,50,0.10);
+  color:         var(--color-brand-green);
+}
+
+/* "لا شيء" button */
+.csp-mx-type-chip-none {
+  padding: 4px 10px;
+  opacity: 0.7;
+}
+.csp-mx-type-chip-none:hover { opacity: 1; }
+.csp-mx-type-chip-none.active-none {
+  background:   rgba(198,40,40,0.08);
+  border-color: rgba(198,40,40,0.3);
+  color:        var(--color-danger);
+  opacity:      1;
+}
+
 /* ── Mobile matrix ── */
 @media (max-width: 767px) {
   .csp-matrix-bar { flex-direction: column; align-items: flex-start; }
   .csp-matrix-bar-left { width: 100%; justify-content: flex-end; }
-  .csp-matrix-wrap { max-height: calc(100vh - 460px); }
+  .csp-matrix-wrap { max-height: calc(100vh - 520px); }
   .csp-mx-th-label,
   .csp-mx-td-label,
   .csp-mx-td-item,
   .csp-mx-grand-label { min-width: 140px; max-width: 180px; }
   .csp-view-toggle { width: 100%; }
   .csp-view-btn    { flex: 1; justify-content: center; }
+  .csp-mx-type-filter { padding: 8px 12px; gap: 5px; }
+  .csp-mx-type-chip   { font-size: 11px; padding: 3px 9px; }
 }

@@ -1,5 +1,5 @@
 const { Pool } = require('pg');
-require('dotenv').config();
+require('dotenv').config({ path: require('path').resolve(__dirname, '../../.env') });
 
 // Support both DATABASE_URL (Docker / cloud) and individual DB_* vars (native install)
 const pool = new Pool(

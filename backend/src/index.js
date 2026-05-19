@@ -1,4 +1,5 @@
-require('dotenv').config();
+// Load .env from backend/ directory regardless of working directory
+require('dotenv').config({ path: require('path').resolve(__dirname, '../.env') });
 const express  = require('express');
 const cors     = require('cors');
 const helmet   = require('helmet');

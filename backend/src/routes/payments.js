@@ -38,8 +38,8 @@ function serialToDate(serial) {
 //          Bank Name English | Customercode | Customer Name |
 //          Cash | Cheque | Bank Tran | POS
 // ─────────────────────────────────────────────
-const UPSERT_BATCH = 300;
-const COLS_UPSERT  = 14; // matches placeholders below
+const UPSERT_BATCH = 1000; // 1000 × 14 cols = 14 000 params, well under PG 65535 limit
+const COLS_UPSERT  = 14;  // matches placeholders below
 
 async function batchUpsertPayments(dbClient, rows) {
   let inserted = 0, updated = 0;

@@ -648,6 +648,11 @@ export default function CurrentStockPage() {
   const itemColName = useMemo(() => detectItemCol(headers), [headers]);
   const qtyColName  = useMemo(() => detectQtyCol(headers),  [headers]);
 
+  const itemTypes = useMemo(
+    () => [...new Set(allRows.map(r => r[typeColName]).filter(Boolean))].sort(),
+    [allRows, typeColName]
+  );
+
   const locations = useMemo(
     () => [...new Set(allRows.map(r => r[locColName]).filter(Boolean))].sort(),
     [allRows, locColName]
@@ -735,9 +740,9 @@ export default function CurrentStockPage() {
             </span>
             <span className="csp-kpi-lbl">المناطق</span>
           </div>
-          <div className={`csp-kpi${activeFilters ? ' csp-kpi-active' : ''}`}>
-            <span className="csp-kpi-val">{filtered.length.toLocaleString('en-SA')}</span>
-            <span className="csp-kpi-lbl">النتائج المعروضة</span>
+          <div className="csp-kpi">
+            <span className="csp-kpi-val">{locations.length.toLocaleString('en-SA')}</span>
+            <span className="csp-kpi-lbl">المواقع / الفروع</span>
           </div>
         </div>
       )}

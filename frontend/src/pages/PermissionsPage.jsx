@@ -1,122 +1,24 @@
-import React, { useState } from 'react';
-import { ShieldCheck, Info } from 'lucide-react';
+import React, { useState, useCallback } from 'react';
+import { ShieldCheck, Lock, Unlock, RotateCcw, Check, X } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
+import { usePermissions } from '../context/PermissionsContext';
+import { ROLES, PAGES, LEVEL_MAP } from '../data/permissions';
 import './PermissionsPage.css';
 
-/* ── Role definitions ─────────────────────────────── */
-const ROLES = [
-  { key: 'super_admin',    label: 'مدير عام',              color: 'role-super'   },
-  { key: 'it_admin',       label: 'مدير تقنية',            color: 'role-it'      },
-  { key: 'supervisor',     label: 'مشرف',                  color: 'role-sup'     },
-  { key: 'region_manager', label: 'مدير منطقة',            color: 'role-region'  },
-  { key: 'sales_rep',      label: 'مندوب مبيعات',          color: 'role-sales'   },
-  { key: 'fridge_admin',   label: 'موظف إداري (ثلاجات)',   color: 'role-fridge'  },
-  { key: 'viewer',         label: 'مستعرض',                color: 'role-viewer'  },
-];
-
-/* ── Pages / features matrix ─────────────────────── */
-// access: 0=لا, 1=قراءة, 2=كامل, 3=كل المناطق, 4=منطقته فقط
-const PAGES = [
-  {
-    page: 'لوحة التحكم',
-    path: '/',
-    desc: 'ملخص الأرصدة والعملاء وبطاقات KPI',
-    super_admin:2, it_admin:2, supervisor:1, region_manager:1, sales_rep:1, fridge_admin:0, viewer:1,
-  },
-  {
-    page: 'الفواتير',
-    path: '/invoices',
-    desc: 'عرض وتصفية فواتير العملاء',
-    super_admin:2, it_admin:2, supervisor:1, region_manager:1, sales_rep:1, fridge_admin:0, viewer:1,
-  },
-  {
-    page: 'ملف العميل',
-    path: '/customers/:id',
-    desc: 'تفاصيل العميل وسجل فواتيره',
-    super_admin:2, it_admin:2, supervisor:1, region_manager:1, sales_rep:1, fridge_admin:0, viewer:1,
-  },
-  {
-    page: 'سجل الملاحظات',
-    path: '/reports',
-    desc: 'إضافة وعرض ملاحظات العملاء',
-    super_admin:2, it_admin:2, supervisor:2, region_manager:2, sales_rep:2, fridge_admin:0, viewer:0,
-  },
-  {
-    page: 'تقرير العملاء',
-    path: '/sales-activity',
-    desc: 'نشاط المبيعات وتحليل الأداء',
-    super_admin:2, it_admin:2, supervisor:1, region_manager:1, sales_rep:1, fridge_admin:0, viewer:0,
-  },
-  {
-    page: 'مهام المبيعات',
-    path: '/sales-tasks',
-    desc: 'إدارة المهام ومتابعتها',
-    super_admin:2, it_admin:2, supervisor:2, region_manager:2, sales_rep:2, fridge_admin:1, viewer:0,
-  },
-  {
-    page: 'متابعة الثلاجات',
-    path: '/fridges',
-    desc: 'إدارة الثلاجات والنقل بين المواقع',
-    super_admin:2, it_admin:2, supervisor:0, region_manager:1, sales_rep:0, fridge_admin:1, viewer:0,
-  },
-  {
-    page: 'المخزون (NetSuite)',
-    path: '/stock',
-    desc: 'بيانات المخزون التاريخية',
-    super_admin:2, it_admin:2, supervisor:0, region_manager:0, sales_rep:0, fridge_admin:0, viewer:0,
-  },
-  {
-    page: 'المخزون الحالي',
-    path: '/current-stock',
-    desc: 'مخزون NetSuite الحالي (مباشر)',
-    super_admin:2, it_admin:2, supervisor:0, region_manager:0, sales_rep:0, fridge_admin:0, viewer:0,
-  },
-  {
-    page: 'رفع البيانات',
-    path: '/upload',
-    desc: 'استيراد ملفات Excel لتحديث البيانات',
-    super_admin:2, it_admin:2, supervisor:0, region_manager:0, sales_rep:0, fridge_admin:0, viewer:0,
-  },
-  {
-    page: 'إدارة المستخدمين',
-    path: '/users',
-    desc: 'إنشاء وتعديل الحسابات وتغيير الأدوار',
-    super_admin:2, it_admin:0, supervisor:0, region_manager:0, sales_rep:0, fridge_admin:0, viewer:0,
-  },
-  {
-    page: 'الصلاحيات',
-    path: '/permissions',
-    desc: 'عرض جدول صلاحيات الأدوار',
-    super_admin:2, it_admin:1, supervisor:0, region_manager:0, sales_rep:0, fridge_admin:0, viewer:0,
-  },
-];
-
-/* نطاق البيانات — row at end */
+/* Data-scope row (read-only) */
 const DATA_SCOPE = {
-  page: 'نطاق البيانات',
-  path: null,
+  label: 'نطاق البيانات',
   desc: 'حدود الوصول الجغرافي للبيانات',
-  super_admin:3, it_admin:3, supervisor:4, region_manager:4, sales_rep:4, fridge_admin:4, viewer:3,
+  super_admin:    { icon: '🌐', label: 'كل المناطق', cls: 'pp-all' },
+  it_admin:       { icon: '🌐', label: 'كل المناطق', cls: 'pp-all' },
+  supervisor:     { icon: '📍', label: 'منطقته فقط', cls: 'pp-own' },
+  region_manager: { icon: '📍', label: 'منطقته فقط', cls: 'pp-own' },
+  sales_rep:      { icon: '📍', label: 'منطقته فقط', cls: 'pp-own' },
+  fridge_admin:   { icon: '📍', label: 'منطقته فقط', cls: 'pp-own' },
+  viewer:         { icon: '🌐', label: 'كل المناطق', cls: 'pp-all' },
 };
 
-const PERM_MAP = {
-  0: { icon: '✕',  label: 'محظور',          cls: 'pp-no'   },
-  1: { icon: '◉',  label: 'قراءة فقط',      cls: 'pp-read' },
-  2: { icon: '✓',  label: 'صلاحية كاملة',   cls: 'pp-full' },
-  3: { icon: '🌐', label: 'كل المناطق',      cls: 'pp-all'  },
-  4: { icon: '📍', label: 'منطقته فقط',      cls: 'pp-own'  },
-};
-
-function PermCell({ value }) {
-  const { icon, label, cls } = PERM_MAP[value] ?? PERM_MAP[0];
-  return (
-    <td className={`pp-cell ${cls}`} title={label}>
-      <span className="pp-icon">{icon}</span>
-    </td>
-  );
-}
-
-/* ── Role descriptions ───────────────────────────── */
-const ROLE_DETAILS = {
+const ROLE_DESCS = {
   super_admin:    'صلاحية كاملة على جميع الصفحات والبيانات والمستخدمين لجميع المناطق.',
   it_admin:       'يملك صلاحية رفع البيانات والاطلاع على جميع المناطق، بدون إدارة المستخدمين.',
   supervisor:     'مشرف — يرى تقارير المبيعات والملاحظات لمنطقته فقط، بدون وصول للثلاجات أو المخزون.',
@@ -126,10 +28,68 @@ const ROLE_DETAILS = {
   viewer:         'مستعرض — قراءة فقط للرئيسية والفواتير، بدون أي صلاحية تعديل أو تصدير.',
 };
 
-export default function PermissionsPage() {
-  const [activeRole, setActiveRole] = useState(null);
+/* Cell state machine: cycle 0→1→2→0 */
+function nextLevel(current) {
+  return (current + 1) % 3;
+}
 
-  const allRows = [...PAGES, DATA_SCOPE];
+/* ── Single editable cell ──────────────────────────── */
+function PermCell({ pageKey, role, level, editMode, onSave, protected: isProtected }) {
+  const [status, setStatus] = useState(null); // null | 'saving' | 'ok' | 'err'
+
+  const cfg = LEVEL_MAP[level] ?? LEVEL_MAP[0];
+
+  const handleClick = useCallback(async () => {
+    if (!editMode || isProtected) return;
+    const next = nextLevel(level);
+    setStatus('saving');
+    try {
+      await onSave(pageKey, role, next);
+      setStatus('ok');
+      setTimeout(() => setStatus(null), 1200);
+    } catch {
+      setStatus('err');
+      setTimeout(() => setStatus(null), 2000);
+    }
+  }, [editMode, isProtected, level, onSave, pageKey, role]);
+
+  const inner = status === 'saving' ? <span className="pp-saving-dot"/> :
+                status === 'ok'     ? <Check size={13}/> :
+                status === 'err'    ? <X size={13}/> :
+                <span className="pp-icon">{cfg.icon}</span>;
+
+  return (
+    <td
+      className={`pp-cell ${cfg.cls}${editMode && !isProtected ? ' pp-editable' : ''}${status === 'ok' ? ' pp-saved' : ''}${status === 'err' ? ' pp-error' : ''}`}
+      title={editMode && !isProtected ? `النقر للتغيير — حالياً: ${cfg.label}` : cfg.label}
+      onClick={handleClick}
+    >
+      {inner}
+    </td>
+  );
+}
+
+/* ═══════════════════════════════════════════════════
+   PAGE
+   ══════════════════════════════════════════════════ */
+export default function PermissionsPage() {
+  const { user: me } = useAuth();
+  const { perms, updatePerm } = usePermissions();
+  const isSuperAdmin = me?.role === 'super_admin';
+
+  const [editMode,    setEditMode]   = useState(false);
+  const [activeRole,  setActiveRole] = useState(null);
+
+  const handleSave = useCallback(
+    (pageKey, role, level) => updatePerm(pageKey, role, level),
+    [updatePerm]
+  );
+
+  /* count accessible pages per role */
+  const accessCount = ROLES.reduce((acc, r) => {
+    acc[r.key] = PAGES.filter(p => (perms[p.key]?.[r.key] ?? 0) > 0).length;
+    return acc;
+  }, {});
 
   return (
     <div className="pp-page">
@@ -140,31 +100,48 @@ export default function PermissionsPage() {
           <h1 className="pp-title"><ShieldCheck size={20}/> جدول الصلاحيات</h1>
           <p className="pp-subtitle">صلاحيات الوصول لكل صفحة حسب الدور الوظيفي</p>
         </div>
+        {isSuperAdmin && (
+          <button
+            className={`pp-edit-btn${editMode ? ' pp-edit-btn-active' : ''}`}
+            onClick={() => setEditMode(s => !s)}
+          >
+            {editMode ? <><Unlock size={14}/> وضع التعديل</>
+                      : <><Lock   size={14}/> تعديل الصلاحيات</>}
+          </button>
+        )}
       </div>
+
+      {/* ── Edit mode notice ── */}
+      {editMode && (
+        <div className="pp-edit-notice">
+          <RotateCcw size={13}/>
+          انقر على أي خلية لتغيير مستوى الصلاحية — التغييرات تُحفظ فوراً وتسري مباشرة على جميع المستخدمين.
+        </div>
+      )}
 
       {/* ── Role cards ── */}
       <div className="pp-roles-row">
         {ROLES.map(r => (
           <button
             key={r.key}
-            className={`pp-role-card ${activeRole === r.key ? 'pp-role-active' : ''}`}
+            className={`pp-role-card${activeRole === r.key ? ' pp-role-active' : ''}`}
             onClick={() => setActiveRole(v => v === r.key ? null : r.key)}
           >
             <span className={`pp-role-badge ${r.color}`}>{r.label}</span>
             <span className="pp-role-count">
-              {allRows.filter(p => (PERM_MAP[p[r.key]] ?? PERM_MAP[0]).cls !== 'pp-no').length}
+              {accessCount[r.key]}
               <span className="pp-role-count-lbl"> صفحة</span>
             </span>
           </button>
         ))}
       </div>
 
-      {/* ── Role description box ── */}
+      {/* ── Role description ── */}
       {activeRole && (
         <div className="pp-role-desc">
-          <Info size={14}/>
+          <ShieldCheck size={14}/>
           <strong>{ROLES.find(r => r.key === activeRole)?.label}:</strong>
-          {' '}{ROLE_DETAILS[activeRole]}
+          {' '}{ROLE_DESCS[activeRole]}
         </div>
       )}
 
@@ -176,43 +153,73 @@ export default function PermissionsPage() {
               <tr>
                 <th className="pp-th-page">الصفحة</th>
                 {ROLES.map(r => (
-                  <th
-                    key={r.key}
-                    className={activeRole === r.key ? 'pp-th-highlight' : ''}
-                  >
+                  <th key={r.key} className={activeRole === r.key ? 'pp-th-highlight' : ''}>
                     <span className={`pp-role-badge ${r.color}`}>{r.label}</span>
                   </th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {allRows.map((row, i) => (
-                <tr key={i} className={row.path === null ? 'pp-scope-row' : ''}>
+              {PAGES.map(page => (
+                <tr key={page.key}>
                   <td className="pp-td-page">
-                    <div className="pp-page-name">{row.page}</div>
-                    <div className="pp-page-desc">{row.desc}</div>
-                    {row.path && <div className="pp-page-path">{row.path}</div>}
+                    <div className="pp-page-name">{page.label}</div>
+                    <div className="pp-page-desc">{page.desc}</div>
+                    <div className="pp-page-path">{page.path}</div>
                   </td>
-                  {ROLES.map(r => (
-                    <PermCell
-                      key={r.key}
-                      value={row[r.key]}
-                    />
-                  ))}
+                  {ROLES.map(r => {
+                    const level = perms[page.key]?.[r.key] ?? 0;
+                    /* super_admin can't lose access to dashboard or permissions */
+                    const isProtected = r.key === 'super_admin' &&
+                      ['dashboard', 'permissions'].includes(page.key);
+                    return (
+                      <PermCell
+                        key={r.key}
+                        pageKey={page.key}
+                        role={r.key}
+                        level={level}
+                        editMode={editMode}
+                        onSave={handleSave}
+                        protected={isProtected}
+                      />
+                    );
+                  })}
                 </tr>
               ))}
+
+              {/* Data scope row — read-only */}
+              <tr className="pp-scope-row">
+                <td className="pp-td-page">
+                  <div className="pp-page-name">{DATA_SCOPE.label}</div>
+                  <div className="pp-page-desc">{DATA_SCOPE.desc}</div>
+                </td>
+                {ROLES.map(r => {
+                  const { icon, label, cls } = DATA_SCOPE[r.key];
+                  return (
+                    <td key={r.key} className={`pp-cell ${cls}`} title={label}>
+                      <span className="pp-icon">{icon}</span>
+                    </td>
+                  );
+                })}
+              </tr>
             </tbody>
           </table>
         </div>
 
         {/* Legend */}
         <div className="pp-legend">
-          {Object.entries(PERM_MAP).map(([v, { icon, label, cls }]) => (
+          {Object.entries(LEVEL_MAP).map(([v, { icon, label, cls }]) => (
             <span key={v} className="pp-legend-item">
-              <span className={`pp-icon ${cls}`}>{icon}</span>
-              {label}
+              <span className={`pp-icon ${cls}`}>{icon}</span>{label}
             </span>
           ))}
+          <span className="pp-legend-item"><span className="pp-icon pp-all">🌐</span> كل المناطق</span>
+          <span className="pp-legend-item"><span className="pp-icon pp-own">📍</span> منطقته فقط</span>
+          {editMode && (
+            <span className="pp-legend-item pp-legend-edit">
+              <span className="pp-icon pp-full">↺</span> انقر للتغيير
+            </span>
+          )}
         </div>
       </div>
     </div>

@@ -1,9 +1,10 @@
 import React, { lazy, Suspense } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './context/AuthContext';
+import { usePermissions } from './context/PermissionsContext';
 import AppLayout from './components/Layout/AppLayout';
 
-// Lazy-loaded pages for code splitting
+// Lazy-loaded pages
 const Login              = lazy(() => import('./pages/Login'));
 const Dashboard          = lazy(() => import('./pages/Dashboard'));
 const Invoices           = lazy(() => import('./pages/Invoices'));
@@ -24,10 +25,11 @@ function PrivateRoute({ children }) {
   return token ? children : <Navigate to="/login" replace />;
 }
 
-function RoleRoute({ children, roles }) {
+function RoleRoute({ children, pageKey }) {
   const { user } = useAuth();
+  const { canAccess } = usePermissions();
   if (!user) return <Navigate to="/login" replace />;
-  if (roles && !roles.includes(user.role)) {
+  if (pageKey && !canAccess(user.role, pageKey)) {
     return <Navigate to={user.role === 'fridge_admin' ? '/fridges' : '/'} replace />;
   }
   return children;
@@ -54,9 +56,8 @@ export default function App() {
         <PageSuspense><Login /></PageSuspense>
       } />
 
-      {/* Protected — wrapped in AppLayout */}
       <Route path="/" element={
-        <RoleRoute roles={['super_admin','it_admin','supervisor','region_manager','sales_rep','viewer']}>
+        <RoleRoute pageKey="dashboard">
           <AppLayout>
             <PageSuspense><Dashboard /></PageSuspense>
           </AppLayout>
@@ -64,7 +65,7 @@ export default function App() {
       } />
 
       <Route path="/invoices" element={
-        <RoleRoute roles={['super_admin','it_admin','supervisor','region_manager','sales_rep','viewer']}>
+        <RoleRoute pageKey="invoices">
           <AppLayout>
             <PageSuspense><Invoices /></PageSuspense>
           </AppLayout>
@@ -72,7 +73,7 @@ export default function App() {
       } />
 
       <Route path="/reports" element={
-        <RoleRoute roles={['super_admin','it_admin','supervisor','region_manager','sales_rep']}>
+        <RoleRoute pageKey="reports">
           <AppLayout>
             <PageSuspense><Reports /></PageSuspense>
           </AppLayout>
@@ -80,7 +81,7 @@ export default function App() {
       } />
 
       <Route path="/upload" element={
-        <RoleRoute roles={['super_admin','it_admin']}>
+        <RoleRoute pageKey="upload">
           <AppLayout>
             <PageSuspense><Upload /></PageSuspense>
           </AppLayout>
@@ -88,7 +89,7 @@ export default function App() {
       } />
 
       <Route path="/users" element={
-        <RoleRoute roles={['super_admin']}>
+        <RoleRoute pageKey="users">
           <AppLayout>
             <PageSuspense><Users /></PageSuspense>
           </AppLayout>
@@ -96,61 +97,55 @@ export default function App() {
       } />
 
       <Route path="/permissions" element={
-        <RoleRoute roles={['super_admin','it_admin']}>
+        <RoleRoute pageKey="permissions">
           <AppLayout>
             <PageSuspense><PermissionsPage /></PageSuspense>
           </AppLayout>
         </RoleRoute>
       } />
 
-      {/* Sales Activity Report */}
       <Route path="/sales-activity" element={
-        <RoleRoute roles={['super_admin','it_admin','supervisor','region_manager','sales_rep']}>
+        <RoleRoute pageKey="sales_activity">
           <AppLayout>
             <PageSuspense><SalesActivityPage /></PageSuspense>
           </AppLayout>
         </RoleRoute>
       } />
 
-      {/* Sales Tasks */}
       <Route path="/sales-tasks" element={
-        <RoleRoute roles={['super_admin','it_admin','supervisor','region_manager','sales_rep','fridge_admin']}>
+        <RoleRoute pageKey="sales_tasks">
           <AppLayout>
             <PageSuspense><SalesTasksPage /></PageSuspense>
           </AppLayout>
         </RoleRoute>
       } />
 
-      {/* Customer detail sub-page */}
       <Route path="/customers/:customerId" element={
-        <RoleRoute roles={['super_admin','it_admin','supervisor','region_manager','sales_rep','viewer']}>
+        <RoleRoute pageKey="customer_detail">
           <AppLayout>
             <PageSuspense><CustomerDetailPage /></PageSuspense>
           </AppLayout>
         </RoleRoute>
       } />
 
-      {/* Fridges */}
       <Route path="/fridges" element={
-        <RoleRoute roles={['super_admin','it_admin','region_manager','fridge_admin']}>
+        <RoleRoute pageKey="fridges">
           <AppLayout>
             <PageSuspense><FridgesPage /></PageSuspense>
           </AppLayout>
         </RoleRoute>
       } />
 
-      {/* Stock / NetSuite */}
       <Route path="/stock" element={
-        <RoleRoute roles={['super_admin','it_admin']}>
+        <RoleRoute pageKey="stock">
           <AppLayout>
             <PageSuspense><StockPage /></PageSuspense>
           </AppLayout>
         </RoleRoute>
       } />
 
-      {/* Current Stock — live NetSuite web query */}
       <Route path="/current-stock" element={
-        <RoleRoute roles={['super_admin','it_admin']}>
+        <RoleRoute pageKey="current_stock">
           <AppLayout>
             <PageSuspense><CurrentStockPage /></PageSuspense>
           </AppLayout>
@@ -158,7 +153,7 @@ export default function App() {
       } />
 
       {/* Fallback */}
-      <Route path="*" element={<Navigate to="/" replace />} />
+      <Route path="*" element={<PrivateRoute><Navigate to="/" replace /></PrivateRoute>} />
     </Routes>
   );
 }

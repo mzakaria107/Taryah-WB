@@ -1,0 +1,150 @@
+/* ── Customer Summary Table ──────────────────────── */
+.cs-table-card {
+  background: #fff;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-card);
+  overflow: hidden;
+}
+
+/* ── Toolbar ─────────────────────────────────────── */
+.cs-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-bg-alt);
+}
+
+.cs-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ── Table wrap ──────────────────────────────────── */
+.cs-table-wrap {
+  overflow-x: auto;
+  overflow-y: auto;
+  max-height: 600px;
+}
+
+/* ── Table ───────────────────────────────────────── */
+.cs-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  direction: rtl;
+}
+
+.cs-table thead {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--color-bg-alt);
+}
+
+.cs-table th {
+  padding: 10px 14px;
+  text-align: right;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  border-bottom: 2px solid var(--color-border);
+  user-select: none;
+}
+
+.cs-table th.sortable { cursor: pointer; }
+.cs-table th.sortable:hover { color: var(--color-brand-green); }
+.cs-table th.sorted { color: var(--color-brand-green); }
+
+.cs-table td {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--color-border);
+  vertical-align: middle;
+  color: var(--color-text-secondary);
+}
+
+.cs-table tbody tr:hover { background: var(--color-bg-alt); }
+.cs-table tbody tr:last-child td { border-bottom: none; }
+
+/* ── Row colouring ───────────────────────────────── */
+.cs-table tbody tr.row-danger  { background: #fff5f5; }
+.cs-table tbody tr.row-danger:hover { background: #ffe8e8; }
+.cs-table tbody tr.row-warning { background: #fffbf0; }
+.cs-table tbody tr.row-warning:hover { background: #fff3d0; }
+
+/* ── Number cells ────────────────────────────────── */
+.cs-table td.num   { font-family: var(--font-en); direction: ltr; text-align: left; }
+.cs-table td.amount { font-family: var(--font-en); direction: ltr; text-align: left; font-weight: 500; }
+.cs-table td.paid   { color: var(--color-brand-green); }
+.cs-table td.balance { color: var(--color-danger); font-weight: 700; }
+
+/* ── Rate bar ────────────────────────────────────── */
+.rate-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 110px;
+}
+.bar {
+  flex: 1;
+  height: 6px;
+  background: var(--color-border);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.bar-fill {
+  height: 100%;
+  background: var(--bar-color);
+  border-radius: 3px;
+  transition: width 400ms ease;
+}
+.rate-val {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--rate-color);
+  font-family: var(--font-en);
+  min-width: 42px;
+  text-align: right;
+}
+
+/* ── Status breakdown ────────────────────────────── */
+.status-breakdown {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.sb {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: var(--radius-full);
+  white-space: nowrap;
+}
+.sb--unpaid  { background: #fff0f0; color: var(--color-danger);       border: 1px solid rgba(198,40,40,0.2); }
+.sb--partial { background: #fff8e1; color: var(--color-warning-dark, #e65100); border: 1px solid rgba(230,81,0,0.2); }
+.sb--paid    { background: var(--color-brand-green-pale); color: var(--color-brand-green); border: 1px solid rgba(46,125,50,0.2); }
+
+/* ── Chip buttons (reuse from InvoiceTable) ──────── */
+.chip-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 11px;
+  font-size: 12px;
+  font-weight: 600;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: #fff;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+.chip-btn:hover { border-color: var(--color-brand-green); color: var(--color-brand-green); }
+.chip-btn.gold  { border-color: rgba(161,121,3,0.35); color: #7c6200; background: #fffde7; }
+.chip-btn.gold:hover { background: #fff9c4; border-color: #c6a800; }

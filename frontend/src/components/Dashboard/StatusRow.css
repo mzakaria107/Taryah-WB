@@ -1,0 +1,319 @@
+/* ════════════════════════════════════════════════
+   StatusRow  —  draggable / resizable panel strip
+   ════════════════════════════════════════════════ */
+
+/* ── Section wrapper ─────────────────────────────── */
+.sr-section {
+  margin-bottom: 20px;
+}
+
+/* ── Settings bar ────────────────────────────────── */
+.sr-settings-bar {
+  display:       flex;
+  align-items:   center;
+  gap:           10px;
+  margin-bottom: 8px;
+  padding:       6px 12px;
+  background:    var(--color-bg-alt);
+  border:        1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  flex-wrap:     wrap;
+}
+.sr-settings-group {
+  display:     flex;
+  align-items: center;
+  gap:         5px;
+}
+.sr-settings-sublbl {
+  font-size:   10px;
+  font-weight: 700;
+  color:       var(--color-text-muted);
+  white-space: nowrap;
+  display:     inline-flex;
+  align-items: center;
+  gap:         3px;
+}
+.sr-settings-vsep {
+  width:       1px;
+  height:      18px;
+  background:  var(--color-border);
+  flex-shrink: 0;
+}
+
+/* Font scale */
+.sr-font-btns {
+  display:     flex;
+  align-items: center;
+  gap:         4px;
+}
+.sr-font-btn {
+  padding:       3px 8px;
+  font-size:     12px;
+  font-weight:   700;
+  border:        1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background:    #fff;
+  color:         var(--color-text-secondary);
+  cursor:        pointer;
+  transition:    all 120ms;
+  line-height:   1.4;
+  min-width:     30px;
+}
+.sr-font-btn:hover:not(:disabled) {
+  border-color: var(--color-brand-green);
+  color:        var(--color-brand-green);
+  background:   var(--color-brand-green-pale);
+}
+.sr-font-btn:disabled { opacity: .35; cursor: not-allowed; }
+.sr-font-pct {
+  font-size:   11px;
+  font-weight: 700;
+  font-family: var(--font-en);
+  color:       var(--color-text-secondary);
+  min-width:   30px;
+  text-align:  center;
+}
+.sr-settings-lbl {
+  display:     inline-flex;
+  align-items: center;
+  gap:         4px;
+  font-size:   11px;
+  font-weight: 600;
+  color:       var(--color-text-muted);
+  white-space: nowrap;
+}
+.sr-edit-toggle {
+  display:       inline-flex;
+  align-items:   center;
+  gap:           5px;
+  padding:       4px 12px;
+  font-size:     11px;
+  font-weight:   600;
+  border:        1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background:    #fff;
+  color:         var(--color-text-secondary);
+  cursor:        pointer;
+  transition:    all 130ms;
+}
+.sr-edit-toggle:hover {
+  border-color: var(--color-brand-gold);
+  color:        #7a5800;
+  background:   var(--color-brand-gold-light);
+}
+.sr-edit-toggle.active {
+  background:   var(--color-brand-gold-light);
+  color:        #7a5800;
+  border-color: rgba(245,197,24,0.6);
+  box-shadow:   0 0 0 3px rgba(245,197,24,0.12);
+}
+.sr-reset-btn {
+  display:       inline-flex;
+  align-items:   center;
+  gap:           4px;
+  padding:       4px 10px;
+  font-size:     11px;
+  font-weight:   600;
+  border:        1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background:    #fff;
+  color:         var(--color-text-muted);
+  cursor:        pointer;
+  transition:    all 120ms;
+}
+.sr-reset-btn:hover {
+  border-color: var(--color-warning);
+  color:        var(--color-warning);
+  background:   var(--color-warning-bg);
+}
+.sr-hint {
+  font-size:   11px;
+  color:       var(--color-text-muted);
+  display:     inline-flex;
+  align-items: center;
+  gap:         4px;
+  opacity:     0.8;
+}
+
+/* ── Height controls ─────────────────────────────── */
+.sr-height-group {
+  display:     flex;
+  align-items: center;
+  gap:         6px;
+  margin-right: auto;         /* pushes everything else left */
+}
+.sr-height-btns {
+  display: flex;
+  gap:     3px;
+}
+.sr-h-btn {
+  display:       inline-flex;
+  align-items:   center;
+  gap:           4px;
+  padding:       4px 9px;
+  font-size:     10px;
+  font-weight:   700;
+  font-family:   var(--font-en, monospace);
+  border:        1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background:    #fff;
+  color:         var(--color-text-muted);
+  cursor:        pointer;
+  transition:    all 120ms;
+  line-height:   1;
+}
+.sr-h-btn:hover {
+  border-color: var(--color-brand-green);
+  color:        var(--color-brand-green);
+  background:   var(--color-brand-green-pale);
+}
+.sr-h-btn.active {
+  background:   var(--color-brand-green);
+  color:        #fff;
+  border-color: var(--color-brand-green);
+}
+
+/* Mini stacked-bars icon inside each height button */
+.sr-h-icon {
+  display:        flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap:            1.5px;
+  width:          10px;
+  height:         12px;
+}
+.sr-h-icon span {
+  display:       block;
+  width:         100%;
+  border-radius: 1px;
+  background:    currentColor;
+  opacity:       0.6;
+}
+.sr-h-icon span:nth-child(1) { height: calc(12px * var(--h-frac, 1) * 0.4); }
+.sr-h-icon span:nth-child(2) { height: calc(12px * var(--h-frac, 1) * 0.65); }
+.sr-h-icon span:nth-child(3) { height: calc(12px * var(--h-frac, 1)); }
+
+/* ── Panels row ──────────────────────────────────── */
+.sr-row {
+  display:     flex;
+  gap:         16px;
+  align-items: stretch;
+  min-height:  260px;
+  transition:  gap 200ms, height 280ms cubic-bezier(.4,0,.2,1);
+  overflow:    hidden;
+  /* Height-scale factor — child components read this */
+  --sr-h-factor: calc(var(--sr-h, 480) / 480);
+}
+.sr-row-edit {
+  gap: 20px;
+}
+
+@media (max-width: 900px) {
+  .sr-row { flex-direction: column; }
+}
+
+/* ── Individual panel ────────────────────────────── */
+.sr-panel {
+  min-width:     0;
+  display:       flex;
+  flex-direction: column;
+  transition:    flex 250ms ease, opacity 200ms, transform 200ms, box-shadow 200ms;
+  border-radius: var(--radius-lg);
+  position:      relative;
+}
+
+/* Edit mode highlight */
+.sr-panel-edit {
+  cursor:       grab;
+  outline:      2px dashed rgba(245,197,24,0.5);
+  outline-offset: 2px;
+  border-radius: var(--radius-lg);
+}
+.sr-panel-edit:hover {
+  outline-color: rgba(245,197,24,0.9);
+}
+
+/* Dragging state */
+.sr-panel-dragging {
+  opacity:   0.38;
+  cursor:    grabbing;
+  transform: scale(0.97);
+  outline:   2px dashed var(--color-border) !important;
+}
+
+/* Drop target */
+.sr-panel-drag-over {
+  outline:      2px solid var(--color-brand-green) !important;
+  outline-offset: 3px;
+  transform:    scale(1.015);
+  box-shadow:   0 0 0 4px rgba(46,125,50,0.15);
+}
+
+/* ── Edit bar (inside each panel, top) ───────────── */
+.sr-edit-bar {
+  display:         flex;
+  align-items:     center;
+  gap:             8px;
+  padding:         5px 10px;
+  background:      rgba(245,197,24,0.1);
+  border:          1px dashed rgba(245,197,24,0.5);
+  border-bottom:   none;
+  border-radius:   var(--radius-lg) var(--radius-lg) 0 0;
+  flex-shrink:     0;
+  flex-wrap:       wrap;
+  user-select:     none;
+  min-height:      34px;
+}
+.sr-drag-handle {
+  display:     inline-flex;
+  align-items: center;
+  color:       rgba(245,197,24,0.9);
+  cursor:      grab;
+  padding:     2px 4px;
+  flex-shrink: 0;
+  transition:  color 120ms;
+}
+.sr-drag-handle:hover  { color: #a07800; }
+.sr-drag-handle:active { cursor: grabbing; }
+
+/* Width option buttons */
+.sr-width-btns { display: flex; gap: 3px; flex-wrap: wrap; }
+.sr-w-btn {
+  padding:       3px 9px;
+  font-size:     10px;
+  font-weight:   600;
+  border:        1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background:    #fff;
+  color:         var(--color-text-muted);
+  cursor:        pointer;
+  transition:    all 100ms;
+  line-height:   1.5;
+}
+.sr-w-btn:hover {
+  border-color: var(--color-brand-green);
+  color:        var(--color-brand-green);
+  background:   var(--color-brand-green-pale);
+}
+.sr-w-btn.active {
+  background:   var(--color-brand-green);
+  color:        #fff;
+  border-color: var(--color-brand-green);
+}
+
+/* ── Panel inner content wrapper ─────────────────── */
+.sr-panel-inner {
+  flex:          1;
+  min-width:     0;
+  min-height:    0;
+  /* children (StatusKPICard, InvoiceStatusChart) are full-height */
+}
+.sr-panel-inner > * {
+  height: 100%;
+}
+.sr-panel-inner-edit {
+  border:        1px dashed rgba(245,197,24,0.5);
+  border-top:    none;
+  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+  overflow:      hidden;
+}

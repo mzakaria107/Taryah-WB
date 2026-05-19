@@ -1,0 +1,209 @@
+﻿/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+   StatusKPICard â€” fully adaptive to --sr-h-factor
+   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+
+/* â”€â”€ Card shell â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+.skpi-card {
+  background:     #fff;
+  border-radius:  var(--radius-lg);
+  border:         1px solid var(--color-border);
+  box-shadow:     var(--shadow-card);
+  padding:
+    clamp(10px, calc(var(--sr-h-factor, 1) * var(--sr-font-scale, 1) * 18px), 26px)
+    clamp(12px, calc(var(--sr-h-factor, 1) * var(--sr-font-scale, 1) * 20px), 28px);
+  display:        flex;
+  flex-direction: column;
+  gap:            clamp(7px, calc(var(--sr-h-factor, 1) * var(--sr-font-scale, 1) * 14px), 20px);
+  animation:      fadeInUp 380ms ease-out both;
+  border-top:     3px solid var(--skpi-color, #c62828);
+  transition:     box-shadow 200ms;
+  /* fill the panel */
+  height:         100%;
+  box-sizing:     border-box;
+  overflow:       hidden;
+}
+.skpi-card:hover {
+  box-shadow: var(--shadow-card-hover);
+}
+
+/* â”€â”€ Header â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+.skpi-header {
+  display:     flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+}
+.skpi-header-left {
+  display:     flex;
+  align-items: center;
+  gap:         clamp(6px, calc(var(--sr-h-factor, 1) * var(--sr-font-scale, 1) * 10px), 14px);
+}
+.skpi-icon {
+  width:         clamp(26px, calc(var(--sr-h-factor, 1) * var(--sr-font-scale, 1) * 36px), 48px);
+  height:        clamp(26px, calc(var(--sr-h-factor, 1) * var(--sr-font-scale, 1) * 36px), 48px);
+  border-radius: var(--radius-md);
+  display:       flex;
+  align-items:   center;
+  justify-content: center;
+  font-size:     clamp(12px, calc(var(--sr-h-factor, 1) * var(--sr-font-scale, 1) * 16px), 22px);
+  font-weight:   900;
+  flex-shrink:   0;
+  transition:    width 280ms, height 280ms, font-size 280ms;
+}
+.skpi-title {
+  font-size:   clamp(12px, calc(var(--sr-h-factor, 1) * var(--sr-font-scale, 1) * 16px), 20px);
+  font-weight: 700;
+  color:       var(--color-text-primary);
+  line-height: 1.2;
+  transition:  font-size 280ms;
+}
+.skpi-subtitle {
+  font-size:      clamp(9px, calc(var(--sr-h-factor, 1) * var(--sr-font-scale, 1) * 11px), 14px);
+  color:          var(--color-text-muted);
+  font-weight:    600;
+  letter-spacing: 0.04em;
+  margin-top:     clamp(1px, calc(var(--sr-h-factor, 1) * var(--sr-font-scale, 1) * 2px), 4px);
+  transition:     font-size 280ms;
+}
+
+/* â”€â”€ Total block â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+.skpi-total-wrap {
+  display:       flex;
+  align-items:   baseline;
+  gap:           clamp(5px, calc(var(--sr-h-factor, 1) * var(--sr-font-scale, 1) * 8px), 12px);
+  padding:
+    clamp(6px,  calc(var(--sr-h-factor, 1) * var(--sr-font-scale, 1) * 10px), 14px)
+    clamp(10px, calc(var(--sr-h-factor, 1) * var(--sr-font-scale, 1) * 14px), 20px);
+  background:    var(--skpi-bg, rgba(198,40,40,0.06));
+  border-radius: var(--radius-md);
+  flex-shrink:   0;
+}
+.skpi-total-num {
+  font-size:   clamp(22px, calc(var(--sr-h-factor, 1) * var(--sr-font-scale, 1) * 36px), 52px);
+  font-weight: 900;
+  font-family: var(--font-en);
+  line-height: 1;
+  transition:  font-size 280ms;
+}
+.skpi-total-label {
+  font-size:   clamp(11px, calc(var(--sr-h-factor, 1) * var(--sr-font-scale, 1) * 13px), 16px);
+  color:       var(--color-text-secondary);
+  font-weight: 600;
+  transition:  font-size 280ms;
+}
+
+/* â”€â”€ Regions list â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+.skpi-regions {
+  display:        flex;
+  flex-direction: column;
+  gap:            clamp(5px, calc(var(--sr-h-factor, 1) * var(--sr-font-scale, 1) * 10px), 15px);
+  flex:           1;
+  min-height:     0;
+  overflow-y:     auto;
+  scrollbar-width: thin;
+}
+
+/* â”€â”€ Region row â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+.skpi-region-row {
+  display:        flex;
+  flex-direction: column;
+  gap:            clamp(2px, calc(var(--sr-h-factor, 1) * var(--sr-font-scale, 1) * 4px), 6px);
+}
+.skpi-region-top {
+  display:         flex;
+  align-items:     center;
+  justify-content: space-between;
+  gap:             8px;
+}
+.skpi-region-name {
+  font-size:      clamp(11px, calc(var(--sr-h-factor, 1) * var(--sr-font-scale, 1) * 13px), 16px);
+  font-weight:    600;
+  color:          var(--color-text-secondary);
+  white-space:    nowrap;
+  overflow:       hidden;
+  text-overflow:  ellipsis;
+  max-width:      140px;
+  transition:     font-size 280ms;
+}
+.skpi-region-nums {
+  display:     flex;
+  align-items: center;
+  gap:         clamp(5px, calc(var(--sr-h-factor, 1) * var(--sr-font-scale, 1) * 8px), 12px);
+  flex-shrink: 0;
+}
+.skpi-region-count {
+  font-size:   clamp(12px, calc(var(--sr-h-factor, 1) * var(--sr-font-scale, 1) * 14px), 18px);
+  font-weight: 800;
+  font-family: var(--font-en);
+  transition:  font-size 280ms;
+}
+.skpi-region-pct {
+  font-size:   clamp(10px, calc(var(--sr-h-factor, 1) * var(--sr-font-scale, 1) * 12px), 15px);
+  color:       var(--color-text-muted);
+  font-family: var(--font-en);
+  min-width:   38px;
+  text-align:  left;
+  transition:  font-size 280ms;
+}
+
+/* â”€â”€ Progress bar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+.skpi-bar-track {
+  height:        clamp(3px, calc(var(--sr-h-factor, 1) * var(--sr-font-scale, 1) * 6px), 9px);
+  background:    var(--color-border);
+  border-radius: 999px;
+  overflow:      hidden;
+  transition:    height 280ms;
+}
+.skpi-bar-fill {
+  height:        100%;
+  border-radius: 999px;
+  transition:    width 550ms cubic-bezier(0.4, 0, 0.2, 1);
+  width:         0;
+}
+
+/* â”€â”€ More chip â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+.skpi-more {
+  font-size:   clamp(9px, calc(var(--sr-h-factor, 1) * var(--sr-font-scale, 1) * 11px), 13px);
+  color:       var(--color-text-muted);
+  text-align:  center;
+  padding:     clamp(2px, calc(var(--sr-h-factor, 1) * var(--sr-font-scale, 1) * 4px), 6px) 0;
+  border-top:  1px dashed var(--color-border);
+  margin-top:  2px;
+}
+
+/* â”€â”€ Empty â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+.skpi-empty {
+  text-align: center;
+  font-size:  12px;
+  color:      var(--color-text-muted);
+  padding:    16px 0;
+}
+
+/* â”€â”€ Skeleton â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+.skpi-skel {
+  background:    var(--color-border);
+  border-radius: var(--radius-md);
+  animation:     shimmer 1.4s ease-in-out infinite;
+  display:       block;
+}
+.skpi-skel-title { width: 100px; height: 14px; }
+.skpi-skel-chip  { width: 60px;  height: 22px; border-radius: 999px; }
+.skpi-total-skel {
+  padding:        10px 14px;
+  background:     var(--color-bg-alt);
+  border-radius:  var(--radius-md);
+  display:        flex;
+  flex-direction: column;
+  gap:            6px;
+}
+.skpi-skel-row {
+  display:        flex;
+  flex-direction: column;
+  gap:            5px;
+  animation:      shimmer 1.4s ease-in-out infinite;
+}
+
+@keyframes shimmer {
+  0%,100% { opacity: 1; }
+  50%      { opacity: 0.45; }
+}

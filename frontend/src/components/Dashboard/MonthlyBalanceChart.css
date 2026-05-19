@@ -1,0 +1,274 @@
+/* ════════════════════════════════════════════════════
+   MonthlyBalanceChart — adaptive to --sr-h-factor
+   ════════════════════════════════════════════════════ */
+
+/* ── Card shell ──────────────────────────────────── */
+.mbc-card {
+  background:     #fff;
+  border-radius:  var(--radius-lg);
+  border:         1px solid var(--color-border);
+  box-shadow:     var(--shadow-card);
+  overflow:       hidden;
+  animation:      fadeInUp 350ms ease-out both;
+  height:         100%;
+  display:        flex;
+  flex-direction: column;
+  box-sizing:     border-box;
+}
+
+/* ── Header ──────────────────────────────────────── */
+.mbc-header {
+  display:         flex;
+  align-items:     flex-start;
+  justify-content: space-between;
+  flex-shrink:     0;
+  gap:             10px;
+  padding:
+    clamp(9px,  calc(var(--sr-h-factor, 1) * var(--sr-font-scale, 1) * 14px), 20px)
+    clamp(12px, calc(var(--sr-h-factor, 1) * var(--sr-font-scale, 1) * 18px), 24px)
+    clamp(7px,  calc(var(--sr-h-factor, 1) * var(--sr-font-scale, 1) * 11px), 16px);
+  border-bottom: 1px solid var(--color-border);
+}
+.mbc-title-wrap {
+  display:        flex;
+  flex-direction: column;
+  gap:            clamp(1px, calc(var(--sr-h-factor, 1) * var(--sr-font-scale, 1) * 2px), 4px);
+}
+.mbc-title {
+  font-size:   clamp(12px, calc(var(--sr-h-factor, 1) * var(--sr-font-scale, 1) * 15px), 19px);
+  font-weight: 700;
+  color:       var(--color-text-primary);
+  transition:  font-size 280ms;
+}
+.mbc-subtitle {
+  font-size: clamp(9px, calc(var(--sr-h-factor, 1) * var(--sr-font-scale, 1) * 11px), 13px);
+  color:     var(--color-text-muted);
+  transition: font-size 280ms;
+}
+
+/* ── Header totals ───────────────────────────────── */
+.mbc-totals {
+  display:     flex;
+  align-items: center;
+  gap:         clamp(8px, calc(var(--sr-h-factor, 1) * var(--sr-font-scale, 1) * 12px), 16px);
+  flex-shrink: 0;
+}
+.mbc-total-item {
+  display:        flex;
+  flex-direction: column;
+  align-items:    flex-end;
+  gap:            1px;
+}
+.mbc-total-val {
+  font-size:   clamp(13px, calc(var(--sr-h-factor, 1) * var(--sr-font-scale, 1) * 18px), 26px);
+  font-weight: 800;
+  font-family: var(--font-en);
+  line-height: 1;
+  color:       var(--color-text-primary);
+  transition:  font-size 280ms;
+}
+.mbc-total-val.danger { color: var(--color-danger); }
+.mbc-total-lbl {
+  font-size:   clamp(8px, calc(var(--sr-h-factor, 1) * var(--sr-font-scale, 1) * 10px), 12px);
+  color:       var(--color-text-muted);
+  font-weight: 600;
+  text-align:  right;
+  transition:  font-size 280ms;
+}
+.mbc-total-sep {
+  width:       1px;
+  height:      clamp(24px, calc(var(--sr-h-factor, 1) * var(--sr-font-scale, 1) * 32px), 44px);
+  background:  var(--color-border);
+  flex-shrink: 0;
+}
+
+/* ── Months section ──────────────────────────────── */
+.mbc-months-section {
+  display:        flex;
+  flex-direction: column;
+  gap:            clamp(3px, calc(var(--sr-h-factor, 1) * var(--sr-font-scale, 1) * 5px), 8px);
+  padding:
+    clamp(8px,  calc(var(--sr-h-factor, 1) * var(--sr-font-scale, 1) * 12px), 18px)
+    clamp(12px, calc(var(--sr-h-factor, 1) * var(--sr-font-scale, 1) * 18px), 24px);
+  flex:            1.6;    /* takes ~60% of available space */
+  min-height:      0;
+  overflow-y:      auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border) transparent;
+}
+
+/* ── Month row ───────────────────────────────────── */
+.mbc-month-row {
+  display:     grid;
+  grid-template-columns:
+    clamp(38px, calc(var(--sr-h-factor, 1) * var(--sr-font-scale, 1) * 46px), 58px)
+    1fr
+    clamp(34px, calc(var(--sr-h-factor, 1) * var(--sr-font-scale, 1) * 46px), 60px)
+    clamp(18px, calc(var(--sr-h-factor, 1) * var(--sr-font-scale, 1) * 22px), 28px);
+  align-items: center;
+  gap:         clamp(5px, calc(var(--sr-h-factor, 1) * var(--sr-font-scale, 1) * 8px), 12px);
+  transition:  opacity 200ms;
+}
+.mbc-month-row.mbc-month-empty {
+  opacity: 0.38;
+}
+.mbc-month-row.mbc-month-current .mbc-month-name {
+  color:       var(--color-brand-green);
+  font-weight: 800;
+}
+
+.mbc-month-name {
+  font-size:   clamp(10px, calc(var(--sr-h-factor, 1) * var(--sr-font-scale, 1) * 12px), 15px);
+  font-weight: 600;
+  color:       var(--color-text-secondary);
+  white-space: nowrap;
+  transition:  font-size 280ms;
+}
+.mbc-month-bal {
+  font-size:   clamp(10px, calc(var(--sr-h-factor, 1) * var(--sr-font-scale, 1) * 12px), 15px);
+  font-weight: 700;
+  font-family: var(--font-en);
+  color:       var(--color-danger);
+  text-align:  right;
+  transition:  font-size 280ms;
+}
+.mbc-month-badge {
+  font-size:     clamp(9px, calc(var(--sr-h-factor, 1) * var(--sr-font-scale, 1) * 11px), 14px);
+  font-weight:   800;
+  font-family:   var(--font-en);
+  background:    rgba(198, 40, 40, 0.1);
+  color:         var(--color-danger);
+  border-radius: 999px;
+  text-align:    center;
+  line-height:   1;
+  padding:       2px 5px;
+  transition:    font-size 280ms;
+}
+.mbc-month-badge.mbc-badge-zero {
+  background: var(--color-bg-alt);
+  color:      var(--color-text-muted);
+}
+
+/* ── Section label / divider ─────────────────────── */
+.mbc-section-label {
+  display:     flex;
+  align-items: center;
+  gap:         8px;
+  padding:
+    clamp(4px,  calc(var(--sr-h-factor, 1) * var(--sr-font-scale, 1) * 6px), 9px)
+    clamp(12px, calc(var(--sr-h-factor, 1) * var(--sr-font-scale, 1) * 18px), 24px);
+  background:  var(--color-bg-alt);
+  border-top:  1px solid var(--color-border);
+  border-bottom: 1px solid var(--color-border);
+  flex-shrink: 0;
+}
+.mbc-section-label span {
+  font-size:      clamp(9px, calc(var(--sr-h-factor, 1) * var(--sr-font-scale, 1) * 10px), 12px);
+  font-weight:    700;
+  color:          var(--color-text-muted);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  transition:     font-size 280ms;
+}
+
+/* ── Regions section ─────────────────────────────── */
+.mbc-regions-section {
+  display:        flex;
+  flex-direction: column;
+  gap:            clamp(4px, calc(var(--sr-h-factor, 1) * var(--sr-font-scale, 1) * 7px), 11px);
+  padding:
+    clamp(7px,  calc(var(--sr-h-factor, 1) * var(--sr-font-scale, 1) * 10px), 14px)
+    clamp(12px, calc(var(--sr-h-factor, 1) * var(--sr-font-scale, 1) * 18px), 24px);
+  flex:            1;    /* takes ~40% */
+  min-height:      0;
+  overflow-y:      auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border) transparent;
+}
+
+/* ── Region row ──────────────────────────────────── */
+.mbc-region-row {
+  display:     grid;
+  grid-template-columns:
+    clamp(55px, calc(var(--sr-h-factor, 1) * var(--sr-font-scale, 1) * 80px), 110px)
+    1fr
+    clamp(26px, calc(var(--sr-h-factor, 1) * var(--sr-font-scale, 1) * 34px), 44px)
+    clamp(30px, calc(var(--sr-h-factor, 1) * var(--sr-font-scale, 1) * 38px), 50px);
+  align-items: center;
+  gap:         clamp(5px, calc(var(--sr-h-factor, 1) * var(--sr-font-scale, 1) * 8px), 12px);
+}
+.mbc-region-name {
+  font-size:     clamp(10px, calc(var(--sr-h-factor, 1) * var(--sr-font-scale, 1) * 12px), 15px);
+  font-weight:   600;
+  color:         var(--color-text-secondary);
+  white-space:   nowrap;
+  overflow:      hidden;
+  text-overflow: ellipsis;
+  transition:    font-size 280ms;
+}
+.mbc-region-count {
+  font-size:   clamp(11px, calc(var(--sr-h-factor, 1) * var(--sr-font-scale, 1) * 13px), 17px);
+  font-weight: 800;
+  font-family: var(--font-en);
+  color:       var(--color-text-primary);
+  text-align:  right;
+  transition:  font-size 280ms;
+}
+.mbc-region-pct {
+  font-size:   clamp(10px, calc(var(--sr-h-factor, 1) * var(--sr-font-scale, 1) * 12px), 15px);
+  font-weight: 700;
+  font-family: var(--font-en);
+  color:       var(--color-brand-green);
+  text-align:  right;
+  transition:  font-size 280ms;
+}
+
+/* ── Shared bar ──────────────────────────────────── */
+.mbc-bar-track {
+  height:        clamp(4px, calc(var(--sr-h-factor, 1) * var(--sr-font-scale, 1) * 7px), 10px);
+  background:    var(--color-border);
+  border-radius: 999px;
+  overflow:      hidden;
+  transition:    height 280ms;
+}
+.mbc-bar-fill {
+  height:        100%;
+  border-radius: 999px;
+  transition:    width 600ms cubic-bezier(0.4, 0, 0.2, 1);
+  width:         0;
+}
+
+/* ── Empty state ─────────────────────────────────── */
+.mbc-empty {
+  text-align: center;
+  font-size:  clamp(11px, calc(var(--sr-h-factor, 1) * var(--sr-font-scale, 1) * 13px), 15px);
+  color:      var(--color-text-muted);
+  padding:    20px 0;
+}
+
+/* ── Skeleton ────────────────────────────────────── */
+.mbc-skel {
+  background:    var(--color-border);
+  border-radius: var(--radius-md);
+  animation:     shimmer 1.4s ease-in-out infinite;
+  display:       block;
+}
+.mbc-skel-title { width: 140px; height: 16px; }
+.mbc-skel-chip  { width: 80px;  height: 28px; border-radius: 8px; }
+.mbc-skel-row   { height: 14px; width: 100%; }
+.mbc-skel-row:nth-child(2) { width: 88%; animation-delay: 0.1s; }
+.mbc-skel-row:nth-child(3) { width: 74%; animation-delay: 0.2s; }
+.mbc-skel-row:nth-child(4) { width: 82%; animation-delay: 0.15s; }
+.mbc-skel-row:nth-child(5) { width: 65%; animation-delay: 0.25s; }
+.mbc-skel-row:nth-child(6) { width: 70%; animation-delay: 0.3s; }
+
+.mbc-divider {
+  height:     1px;
+  background: var(--color-border);
+  flex-shrink: 0;
+}
+
+@keyframes shimmer {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.45; }
+}

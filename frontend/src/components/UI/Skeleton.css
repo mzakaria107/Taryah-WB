@@ -1,0 +1,17 @@
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--color-border) 25%,
+    #e8ecf0 50%,
+    var(--color-border) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.4s infinite;
+  display: inline-block;
+  vertical-align: middle;
+}
+
+.skeleton-row td {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--color-border);
+}

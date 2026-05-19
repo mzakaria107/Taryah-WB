@@ -1,0 +1,212 @@
+/* ── Wrapper ───────────────────────────────────────────────── */
+.rm-wrap {
+  background: var(--color-surface, #fff);
+  border: 1px solid var(--color-border, #e5e7eb);
+  border-radius: var(--radius-lg, 12px);
+  padding: 14px 14px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.rm-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-primary, #111827);
+}
+
+.rm-scroll {
+  overflow-x: auto;
+}
+
+/* ── Table ─────────────────────────────────────────────────── */
+.rm-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  direction: rtl;
+}
+
+/* ── Head ── */
+.rm-table thead th {
+  padding: 7px 6px;
+  text-align: center;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-text-muted, #6b7280);
+  background: #f9fafb;
+  border-bottom: 2px solid var(--color-border, #e5e7eb);
+  white-space: nowrap;
+}
+.rm-th-region    { text-align: right !important; min-width: 82px; }
+.rm-th-num       { min-width: 56px; }
+.rm-th-delta     { min-width: 112px; }
+.rm-th-new       { min-width: 54px; }
+.rm-th-returning { min-width: 60px; }
+
+.rm-th-inner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+.rm-th-inner-new { color: #92400e; }
+.rm-th-inner-ret { color: #1e40af; }
+.rm-th-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.rm-dot-prev { background: #94a3b8; }
+.rm-dot-cur  { background: #3b82f6; }
+
+/* ── Body rows ── */
+.rm-tr { transition: background 0.1s; }
+.rm-tr:hover td { background: #f9fafb; }
+
+.rm-table tbody td {
+  padding: 8px 6px;
+  border-bottom: 1px solid var(--color-border, #f3f4f6);
+  vertical-align: middle;
+}
+
+.rm-td-region {
+  font-weight: 600;
+  color: var(--color-text-primary, #111827);
+  text-align: right;
+  font-size: 12px;
+}
+
+.rm-td-num {
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+  font-size: 12px;
+}
+.rm-td-prev { color: #64748b; }
+.rm-td-cur  { color: #1d4ed8; font-weight: 700; }
+
+.rm-zero { color: var(--color-text-muted, #9ca3af); }
+
+/* ── Delta cell ── */
+.rm-td-delta { padding: 5px 4px; }
+
+.rm-delta {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 7px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+  width: 100%;
+  justify-content: center;
+}
+
+/* UP — green glow */
+.rm-delta-up {
+  background: rgba(34, 197, 94, 0.12);
+  color: #15803d;
+  box-shadow: 0 0 0 1px rgba(34,197,94,0.25),
+              0 0 8px  rgba(34,197,94,0.20);
+}
+.rm-delta-up .rm-arrow-icon {
+  color: #22c55e;
+  filter: drop-shadow(0 0 4px rgba(34,197,94,0.7));
+}
+
+/* DOWN — red glow */
+.rm-delta-down {
+  background: rgba(239, 68, 68, 0.10);
+  color: #b91c1c;
+  box-shadow: 0 0 0 1px rgba(239,68,68,0.22),
+              0 0 8px  rgba(239,68,68,0.18);
+}
+.rm-delta-down .rm-arrow-icon {
+  color: #ef4444;
+  filter: drop-shadow(0 0 4px rgba(239,68,68,0.65));
+}
+
+/* ZERO */
+.rm-delta-zero {
+  background: #f3f4f6;
+  color: #9ca3af;
+  box-shadow: none;
+}
+
+.rm-delta-val { font-size: 12px; }
+.rm-delta-pct {
+  font-size: 10px;
+  opacity: 0.8;
+  border-right: 1px solid currentColor;
+  padding-right: 5px;
+  margin-right: 1px;
+}
+
+/* ── New customers pill (truly new — amber) ── */
+.rm-new-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #fef3c7;
+  color: #92400e;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  min-width: 24px;
+}
+.rm-new-pill-total {
+  background: #fde68a;
+  font-size: 12px;
+}
+
+/* ── Returning customers pill (blue) ── */
+.rm-ret-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #dbeafe;
+  color: #1e40af;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  min-width: 24px;
+}
+.rm-ret-pill-total {
+  background: #bfdbfe;
+  font-size: 12px;
+}
+
+.rm-td-returning { text-align: center; }
+
+/* ── Footer ── */
+.rm-tf td {
+  padding: 8px 6px;
+  border-top: 2px solid var(--color-border, #e5e7eb);
+  background: #f8fafc;
+}
+.rm-tf-label {
+  text-align: right;
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--color-text-primary, #111827);
+}
+.rm-tf-num {
+  text-align: center;
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--color-text-primary, #111827);
+}
+
+/* ── Skeleton ── */
+.rm-skel { animation: rmPulse 1.4s ease-in-out infinite; }
+@keyframes rmPulse { 0%,100%{opacity:1} 50%{opacity:.5} }
+.rm-sk { background: #e5e7eb; border-radius: 5px; }
+.rm-sk-title { width: 55%; height: 12px; margin-bottom: 4px; }
+.rm-sk-th    { width: 50px; height: 10px; margin: auto; }
+.rm-sk-td    { width: 40px; height: 12px; margin: auto; }

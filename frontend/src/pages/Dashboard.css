@@ -1,0 +1,82 @@
+/* ════════════════════════════════════════════════
+   Dashboard Page
+   ════════════════════════════════════════════════ */
+.db-page {
+  position: relative;
+}
+
+/* ── PDF button (floating top-left) ── */
+.db-pdf-btn {
+  position: fixed;
+  bottom: 80px;
+  left: 20px;
+  z-index: 50;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #374151;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  transition: all 0.15s;
+  font-family: inherit;
+}
+.db-pdf-btn:hover {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+}
+
+/* ── Print header (screen: hidden) ── */
+.db-print-header { display: none; }
+
+/* ════════════════════════════════════════════════
+   PRINT / PDF
+   ════════════════════════════════════════════════ */
+@media print {
+  @page { size: A4 landscape; margin: 1.2cm 1cm; }
+
+  .db-no-print { display: none !important; }
+
+  .db-print-header {
+    display: flex !important;
+    align-items: center;
+    gap: 12px;
+    padding-bottom: 10px;
+    margin-bottom: 14px;
+    border-bottom: 2px solid #1d4ed8;
+    break-after: avoid;
+  }
+  .db-print-logo  { font-size: 28px; }
+  .db-print-title { font-size: 17px; font-weight: 700; color: #1e3a5f; flex: 1; }
+  .db-print-date  { font-size: 11px; color: #6b7280; white-space: nowrap; }
+
+  /* Force background/color in KPI cards and charts */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Hide filter bar and action buttons */
+  [class*="filters"],
+  [class*="filter-"],
+  [class*="-filters"],
+  [class*="toolbar"],
+  [class*="-btn-export"],
+  [class*="-btn-download"] { display: none !important; }
+
+  /* Tables */
+  table { width: 100% !important; font-size: 10px !important; }
+  th, td { padding: 4px 6px !important; }
+
+  /* No break inside rows */
+  tr { break-inside: avoid; }
+
+  /* Remove scroll containers */
+  [style*="overflow"] { overflow: visible !important; }
+}

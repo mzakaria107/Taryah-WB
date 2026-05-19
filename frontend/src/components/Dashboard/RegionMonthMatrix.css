@@ -1,0 +1,302 @@
+/* ════════════════════════════════════════════════
+   RegionMonthMatrix  —  Heat-map table
+   ════════════════════════════════════════════════ */
+
+.rmm-section {
+  margin-bottom: 24px;
+  position:      relative; /* drawer overlay anchors here */
+}
+
+/* ── Header bar ───────────────────────────────── */
+.rmm-header-bar {
+  display:      flex;
+  align-items:  center;
+  gap:          12px;
+  margin-bottom: 8px;
+  padding:      7px 14px;
+  background:   var(--color-bg-alt);
+  border:       1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  flex-wrap:    wrap;
+  user-select:  none;
+}
+.rmm-title {
+  font-size:   12.5px;
+  font-weight: 700;
+  color:       var(--color-text-secondary);
+  flex:        1;
+  min-width:   0;
+  white-space: nowrap;
+}
+.rmm-grand {
+  font-size:   11.5px;
+  font-weight: 500;
+  color:       var(--color-text-muted);
+}
+.rmm-grand strong {
+  font-family: var(--font-en);
+  color:       var(--color-text-primary);
+}
+.rmm-grand-paid {
+  color:       var(--color-brand-green);
+  font-weight: 600;
+}
+
+/* ── Year picker ──────────────────────────────── */
+.rmm-year-picker {
+  display:     flex;
+  align-items: center;
+  gap:         4px;
+  background:  #fff;
+  border:      1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding:     2px 4px;
+}
+.rmm-yr-btn {
+  display:         flex;
+  align-items:     center;
+  justify-content: center;
+  width:           26px;
+  height:          26px;
+  border:          none;
+  background:      transparent;
+  color:           var(--color-text-secondary);
+  cursor:          pointer;
+  border-radius:   var(--radius-sm);
+  transition:      background 120ms;
+}
+.rmm-yr-btn:hover:not(:disabled) { background: var(--color-brand-green-pale); color: var(--color-brand-green); }
+.rmm-yr-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+.rmm-yr-label {
+  font-size:   13px;
+  font-weight: 800;
+  font-family: var(--font-en);
+  color:       var(--color-text-primary);
+  min-width:   38px;
+  text-align:  center;
+}
+
+/* ── Table wrapper ────────────────────────────── */
+.rmm-wrapper {
+  overflow-x:  auto;
+  overflow-y:  visible;
+  border:      1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow:  var(--shadow-card);
+  background:  #fff;
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border) transparent;
+}
+.rmm-wrapper::-webkit-scrollbar       { height: 5px; }
+.rmm-wrapper::-webkit-scrollbar-track { background: transparent; }
+.rmm-wrapper::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 4px; }
+
+/* ── Table ────────────────────────────────────── */
+.rmm-table {
+  width:           100%;
+  border-collapse: collapse;
+  font-size:       12.5px;
+  min-width:       640px;
+}
+
+/* ── Sticky region column ─────────────────────── */
+.rmm-sticky-col {
+  position:   sticky;
+  right:      0;
+  z-index:    3;
+  background: #fff;
+}
+thead .rmm-sticky-col { background: #f7f7f7; z-index: 4; }
+tfoot .rmm-sticky-col { background: #f0f0f0; z-index: 4; }
+
+/* ── TH ───────────────────────────────────────── */
+.rmm-th-region,
+.rmm-th-month,
+.rmm-th-total {
+  position:    sticky;
+  top:         0;
+  background:  #f7f7f7;
+  z-index:     3;
+  padding:     9px 10px 8px;
+  font-size:   11px;
+  font-weight: 700;
+  color:       var(--color-text-secondary);
+  text-align:  center;
+  border-bottom: 2px solid var(--color-border);
+  white-space: nowrap;
+}
+.rmm-th-region {
+  text-align: right;
+  min-width:  110px;
+  max-width:  160px;
+  border-left: 2px solid var(--color-border);
+  box-shadow:  -2px 0 6px rgba(0,0,0,0.05);
+}
+.rmm-th-total {
+  border-right: 2px solid var(--color-border);
+  background:   #f0f0f0;
+}
+
+/* ── Region name cell ─────────────────────────── */
+.rmm-td-region {
+  padding:     10px 12px;
+  font-size:   12px;
+  font-weight: 700;
+  color:       var(--color-text-primary);
+  white-space: nowrap;
+  border-bottom: 1px solid var(--color-border-light, #f0f0f0);
+  border-left:   2px solid var(--color-border);
+  box-shadow:    -2px 0 6px rgba(0,0,0,0.04);
+  min-width:     110px;
+}
+
+/* ── Data cell ────────────────────────────────── */
+.rmm-td-cell {
+  padding:    8px 10px;
+  text-align: center;
+  cursor:     pointer;
+  border-bottom: 1px solid rgba(255,255,255,0.18);
+  border-right:  1px solid rgba(255,255,255,0.12);
+  transition: filter 120ms, transform 120ms;
+  min-width:  72px;
+  vertical-align: middle;
+}
+.rmm-td-cell:hover {
+  filter:    brightness(0.88);
+  transform: scale(1.03);
+  z-index:   2;
+  position:  relative;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.18);
+  border-radius: 4px;
+}
+
+/* ── Empty cell ───────────────────────────────── */
+.rmm-td-empty {
+  text-align: center;
+  color:      #d0d0d0;
+  font-size:  13px;
+  padding:    10px 4px;
+  border-bottom: 1px solid var(--color-border-light, #f0f0f0);
+}
+
+/* ── Row total cell ───────────────────────────── */
+.rmm-td-row-total {
+  text-align:  center;
+  padding:     8px 10px;
+  background:  #f9f9f9;
+  border-left: 2px solid var(--color-border);
+  border-bottom: 1px solid var(--color-border-light, #f0f0f0);
+  min-width:   80px;
+}
+
+/* ── Cell content ─────────────────────────────── */
+.rmm-cell-bal {
+  display:     block;
+  font-size:   12.5px;
+  font-weight: 800;
+  font-family: var(--font-en);
+  line-height: 1.2;
+  white-space: nowrap;
+}
+.rmm-cell-cnt {
+  display:     block;
+  font-size:   10px;
+  font-weight: 600;
+  font-family: var(--font-en);
+  opacity:     0.7;
+  margin-top:  2px;
+}
+
+/* ── Pills (unpaid / partial counts) ─────────── */
+.rmm-cell-pills {
+  display:     flex;
+  gap:         3px;
+  justify-content: center;
+  flex-wrap:   wrap;
+  margin-top:  4px;
+}
+.rmm-pill {
+  font-size:     9.5px;
+  font-weight:   700;
+  font-family:   var(--font-en);
+  padding:       1px 5px;
+  border-radius: var(--radius-full);
+  line-height:   1.4;
+  white-space:   nowrap;
+}
+.rmm-pill-u {
+  background: rgba(255,255,255,0.30);
+  color:      inherit;
+  border:     1px solid rgba(255,255,255,0.40);
+}
+.rmm-pill-p {
+  background: rgba(255,150,50,0.25);
+  color:      inherit;
+  border:     1px solid rgba(255,150,50,0.35);
+}
+/* Paid pill — always green regardless of cell intensity */
+.rmm-pill-ok {
+  background: rgba(46,125,50,0.18);
+  color:      var(--color-brand-green);
+  border:     1px solid rgba(46,125,50,0.30);
+}
+/* Cell with 0 remaining balance (all paid) */
+.rmm-td-cell-paid {
+  background: rgba(46,125,50,0.07) !important;
+  cursor:     pointer;
+}
+.rmm-td-cell-paid:hover {
+  background: rgba(46,125,50,0.15) !important;
+  filter: none;
+}
+.rmm-cell-bal-zero {
+  color: var(--color-brand-green) !important;
+  font-size: 11px !important;
+  opacity: 0.7;
+}
+/* For light cells, use darker pill colors */
+.rmm-td-cell[style*="rgba(198,40,40,0.0"],
+.rmm-td-cell[style*="rgba(198,40,40,0.1"] {
+  /* low intensity cell — no override needed */
+}
+
+/* ── Footer ───────────────────────────────────── */
+.rmm-tf-row td {
+  background:  #f0f0f0;
+  border-top:  2px solid var(--color-border);
+  padding:     9px 10px;
+  text-align:  center;
+}
+.rmm-tf-label {
+  font-size:   12px;
+  font-weight: 800;
+  color:       var(--color-text-secondary);
+  text-align:  right !important;
+  padding-right: 14px !important;
+  border-left: 2px solid var(--color-border);
+}
+.rmm-td-col-total {
+  background: #f4f4f4 !important;
+}
+.rmm-td-grand-total {
+  background:  #ebebeb !important;
+  border-right: 2px solid var(--color-border);
+}
+
+/* ── Skeleton ─────────────────────────────────── */
+.rmm-sk {
+  height:          11px;
+  border-radius:   var(--radius-sm);
+  background:      linear-gradient(90deg, var(--color-border) 25%, #f0f0f0 50%, var(--color-border) 75%);
+  background-size: 200% 100%;
+  animation:       shimmer 1.4s infinite;
+}
+.rmm-sk-title { height: 13px; width: 280px; }
+@keyframes shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* ── Rows hover ───────────────────────────────── */
+.rmm-tr:hover .rmm-td-region { background: var(--color-brand-green-pale); }
+.rmm-tr:hover .rmm-td-row-total { background: #f0f4f0; }

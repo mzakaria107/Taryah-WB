@@ -1,0 +1,32 @@
+.lc-toolbar { display: flex; align-items: center; gap: 6px; }
+
+.lc-toggle {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 14px;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+  background: #fff;
+  color: #6b7280;
+  font-size: 13px; font-weight: 500;
+  cursor: pointer; transition: all 0.15s;
+}
+.lc-toggle:hover { border-color: #93c5fd; color: #3b82f6; background: #eff6ff; }
+.lc-toggle-active { border-color: #3b82f6; color: #3b82f6; background: #eff6ff; }
+
+.lc-reset-btn {
+  display: flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+  background: #fff; color: #9ca3af;
+  cursor: pointer; transition: all 0.15s;
+}
+.lc-reset-btn:hover { border-color: #f87171; color: #ef4444; background: #fef2f2; }
+
+.lc-hidden-badge {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 16px; height: 16px; padding: 0 4px;
+  font-size: 10px; font-weight: 700;
+  background: #f59e0b; color: #fff;
+  border-radius: 999px;
+}

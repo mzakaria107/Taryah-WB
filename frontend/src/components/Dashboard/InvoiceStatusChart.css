@@ -1,0 +1,221 @@
+﻿/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+   InvoiceStatusChart â€” fully adaptive to --sr-h-factor
+   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+
+/* â”€â”€ Card shell â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+.sc-card {
+  background:     #fff;
+  border-radius:  var(--radius-lg);
+  border:         1px solid var(--color-border);
+  box-shadow:     var(--shadow-card);
+  overflow:       hidden;
+  animation:      fadeInUp 350ms ease-out both;
+  /* Fill the panel height */
+  height:         100%;
+  display:        flex;
+  flex-direction: column;
+  box-sizing:     border-box;
+}
+
+/* â”€â”€ Header â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+.sc-header {
+  display:         flex;
+  align-items:     center;
+  justify-content: space-between;
+  flex-shrink:     0;
+  padding:
+    clamp(10px, calc(var(--sr-h-factor, 1) * var(--sr-font-scale, 1) * 16px), 22px)
+    clamp(14px, calc(var(--sr-h-factor, 1) * var(--sr-font-scale, 1) * 20px), 26px)
+    clamp(8px,  calc(var(--sr-h-factor, 1) * var(--sr-font-scale, 1) * 14px), 18px);
+  border-bottom: 1px solid var(--color-border);
+}
+.sc-title-wrap {
+  display:        flex;
+  flex-direction: column;
+  gap:            clamp(1px, calc(var(--sr-h-factor, 1) * var(--sr-font-scale, 1) * 3px), 5px);
+}
+.sc-title {
+  font-size:   clamp(13px, calc(var(--sr-h-factor, 1) * var(--sr-font-scale, 1) * 17px), 21px);
+  font-weight: 700;
+  color:       var(--color-text-primary);
+}
+.sc-subtitle {
+  font-size: clamp(10px, calc(var(--sr-h-factor, 1) * var(--sr-font-scale, 1) * 12px), 14px);
+  color:     var(--color-text-muted);
+}
+.sc-total-chip {
+  font-size:     clamp(10px, calc(var(--sr-h-factor, 1) * var(--sr-font-scale, 1) * 12px), 15px);
+  font-weight:   700;
+  font-family:   var(--font-en);
+  padding:
+    clamp(2px, calc(var(--sr-h-factor, 1) * var(--sr-font-scale, 1) * 4px), 6px)
+    clamp(8px, calc(var(--sr-h-factor, 1) * var(--sr-font-scale, 1) * 12px), 16px);
+  background:    var(--color-bg-alt);
+  border:        1px solid var(--color-border);
+  border-radius: 999px;
+  color:         var(--color-text-secondary);
+}
+
+/* â”€â”€ Body (donut + stats) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+.sc-body {
+  display:     flex;
+  align-items: center;
+  gap:         clamp(14px, calc(var(--sr-h-factor, 1) * var(--sr-font-scale, 1) * 24px), 36px);
+  padding:
+    clamp(12px, calc(var(--sr-h-factor, 1) * var(--sr-font-scale, 1) * 20px), 30px)
+    clamp(14px, calc(var(--sr-h-factor, 1) * var(--sr-font-scale, 1) * 24px), 32px);
+  flex:        1;
+  min-height:  0;
+  overflow:    hidden;
+}
+@media (max-width: 580px) {
+  .sc-body { flex-direction: column; align-items: stretch; }
+  .sc-donut-wrap { align-self: center; }
+}
+
+/* â”€â”€ Donut â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+.sc-donut-wrap {
+  flex-shrink: 0;
+  width:       clamp(72px,  calc(var(--sr-h-factor, 1) * var(--sr-font-scale, 1) * 128px), 200px);
+  height:      clamp(72px,  calc(var(--sr-h-factor, 1) * var(--sr-font-scale, 1) * 128px), 200px);
+  transition:  width 280ms cubic-bezier(.4,0,.2,1),
+               height 280ms cubic-bezier(.4,0,.2,1);
+}
+.donut-svg {
+  width:    100%;
+  height:   100%;
+  overflow: visible;
+}
+.donut-seg {
+  transition: stroke-dasharray 700ms cubic-bezier(0.4, 0, 0.2, 1),
+              stroke-dashoffset 700ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* â”€â”€ Stats column â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+.sc-stats {
+  flex:            1;
+  display:         flex;
+  flex-direction:  column;
+  gap:             clamp(5px, calc(var(--sr-h-factor, 1) * var(--sr-font-scale, 1) * 10px), 16px);
+  min-width:       0;
+  overflow:        hidden;
+}
+
+/* â”€â”€ Stat row â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+.sc-stat-row {
+  display:        flex;
+  flex-direction: column;
+  gap:            clamp(2px, calc(var(--sr-h-factor, 1) * var(--sr-font-scale, 1) * 5px), 8px);
+}
+.sc-stat-label {
+  display:     flex;
+  align-items: center;
+  gap:         clamp(4px, calc(var(--sr-h-factor, 1) * var(--sr-font-scale, 1) * 7px), 10px);
+}
+.sc-dot {
+  width:        clamp(6px, calc(var(--sr-h-factor, 1) * var(--sr-font-scale, 1) * 9px), 12px);
+  height:       clamp(6px, calc(var(--sr-h-factor, 1) * var(--sr-font-scale, 1) * 9px), 12px);
+  border-radius: 50%;
+  flex-shrink:  0;
+}
+.sc-stat-name {
+  font-size:   clamp(11px, calc(var(--sr-h-factor, 1) * var(--sr-font-scale, 1) * 13px), 16px);
+  font-weight: 600;
+  color:       var(--color-text-secondary);
+}
+.sc-bar-wrap {
+  display:     flex;
+  align-items: center;
+  gap:         clamp(6px, calc(var(--sr-h-factor, 1) * var(--sr-font-scale, 1) * 10px), 14px);
+}
+.sc-bar-track {
+  flex:          1;
+  height:        clamp(4px, calc(var(--sr-h-factor, 1) * var(--sr-font-scale, 1) * 8px), 12px);
+  background:    var(--color-border);
+  border-radius: 999px;
+  overflow:      hidden;
+}
+.sc-bar-fill {
+  height:        100%;
+  border-radius: 999px;
+  transition:    width 600ms cubic-bezier(0.4, 0, 0.2, 1);
+  width:         0;
+}
+.sc-stat-count {
+  font-size:   clamp(12px, calc(var(--sr-h-factor, 1) * var(--sr-font-scale, 1) * 15px), 20px);
+  font-weight: 800;
+  font-family: var(--font-en);
+  min-width:   clamp(40px, calc(var(--sr-h-factor, 1) * var(--sr-font-scale, 1) * 52px), 68px);
+  text-align:  left;
+}
+.sc-stat-pct {
+  font-size:   clamp(10px, calc(var(--sr-h-factor, 1) * var(--sr-font-scale, 1) * 12px), 15px);
+  color:       var(--color-text-muted);
+  font-family: var(--font-en);
+  min-width:   clamp(30px, calc(var(--sr-h-factor, 1) * var(--sr-font-scale, 1) * 38px), 50px);
+  text-align:  right;
+}
+
+/* â”€â”€ Totals row â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+.sc-totals {
+  display:     flex;
+  gap:         clamp(12px, calc(var(--sr-h-factor, 1) * var(--sr-font-scale, 1) * 20px), 28px);
+  padding-top: clamp(6px, calc(var(--sr-h-factor, 1) * var(--sr-font-scale, 1) * 10px), 14px);
+  border-top:  1px dashed var(--color-border);
+  margin-top:  clamp(2px, calc(var(--sr-h-factor, 1) * var(--sr-font-scale, 1) * 4px), 6px);
+}
+.sc-total-item {
+  display:        flex;
+  flex-direction: column;
+  gap:            clamp(1px, calc(var(--sr-h-factor, 1) * var(--sr-font-scale, 1) * 2px), 4px);
+}
+.sc-total-lbl {
+  font-size:      clamp(9px, calc(var(--sr-h-factor, 1) * var(--sr-font-scale, 1) * 11px), 14px);
+  font-weight:    700;
+  color:          var(--color-text-muted);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.sc-total-val {
+  font-size:   clamp(15px, calc(var(--sr-h-factor, 1) * var(--sr-font-scale, 1) * 20px), 28px);
+  font-weight: 800;
+  font-family: var(--font-en);
+  color:       var(--color-text-primary);
+  line-height: 1;
+}
+
+/* â”€â”€ Loading skeleton â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+.sc-loading {
+  display:     flex;
+  align-items: center;
+  gap:         24px;
+  padding:     20px 24px;
+  flex:        1;
+}
+.sc-donut-skel {
+  width:        128px;
+  height:       128px;
+  border-radius: 50%;
+  border:       16px solid var(--color-border);
+  flex-shrink:  0;
+  animation:    shimmer 1.4s ease-in-out infinite;
+}
+.sc-rows-skel {
+  flex:            1;
+  display:         flex;
+  flex-direction:  column;
+  gap:             16px;
+}
+.sc-row-skel {
+  height:        28px;
+  background:    var(--color-border);
+  border-radius: var(--radius-md);
+  animation:     shimmer 1.4s ease-in-out infinite;
+}
+.sc-row-skel:nth-child(2) { width: 80%; animation-delay: 0.1s; }
+.sc-row-skel:nth-child(3) { width: 65%; animation-delay: 0.2s; }
+
+@keyframes shimmer {
+  0%,100% { opacity: 1; }
+  50%      { opacity: 0.5; }
+}

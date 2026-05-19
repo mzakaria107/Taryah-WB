@@ -1,0 +1,5 @@
+CREATE TABLE IF NOT EXISTS regions (
+  id   SERIAL PRIMARY KEY,
+  name_ar VARCHAR(100) NOT NULL,
+  name_en VARCHAR(100) NOT NULL
+);

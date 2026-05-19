@@ -1,0 +1,315 @@
+/* ═══════════════════════════════════════
+   Notes Report Page
+   ═══════════════════════════════════════ */
+
+.nr-page {
+  padding: 20px 24px;
+  max-width: 1400px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* Header */
+.nr-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.nr-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+}
+
+.nr-count {
+  background: var(--color-brand-green);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-family: var(--font-en);
+}
+
+/* Filters */
+.nr-filters {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.nr-search-wrap {
+  position: relative;
+  flex: 1;
+  min-width: 200px;
+  max-width: 320px;
+}
+
+.nr-search-icon {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--color-text-muted);
+  pointer-events: none;
+}
+
+.nr-input {
+  width: 100%;
+  padding: 7px 32px 7px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  font-size: 13px;
+  background: var(--color-bg-card);
+  color: var(--color-text-primary);
+  font-family: var(--font-ar);
+  transition: border-color 150ms;
+}
+
+.nr-input:focus {
+  outline: none;
+  border-color: var(--color-brand-green);
+  box-shadow: 0 0 0 3px rgba(5,150,105,.08);
+}
+
+.nr-input.nr-date {
+  padding-right: 10px;
+  min-width: 130px;
+  max-width: 150px;
+}
+
+.nr-select {
+  padding: 7px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  font-size: 13px;
+  background: var(--color-bg-card);
+  color: var(--color-text-primary);
+  font-family: var(--font-ar);
+  cursor: pointer;
+  min-width: 150px;
+}
+
+/* Loading bar */
+.nr-loading-bar {
+  height: 3px;
+  background: linear-gradient(90deg, var(--color-brand-green) 0%, transparent 100%);
+  animation: nr-shimmer 1.2s infinite;
+  border-radius: 2px;
+  margin-bottom: 4px;
+}
+
+@keyframes nr-shimmer {
+  0%   { width: 0%; opacity: 1; }
+  80%  { width: 100%; opacity: 1; }
+  100% { width: 100%; opacity: 0; }
+}
+
+/* Table */
+.nr-table-wrap {
+  background: var(--color-bg-card);
+  border-radius: 12px;
+  border: 1px solid var(--color-border);
+  overflow: hidden;
+}
+
+.nr-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.nr-table thead th {
+  background: var(--color-bg-header, #1a2a1a);
+  color: #fff;
+  padding: 11px 14px;
+  text-align: right;
+  font-weight: 600;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.nr-row {
+  border-bottom: 1px solid var(--color-border);
+  transition: background 120ms;
+}
+
+.nr-row:last-child { border-bottom: none; }
+.nr-row:hover { background: var(--color-bg-hover, rgba(5,150,105,.04)); }
+
+.nr-table td {
+  padding: 10px 14px;
+  vertical-align: top;
+  color: var(--color-text-primary);
+}
+
+.nr-td-date {
+  white-space: nowrap;
+  font-family: var(--font-en);
+  font-size: 12px;
+  color: var(--color-text-secondary) !important;
+}
+
+.nr-td-user { white-space: nowrap; }
+
+.nr-user-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--color-bg-page, #f4f6fa);
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+
+.nr-td-mono {
+  font-family: var(--font-en);
+  font-size: 12px;
+  color: var(--color-text-secondary) !important;
+}
+
+.nr-td-name {
+  font-weight: 600;
+  max-width: 180px;
+}
+
+.nr-td-note {
+  max-width: 300px;
+  line-height: 1.5;
+  color: var(--color-text-primary);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* Type badges */
+.nr-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.badge-customer {
+  background: rgba(5,150,105,.12);
+  color: var(--color-brand-green);
+}
+
+.badge-invoice {
+  background: rgba(59,130,246,.12);
+  color: #3b82f6;
+}
+
+/* Empty */
+.nr-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 60px 20px;
+  color: var(--color-text-muted);
+  font-size: 14px;
+}
+
+/* Pagination */
+.nr-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 8px 0;
+}
+
+.nr-page-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-card);
+  color: var(--color-text-primary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 120ms;
+}
+
+.nr-page-btn:hover:not(:disabled) {
+  border-color: var(--color-brand-green);
+  color: var(--color-brand-green);
+}
+
+.nr-page-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.nr-page-info {
+  font-size: 13px;
+  color: var(--color-text-secondary);
+}
+
+.nr-page-total {
+  color: var(--color-text-muted);
+  font-size: 12px;
+}
+
+@media (max-width: 768px) {
+  .nr-page { padding: 12px; }
+  .nr-table { font-size: 12px; }
+  .nr-table td, .nr-table th { padding: 8px 10px; }
+  .nr-td-name { max-width: 120px; }
+  .nr-td-note { max-width: 150px; }
+}
+
+/* Delete button in report table */
+.nr-del-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--color-border);
+  background: transparent;
+  color: var(--color-text-muted);
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 150ms;
+  white-space: nowrap;
+}
+.nr-del-btn:hover {
+  border-color: var(--color-danger);
+  color: var(--color-danger);
+  background: rgba(198,40,40,0.06);
+}
+.nr-del-btn.confirm {
+  background: var(--color-danger);
+  color: #fff;
+  border-color: var(--color-danger);
+  font-weight: 700;
+  font-size: 11px;
+  padding: 3px 8px;
+}
+.nr-del-btn.cancel {
+  background: var(--color-bg-card);
+  color: var(--color-text-secondary);
+  font-weight: 600;
+  font-size: 11px;
+  padding: 3px 8px;
+}

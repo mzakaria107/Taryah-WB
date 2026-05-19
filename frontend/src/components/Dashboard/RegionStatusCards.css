@@ -1,0 +1,116 @@
+/* ════════════════════════════════════════════════
+   RegionStatusCards  —  invoice count variant
+   Extends RegionBalanceCards.css (rbc-*)
+   ════════════════════════════════════════════════ */
+
+/* ── Section ──────────────────────────────────── */
+.rsc-section {
+  margin-bottom: 24px;
+}
+
+/* ── Header row ───────────────────────────────── */
+.rsc-header-row {
+  display:         flex;
+  align-items:     center;
+  justify-content: space-between;
+  gap:             10px;
+  flex-wrap:       wrap;
+  margin-bottom:   8px;
+  padding:         6px 12px;
+  background:      var(--color-bg-alt);
+  border:          1px solid var(--color-border);
+  border-radius:   var(--radius-md);
+  user-select:     none;
+}
+
+.rsc-section-lbl {
+  font-size:   12px;
+  font-weight: 700;
+  color:       var(--color-text-secondary);
+  white-space: nowrap;
+}
+
+.rsc-grand-total {
+  font-size:   11.5px;
+  font-weight: 500;
+  color:       var(--color-text-muted);
+  display:     flex;
+  align-items: center;
+  gap:         4px;
+  flex-wrap:   wrap;
+}
+.rsc-grand-total strong {
+  font-family: var(--font-en);
+  color:       var(--color-text-primary);
+}
+
+/* ── Card accent — orange-red left border ─────── */
+.rsc-card {
+  border-right-color: #c62828 !important;
+}
+
+/* ── % of total chip ──────────────────────────── */
+.rsc-rate-pct {
+  color:      #6a1515 !important;
+  background: rgba(198, 40, 40, 0.08) !important;
+}
+
+/* ── Total count (large number) ───────────────── */
+.rsc-total-count {
+  color: var(--color-text-primary) !important;
+  font-size: calc(var(--rbc-f-scale, 1) * 17px) !important;
+}
+
+/* ── Type icons (✗ / ◑) ───────────────────────── */
+.rsc-type-icon {
+  font-size:   calc(var(--rbc-f-scale, 1) * 12px);
+  font-weight: 700;
+  width:       16px;
+  text-align:  center;
+  flex-shrink: 0;
+  line-height: 1;
+  transition:  font-size 200ms;
+}
+.rsc-unpaid  { color: #c62828; }
+.rsc-partial { color: #e65100; }
+
+/* ── Count values (inline row) ────────────────── */
+.rsc-count-val {
+  font-size:  calc(var(--rbc-f-scale, 1) * 10px) !important;
+  width:      clamp(28px, calc(var(--rbc-f-scale, 1) * 38px), 52px) !important;
+  transition: font-size 200ms, width 200ms;
+}
+
+/* ── Year-row count value ─────────────────────── */
+.rsc-yr-val {
+  color:       var(--color-text-secondary);
+  font-family: var(--font-en);
+}
+
+/* ── Dual-colour footer bar ───────────────────── */
+.rsc-foot-dual {
+  display:         flex;
+  height:          4px;
+  background:      var(--color-border);
+  margin:          6px -12px 0;
+  border-radius:   0 0 var(--radius-lg) var(--radius-lg);
+  overflow:        hidden;
+}
+.rbc-card-compact .rsc-foot-dual { margin: 5px -9px  0; }
+.rbc-card-large   .rsc-foot-dual { margin: 8px -16px 0; }
+.rbc-card-wide    .rsc-foot-dual { margin: 8px -20px 0; }
+
+.rsc-foot-unpaid {
+  height:     100%;
+  background: #c62828;
+  animation:  fillBar 700ms ease-out both;
+  min-width:  0;
+  transition: width 400ms ease;
+}
+.rsc-foot-partial {
+  height:     100%;
+  background: #e65100;
+  animation:  fillBar 700ms ease-out both;
+  min-width:  0;
+  transition: width 400ms ease;
+}

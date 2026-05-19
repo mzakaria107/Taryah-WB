@@ -14,6 +14,7 @@ const CustomerDetailPage  = lazy(() => import('./pages/CustomerDetailPage'));
 const SalesActivityPage   = lazy(() => import('./pages/SalesActivityPage'));
 const SalesTasksPage      = lazy(() => import('./pages/SalesTasksPage'));
 const FridgesPage         = lazy(() => import('./pages/FridgesPage'));
+const StockPage           = lazy(() => import('./pages/StockPage'));
 
 /* ── Guards ──────────────────────────────────────── */
 function PrivateRoute({ children }) {
@@ -122,6 +123,15 @@ export default function App() {
         <PrivateRoute>
           <AppLayout>
             <PageSuspense><FridgesPage /></PageSuspense>
+          </AppLayout>
+        </PrivateRoute>
+      } />
+
+      {/* Stock / NetSuite */}
+      <Route path="/stock" element={
+        <PrivateRoute>
+          <AppLayout>
+            <PageSuspense><StockPage /></PageSuspense>
           </AppLayout>
         </PrivateRoute>
       } />

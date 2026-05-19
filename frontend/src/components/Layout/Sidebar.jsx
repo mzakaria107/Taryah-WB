@@ -9,6 +9,7 @@ import {
   UserSearch,
   ClipboardList,
   Thermometer,
+  Package,
   ChevronRight,
   ChevronLeft,
 } from 'lucide-react';
@@ -21,6 +22,7 @@ const NAV = [
   { to: '/sales-activity', label: 'تقرير العملاء',   icon: <UserSearch size={18} />,    always: true },
   { to: '/sales-tasks',    label: 'مهام المبيعات',   icon: <ClipboardList size={18} />, always: true },
   { to: '/fridges',        label: 'متابعة الثلاجات', icon: <Thermometer   size={18} />, always: true },
+  { to: '/stock',          label: 'المخزون',          icon: <Package       size={18} />, always: true },
   { to: '/upload',         label: 'رفع البيانات',    icon: <Upload size={18} />,        roles: ['super_admin','it_admin'] },
   { to: '/users',    label: 'المستخدمون',    icon: <Users size={18} />,           roles: ['super_admin'] },
 ];

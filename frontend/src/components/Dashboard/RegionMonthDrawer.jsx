@@ -28,7 +28,7 @@ function SkeletonRows() {
   ));
 }
 
-export default function RegionMonthDrawer({ cell, customerTypeParam, onClose }) {
+export default function RegionMonthDrawer({ cell, customerTypeParam, onClose, topOffset = 0 }) {
   const navigate = useNavigate();
   const { region_id, region_name, month, year } = cell;
 
@@ -46,7 +46,7 @@ export default function RegionMonthDrawer({ cell, customerTypeParam, onClose }) 
   const customers = data?.customers ?? [];
 
   return (
-    <div className="rmd-overlay" onClick={onClose}>
+    <div className="rmd-overlay" style={{ top: topOffset }} onClick={onClose}>
       <div className="rmd-drawer" onClick={e => e.stopPropagation()}>
 
         {/* ── Header ── */}

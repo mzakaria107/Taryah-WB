@@ -2,10 +2,14 @@
    RegionMonthDrawer  —  slide-in customer panel
    ════════════════════════════════════════════════ */
 
-/* ── Overlay — full-viewport so drawer has full height ── */
+/* ── Overlay — starts at matrix top, covers to viewport bottom ── */
 .rmd-overlay {
   position:   fixed;
-  inset:      0;
+  /* top is set via inline style (matrix section's getBoundingClientRect().top) */
+  top:        0;
+  left:       0;
+  right:      0;
+  bottom:     0;
   background: rgba(0,0,0,0.40);
   z-index:    500;
   display:    flex;
@@ -22,7 +26,7 @@
 /* ── Drawer panel ─────────────────────────────── */
 .rmd-drawer {
   width:          min(560px, 92vw);
-  height:         100vh;
+  height:         100%;
   background:     #fff;
   box-shadow:     4px 0 32px rgba(0,0,0,0.22);
   display:        flex;

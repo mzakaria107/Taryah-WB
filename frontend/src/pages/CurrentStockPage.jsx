@@ -49,12 +49,36 @@ function getRegion(loc) {
 }
 
 function detectTypeCol(headers) {
-  const kw = ['نوع', 'type', 'category', 'صنف', 'تصنيف'];
-  return headers.find(h => kw.some(k => h.toLowerCase().includes(k))) || headers[1] || '';
+  const kw = ['item type', 'نوع', 'type', 'category', 'صنف', 'تصنيف'];
+  return (
+    headers.find(h => h.toLowerCase() === 'item type') ||
+    headers.find(h => kw.some(k => h.toLowerCase().includes(k))) ||
+    headers[1] || ''
+  );
 }
 function detectLocCol(headers) {
   const kw = ['location', 'موقع', 'فرع', 'مقر', 'الوحدة', 'subsidiary'];
-  return headers.find(h => kw.some(k => h.toLowerCase().includes(k))) || headers[0] || '';
+  return (
+    headers.find(h => h.toLowerCase() === 'location') ||
+    headers.find(h => kw.some(k => h.toLowerCase().includes(k))) ||
+    headers[0] || ''
+  );
+}
+function detectItemCol(headers) {
+  const kw = ['item', 'صنف', 'اسم الصنف', 'product'];
+  return (
+    headers.find(h => h.toLowerCase() === 'item') ||
+    headers.find(h => kw.some(k => h.toLowerCase().includes(k) && !h.toLowerCase().includes('type'))) ||
+    headers[2] || ''
+  );
+}
+function detectQtyCol(headers) {
+  const kw = ['ending inv', 'qty on-hand', 'on hand', 'كمية', 'مخزون'];
+  return (
+    headers.find(h => h.toLowerCase().includes('ending inv')) ||
+    headers.find(h => kw.some(k => h.toLowerCase().includes(k))) ||
+    ''
+  );
 }
 
 /* ── Skeleton ─────────────────────────────────────────────── */
@@ -83,7 +107,7 @@ function Skeleton({ cols = 7, rows = 12 }) {
    Columns = Region names (extracted from Location)
    Cells   = SUM of Ending Inv Qty On-hand
    ══════════════════════════════════════════════════════════ */
-function StockMatrix({ rows, typeFilter, locFilter, search }) {
+function StockMatrix({ rows, typeFilter, locFilter, search, typeCol, locCol, itemCol, qtyCol }) {
   const [expanded,   setExpanded]   = useState(new Set());
   const [sortCol,    setSortCol]    = useState('__total__');
   const [sortDir,    setSortDir]    = useState('desc');
@@ -93,26 +117,26 @@ function StockMatrix({ rows, typeFilter, locFilter, search }) {
     // Apply same filters as table view
     const q = search?.toLowerCase() || '';
     let filtered = rows;
-    if (typeFilter) filtered = filtered.filter(r => r[COL_TYPE] === typeFilter);
-    if (locFilter)  filtered = filtered.filter(r => r[COL_LOC]  === locFilter);
+    if (typeFilter) filtered = filtered.filter(r => r[typeCol] === typeFilter);
+    if (locFilter)  filtered = filtered.filter(r => r[locCol]  === locFilter);
     if (q) filtered = filtered.filter(r =>
       Object.values(r).some(v => String(v ?? '').toLowerCase().includes(q))
     );
 
     // Collect unique regions
     const regionSet = new Set();
-    filtered.forEach(r => regionSet.add(getRegion(r[COL_LOC])));
-    const regions = [...regionSet].sort();
+    filtered.forEach(r => regionSet.add(getRegion(r[locCol])));
+    const regions = [...regionSet].filter(r => r && r !== '—').sort();
 
     // typeMap: type → { locTotals: Map<region, qty>, items: Map<item, Map<region, qty>> }
     const typeMap = new Map();
     let maxTypeTotal = 1;
 
     filtered.forEach(r => {
-      const type   = r[COL_TYPE] || '(بدون نوع)';
-      const item   = r[COL_ITEM] || '—';
-      const region = getRegion(r[COL_LOC]);
-      const qty    = parseFloat(String(r[COL_QTY] || '0').replace(/,/g, '')) || 0;
+      const type   = r[typeCol] || '(بدون نوع)';
+      const item   = r[itemCol] || '—';
+      const region = getRegion(r[locCol]);
+      const qty    = parseFloat(String(r[qtyCol] || '0').replace(/,/g, '')) || 0;
 
       if (!typeMap.has(type)) {
         typeMap.set(type, { locTotals: new Map(), items: new Map() });
@@ -208,6 +232,11 @@ function StockMatrix({ rows, typeFilter, locFilter, search }) {
           <span className="csp-matrix-meta">
             {typeMap.size} نوع · {regions.length} منطقة
           </span>
+          {(!typeCol || !locCol || !qtyCol) && (
+            <span style={{ fontSize: 10, color: '#c00', fontWeight: 700 }}>
+              ⚠ أعمدة غير مكتشفة: نوع="{typeCol}" موقع="{locCol}" كمية="{qtyCol}"
+            </span>
+          )}
         </div>
         <div className="csp-matrix-bar-left">
           <button className="csp-mx-ctrl" onClick={expandAll}   title="توسيع جميع الأنواع">
@@ -373,6 +402,8 @@ export default function CurrentStockPage() {
 
   const typeColName = useMemo(() => detectTypeCol(headers), [headers]);
   const locColName  = useMemo(() => detectLocCol(headers),  [headers]);
+  const itemColName = useMemo(() => detectItemCol(headers), [headers]);
+  const qtyColName  = useMemo(() => detectQtyCol(headers),  [headers]);
 
   const numericCols = useMemo(
     () => new Set(headers.filter(h => isNumericCol(allRows, h))),
@@ -515,7 +546,7 @@ export default function CurrentStockPage() {
           </div>
           <div className="csp-kpi">
             <span className="csp-kpi-val">
-              {[...new Set(allRows.map(r => getRegion(r[COL_LOC])).filter(Boolean))].length}
+              {[...new Set(allRows.map(r => getRegion(r[locColName])).filter(v => v && v !== '—'))].length}
             </span>
             <span className="csp-kpi-lbl">المناطق</span>
           </div>
@@ -624,6 +655,10 @@ export default function CurrentStockPage() {
               typeFilter={typeFilter}
               locFilter={locFilter}
               search={search}
+              typeCol={typeColName}
+              locCol={locColName}
+              itemCol={itemColName}
+              qtyCol={qtyColName}
             />
           )}
 

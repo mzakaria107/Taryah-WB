@@ -32,7 +32,7 @@ RefreshPath
 Write-Host "[4/9] Installing PostgreSQL 15..." -ForegroundColor Yellow
 choco install postgresql15 --params '/Password:TaryahDB@Prod2024!' -y
 RefreshPath
-$pgBin = "C:\Program Files\PostgreSQL\15\bin"
+$pgBin = (Get-ChildItem "C:\Program Files\PostgreSQL\" -Directory | Sort-Object Name -Descending | Select-Object -First 1).FullName + "\bin"
 if (Test-Path $pgBin) {
     $current = [System.Environment]::GetEnvironmentVariable("Path","Machine")
     [System.Environment]::SetEnvironmentVariable("Path", $current + ";" + $pgBin, "Machine")
@@ -83,9 +83,10 @@ New-Item -ItemType Directory -Force -Path C:\apps\Taryah-WB\logs | Out-Null
 # Create PostgreSQL user + database
 Write-Host "Creating PostgreSQL database..." -ForegroundColor Yellow
 $env:PGPASSWORD = "TaryahDB@Prod2024!"
-& "C:\Program Files\PostgreSQL\15\bin\psql.exe" -U postgres -h localhost -c "CREATE USER cbuser WITH PASSWORD 'TaryahDB@Prod2024!';" 2>$null
-& "C:\Program Files\PostgreSQL\15\bin\psql.exe" -U postgres -h localhost -c "CREATE DATABASE customer_balance_db OWNER cbuser;" 2>$null
-& "C:\Program Files\PostgreSQL\15\bin\psql.exe" -U postgres -h localhost -c "GRANT ALL PRIVILEGES ON DATABASE customer_balance_db TO cbuser;" 2>$null
+$psqlExe = (Get-ChildItem "C:\Program Files\PostgreSQL\" -Directory | Sort-Object Name -Descending | Select-Object -First 1).FullName + "\bin\psql.exe"
+& $psqlExe -U postgres -h localhost -c "CREATE USER cbuser WITH PASSWORD 'TaryahDB@Prod2024!';" 2>$null
+& $psqlExe -U postgres -h localhost -c "CREATE DATABASE customer_balance_db OWNER cbuser;" 2>$null
+& $psqlExe -U postgres -h localhost -c "GRANT ALL PRIVILEGES ON DATABASE customer_balance_db TO cbuser;" 2>$null
 
 # Copy nginx config
 $nginxDir = Get-ChildItem C:\tools\nginx-* -Directory -ErrorAction SilentlyContinue | Sort-Object Name -Descending | Select-Object -First 1

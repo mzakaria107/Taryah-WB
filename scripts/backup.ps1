@@ -25,7 +25,7 @@ if ($env:DB_HOST)     { $pgHost = $env:DB_HOST }     else { $pgHost = "localhost
 
 $env:PGPASSWORD = $pgPass
 
-$pgDump = "C:\Program Files\PostgreSQL\15\bin\pg_dump.exe"
+$pgDump = "C:\Program Files\PostgreSQL\16\bin\pg_dump.exe"
 & $pgDump -U $pgUser -h $pgHost $pgDb | Out-File $backupFile -Encoding utf8
 
 if ($LASTEXITCODE -eq 0) {

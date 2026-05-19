@@ -8,6 +8,7 @@ import {
   ClipboardList,
   Thermometer,
   Package,
+  Warehouse,
   Upload,
   Users,
 } from 'lucide-react';
@@ -21,6 +22,7 @@ const ITEMS = [
   { to: '/sales-tasks',   label: 'المهام',       icon: <ClipboardList   size={20} />, always: true },
   { to: '/fridges',       label: 'الثلاجات',     icon: <Thermometer     size={20} />, always: true },
   { to: '/stock',         label: 'المخزون',      icon: <Package         size={20} />, always: true },
+  { to: '/current-stock', label: 'المخزون الحالي', icon: <Warehouse      size={20} />, always: true },
   { to: '/upload',        label: 'رفع البيانات', icon: <Upload          size={20} />, roles: ['super_admin', 'it_admin'] },
   { to: '/users',         label: 'المستخدمون',   icon: <Users           size={20} />, roles: ['super_admin'] },
 ];

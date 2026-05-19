@@ -21,6 +21,7 @@ const salesTasksRoutes    = require('./routes/salesTasks');
 const notificationsRoutes = require('./routes/notifications');
 const fridgesRoutes       = require('./routes/fridges');
 const stockRoutes         = require('./routes/stock');
+const currentStockRoutes  = require('./routes/currentStock');
 
 /* ── Auto-run pending DB migrations on startup ── */
 async function runMigrations() {
@@ -81,6 +82,7 @@ app.use('/api/sales-tasks',   salesTasksRoutes);
 app.use('/api/notifications', notificationsRoutes);
 app.use('/api/fridges',       fridgesRoutes);
 app.use('/api/stock',         stockRoutes);
+app.use('/api/current-stock', currentStockRoutes);
 
 // Last-upload timestamps for the three daily reports
 const { verifyToken: _vt } = require('./middleware/auth');

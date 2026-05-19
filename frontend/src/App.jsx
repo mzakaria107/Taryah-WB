@@ -15,6 +15,7 @@ const SalesActivityPage   = lazy(() => import('./pages/SalesActivityPage'));
 const SalesTasksPage      = lazy(() => import('./pages/SalesTasksPage'));
 const FridgesPage         = lazy(() => import('./pages/FridgesPage'));
 const StockPage           = lazy(() => import('./pages/StockPage'));
+const CurrentStockPage    = lazy(() => import('./pages/CurrentStockPage'));
 
 /* ── Guards ──────────────────────────────────────── */
 function PrivateRoute({ children }) {
@@ -132,6 +133,15 @@ export default function App() {
         <PrivateRoute>
           <AppLayout>
             <PageSuspense><StockPage /></PageSuspense>
+          </AppLayout>
+        </PrivateRoute>
+      } />
+
+      {/* Current Stock — live NetSuite web query */}
+      <Route path="/current-stock" element={
+        <PrivateRoute>
+          <AppLayout>
+            <PageSuspense><CurrentStockPage /></PageSuspense>
           </AppLayout>
         </PrivateRoute>
       } />

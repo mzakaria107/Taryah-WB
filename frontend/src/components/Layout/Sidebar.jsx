@@ -10,6 +10,7 @@ import {
   ClipboardList,
   Thermometer,
   Package,
+  Warehouse,
   ChevronRight,
   ChevronLeft,
 } from 'lucide-react';
@@ -23,6 +24,7 @@ const NAV = [
   { to: '/sales-tasks',    label: 'مهام المبيعات',   icon: <ClipboardList size={18} />, always: true },
   { to: '/fridges',        label: 'متابعة الثلاجات', icon: <Thermometer   size={18} />, always: true },
   { to: '/stock',          label: 'المخزون',          icon: <Package       size={18} />, always: true },
+  { to: '/current-stock', label: 'المخزون الحالي',    icon: <Warehouse     size={18} />, always: true },
   { to: '/upload',         label: 'رفع البيانات',    icon: <Upload size={18} />,        roles: ['super_admin','it_admin'] },
   { to: '/users',    label: 'المستخدمون',    icon: <Users size={18} />,           roles: ['super_admin'] },
 ];

@@ -1,0 +1,9 @@
+# Deployment is handled manually on the Windows Server via deploy.ps1
+# This workflow exists only to prevent "deploy failed" notification emails.
+name: CI
+on: [push]
+jobs:
+  ok:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Code pushed to GitHub. Deploy manually on server using deploy.ps1"

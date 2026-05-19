@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 
 const AuthContext = createContext(null);
@@ -10,13 +10,20 @@ export function AuthProvider({ children }) {
     return u ? JSON.parse(u) : null;
   });
   const [loading, setLoading] = useState(false);
+  const heartbeatRef = useRef(null);
 
   useEffect(() => {
     if (token) {
       axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+      // Send heartbeat immediately + every 3 minutes to track last_seen_at
+      const beat = () => axios.post('/api/auth/heartbeat').catch(() => {});
+      beat();
+      heartbeatRef.current = setInterval(beat, 3 * 60 * 1000);
     } else {
       delete axios.defaults.headers.common['Authorization'];
+      clearInterval(heartbeatRef.current);
     }
+    return () => clearInterval(heartbeatRef.current);
   }, [token]);
 
   const login = async (email, password) => {

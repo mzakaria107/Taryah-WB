@@ -1,0 +1,177 @@
+/* ── Page ─────────────────────────────────────────── */
+.pp-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* ── Header ──────────────────────────────────────── */
+.pp-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.pp-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--color-text-primary);
+  margin: 0 0 4px;
+}
+.pp-subtitle {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  margin: 0;
+}
+
+/* ── Role cards row ──────────────────────────────── */
+.pp-roles-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.pp-role-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 14px;
+  background: #fff;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  cursor: pointer;
+  transition: all 150ms;
+  box-shadow: var(--shadow-card);
+  font-family: inherit;
+}
+.pp-role-card:hover         { border-color: var(--color-border-hover); background: var(--color-bg-alt); }
+.pp-role-card.pp-role-active { border-color: var(--color-brand-green); box-shadow: 0 0 0 2px rgba(46,125,50,0.15); }
+
+.pp-role-count {
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--color-text-primary);
+  font-family: var(--font-en);
+  line-height: 1;
+}
+.pp-role-count-lbl {
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--color-text-muted);
+}
+
+/* ── Role description ────────────────────────────── */
+.pp-role-desc {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 12px 16px;
+  background: var(--color-brand-green-pale);
+  border: 1px solid rgba(46,125,50,0.2);
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  line-height: 1.6;
+}
+.pp-role-desc svg { flex-shrink: 0; color: var(--color-brand-green); margin-top: 2px; }
+
+/* ── Table card ──────────────────────────────────── */
+.pp-card {
+  background: #fff;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-card);
+  overflow: hidden;
+}
+.pp-table-wrap { overflow-x: auto; }
+.pp-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.pp-table thead tr { background: var(--color-bg-header); }
+.pp-table th {
+  padding: 12px 10px;
+  text-align: center;
+  font-weight: 600;
+  color: rgba(255,255,255,0.85);
+  border-bottom: 2px solid rgba(255,255,255,0.1);
+  white-space: nowrap;
+}
+.pp-th-page    { text-align: right; min-width: 200px; padding-right: 16px; }
+.pp-th-highlight { background: rgba(255,255,255,0.12); }
+
+.pp-table tbody tr {
+  border-bottom: 1px solid var(--color-border);
+  transition: background 100ms;
+}
+.pp-table tbody tr:last-child { border-bottom: 0; }
+.pp-table tbody tr:hover:not(.pp-scope-row) { background: var(--color-bg-alt); }
+.pp-scope-row { background: #f8f9fb; }
+.pp-scope-row .pp-page-name { font-weight: 700; color: var(--color-text-secondary); }
+
+.pp-td-page  { padding: 11px 14px; text-align: right; }
+.pp-page-name { font-weight: 600; color: var(--color-text-primary); font-size: 13px; }
+.pp-page-desc { font-size: 11px; color: var(--color-text-muted); margin-top: 2px; }
+.pp-page-path {
+  font-size: 10px;
+  color: var(--color-brand-green);
+  font-family: var(--font-en);
+  margin-top: 2px;
+  direction: ltr;
+  text-align: left;
+}
+
+/* ── Permission cell ─────────────────────────────── */
+.pp-cell { padding: 11px 10px; text-align: center; }
+.pp-icon { font-size: 15px; display: inline-block; }
+.pp-no   { color: #d1d5db; }
+.pp-read { color: var(--color-warning); }
+.pp-full { color: var(--color-brand-green); font-weight: 700; }
+.pp-all  { }
+.pp-own  { }
+
+/* ── Legend ──────────────────────────────────────── */
+.pp-legend {
+  display: flex;
+  gap: 20px;
+  padding: 10px 16px;
+  border-top: 1px solid var(--color-border);
+  background: var(--color-bg-alt);
+  font-size: 11px;
+  color: var(--color-text-muted);
+  flex-wrap: wrap;
+}
+.pp-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+/* ── Role badges (reused from Users.css) ─────────── */
+.pp-role-badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.role-super  { background: #e8f5e9; color: #1b5e20; border: 1px solid rgba(27,94,32,0.2); }
+.role-it     { background: #e3f2fd; color: #0d47a1; border: 1px solid rgba(13,71,161,0.2); }
+.role-sup    { background: #e8eaf6; color: #283593; border: 1px solid rgba(40,53,147,0.2); }
+.role-region { background: #f3e5f5; color: #4a148c; border: 1px solid rgba(74,20,140,0.2); }
+.role-sales  { background: #fff3e0; color: #bf360c; border: 1px solid rgba(191,54,12,0.2); }
+.role-fridge { background: #e0f7fa; color: #006064; border: 1px solid rgba(0,96,100,0.2); }
+.role-viewer { background: #eceff1; color: #37474f; border: 1px solid rgba(55,71,79,0.2); }
+
+/* ── Responsive ──────────────────────────────────── */
+@media (max-width: 700px) {
+  .pp-roles-row { gap: 6px; }
+  .pp-role-card { padding: 8px 10px; }
+  .pp-th-page, .pp-td-page { min-width: 130px; }
+}

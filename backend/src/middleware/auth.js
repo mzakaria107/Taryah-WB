@@ -25,9 +25,10 @@ function requireRoles(...roles) {
   };
 }
 
-// Applies region filter: non-super_admin users only see their region
+// Applies region filter: only super_admin and it_admin see all regions
 function applyRegionFilter(req, _res, next) {
-  if (req.user.role !== 'super_admin' && req.user.region_id) {
+  const allRegionRoles = ['super_admin', 'it_admin'];
+  if (!allRegionRoles.includes(req.user.role) && req.user.region_id) {
     req.regionFilter = req.user.region_id;
   } else {
     req.regionFilter = null; // all regions

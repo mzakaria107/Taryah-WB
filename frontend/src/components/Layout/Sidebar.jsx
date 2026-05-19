@@ -11,22 +11,24 @@ import {
   Thermometer,
   Package,
   Warehouse,
+  ShieldCheck,
   ChevronRight,
   ChevronLeft,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
 const NAV = [
-  { to: '/',         label: 'الرئيسية',     icon: <LayoutDashboard size={18} />, always: true },
-  { to: '/invoices', label: 'الفواتير',      icon: <FileText size={18} />,        always: true },
-  { to: '/reports',  label: 'سجل الملاحظات', icon: <MessageSquare size={18} />,   always: true },
-  { to: '/sales-activity', label: 'تقرير العملاء',   icon: <UserSearch size={18} />,    always: true },
-  { to: '/sales-tasks',    label: 'مهام المبيعات',   icon: <ClipboardList size={18} />, always: true },
-  { to: '/fridges',        label: 'متابعة الثلاجات', icon: <Thermometer   size={18} />, always: true },
-  { to: '/stock',          label: 'المخزون',          icon: <Package       size={18} />, always: true },
-  { to: '/current-stock', label: 'المخزون الحالي',    icon: <Warehouse     size={18} />, always: true },
-  { to: '/upload',         label: 'رفع البيانات',    icon: <Upload size={18} />,        roles: ['super_admin','it_admin'] },
-  { to: '/users',    label: 'المستخدمون',    icon: <Users size={18} />,           roles: ['super_admin'] },
+  { to: '/',               label: 'الرئيسية',       icon: <LayoutDashboard size={18}/>, roles: ['super_admin','it_admin','supervisor','region_manager','sales_rep','viewer'] },
+  { to: '/invoices',       label: 'الفواتير',        icon: <FileText        size={18}/>, roles: ['super_admin','it_admin','supervisor','region_manager','sales_rep','viewer'] },
+  { to: '/reports',        label: 'سجل الملاحظات',  icon: <MessageSquare   size={18}/>, roles: ['super_admin','it_admin','supervisor','region_manager','sales_rep'] },
+  { to: '/sales-activity', label: 'تقرير العملاء',  icon: <UserSearch      size={18}/>, roles: ['super_admin','it_admin','supervisor','region_manager','sales_rep'] },
+  { to: '/sales-tasks',    label: 'مهام المبيعات',  icon: <ClipboardList   size={18}/>, roles: ['super_admin','it_admin','supervisor','region_manager','sales_rep','fridge_admin'] },
+  { to: '/fridges',        label: 'متابعة الثلاجات',icon: <Thermometer     size={18}/>, roles: ['super_admin','it_admin','region_manager','fridge_admin'] },
+  { to: '/stock',          label: 'المخزون',         icon: <Package         size={18}/>, roles: ['super_admin','it_admin'] },
+  { to: '/current-stock',  label: 'المخزون الحالي', icon: <Warehouse       size={18}/>, roles: ['super_admin','it_admin'] },
+  { to: '/upload',         label: 'رفع البيانات',   icon: <Upload          size={18}/>, roles: ['super_admin','it_admin'] },
+  { to: '/users',          label: 'المستخدمون',     icon: <Users           size={18}/>, roles: ['super_admin'] },
+  { to: '/permissions',    label: 'الصلاحيات',      icon: <ShieldCheck     size={18}/>, roles: ['super_admin','it_admin'] },
 ];
 
 export default function Sidebar({ collapsed, onToggle }) {
@@ -35,7 +37,7 @@ export default function Sidebar({ collapsed, onToggle }) {
   const role     = user?.role;
 
   const visible = NAV.filter(
-    (n) => n.always || (n.roles && role && n.roles.includes(role))
+    (n) => n.roles && role && n.roles.includes(role)
   );
 
   // Customer sub-page active when URL starts with /customers/

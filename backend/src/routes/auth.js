@@ -23,7 +23,7 @@ router.post('/register', verifyToken, async (req, res) => {
     return res.status(400).json({ error: 'كلمة المرور يجب أن تكون 6 أحرف على الأقل' });
   }
 
-  const allowed = ['super_admin','region_manager','sales_rep','it_admin','viewer'];
+  const allowed = ['super_admin','it_admin','supervisor','region_manager','sales_rep','fridge_admin','viewer'];
   if (role && !allowed.includes(role)) {
     return res.status(400).json({ error: 'الدور غير صالح' });
   }
@@ -78,6 +78,9 @@ router.post('/login', async (req, res) => {
       return res.status(401).json({ error: 'بيانات الاعتماد غير صحيحة' });
     }
 
+    // Track last login time
+    await pool.query('UPDATE users SET last_seen_at = NOW() WHERE id = $1', [user.id]);
+
     const payload = {
       id: user.id,
       name: user.name,
@@ -94,6 +97,16 @@ router.post('/login', async (req, res) => {
   } catch (err) {
     console.error('Login error:', err);
     res.status(500).json({ error: 'خطأ في الخادم' });
+  }
+});
+
+// POST /api/auth/heartbeat — keeps last_seen_at current while user is active
+router.post('/heartbeat', verifyToken, async (req, res) => {
+  try {
+    await pool.query('UPDATE users SET last_seen_at = NOW() WHERE id = $1', [req.user.id]);
+    res.json({ ok: true });
+  } catch {
+    res.json({ ok: false }); // non-fatal
   }
 });
 

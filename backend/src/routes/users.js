@@ -10,7 +10,7 @@ router.get('/', verifyToken, requireRoles('super_admin'), async (req, res) => {
   try {
     const { rows } = await pool.query(
       `SELECT u.id, u.name, u.email, u.role, u.region_id,
-              u.is_active, u.created_at,
+              u.is_active, u.created_at, u.last_seen_at,
               r.name_ar AS region_name_ar
        FROM users u
        LEFT JOIN regions r ON r.id = u.region_id
@@ -40,7 +40,7 @@ router.put('/:id', verifyToken, requireRoles('super_admin'), async (req, res) =>
   const params  = [];
   let p = 1;
 
-  const allowed = ['super_admin','region_manager','sales_rep','it_admin','viewer'];
+  const allowed = ['super_admin','it_admin','supervisor','region_manager','sales_rep','fridge_admin','viewer'];
 
   if (name !== undefined)      { updates.push(`name = $${p++}`);      params.push(name); }
   if (email !== undefined)     { updates.push(`email = $${p++}`);     params.push(email); }

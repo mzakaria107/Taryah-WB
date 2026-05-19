@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   UserPlus, Trash2, Edit2, X, Check, ShieldCheck,
-  ShieldOff, ChevronDown, ChevronUp, Eye, EyeOff,
+  ShieldOff, ChevronDown, ChevronUp, Eye, EyeOff, Circle,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import client from '../api/client';
@@ -9,25 +9,49 @@ import './Users.css';
 
 /* ── Role config ──────────────────────────────────── */
 const ROLES = {
-  super_admin:    { label: 'مدير عام',        color: 'role-super' },
-  it_admin:       { label: 'مدير تقنية',      color: 'role-it'    },
-  region_manager: { label: 'مدير منطقة',      color: 'role-region'},
-  sales_rep:      { label: 'مندوب مبيعات',    color: 'role-sales' },
-  viewer:         { label: 'مستعرض',           color: 'role-viewer'},
+  super_admin:    { label: 'مدير عام',              color: 'role-super'   },
+  it_admin:       { label: 'مدير تقنية',            color: 'role-it'      },
+  supervisor:     { label: 'مشرف',                  color: 'role-sup'     },
+  region_manager: { label: 'مدير منطقة',            color: 'role-region'  },
+  sales_rep:      { label: 'مندوب مبيعات',          color: 'role-sales'   },
+  fridge_admin:   { label: 'موظف إداري (ثلاجات)',   color: 'role-fridge'  },
+  viewer:         { label: 'مستعرض',                color: 'role-viewer'  },
 };
 
 /* ── Permission matrix ────────────────────────────── */
 const PERMS = [
-  { feature: 'لوحة التحكم',      desc:'إجمالي العملاء والأرصدة', super_admin:2, it_admin:2, region_manager:1, sales_rep:1, viewer:1 },
-  { feature: 'الفواتير',          desc:'عرض وتصفية الفواتير',      super_admin:2, it_admin:2, region_manager:1, sales_rep:1, viewer:1 },
-  { feature: 'ملف العميل',        desc:'تفاصيل وتاريخ العميل',     super_admin:2, it_admin:2, region_manager:1, sales_rep:1, viewer:1 },
-  { feature: 'الملاحظات',         desc:'إضافة وتعديل ملاحظات',     super_admin:2, it_admin:2, region_manager:2, sales_rep:2, viewer:0 },
-  { feature: 'تصدير Excel/CSV',   desc:'تنزيل تقارير البيانات',    super_admin:2, it_admin:2, region_manager:2, sales_rep:2, viewer:0 },
-  { feature: 'رفع البيانات',      desc:'استيراد ملفات Excel',      super_admin:2, it_admin:2, region_manager:0, sales_rep:0, viewer:0 },
-  { feature: 'إدارة المستخدمين', desc:'إنشاء وتعديل الحسابات',    super_admin:2, it_admin:0, region_manager:0, sales_rep:0, viewer:0 },
-  { feature: 'نطاق البيانات',     desc:'حدود الوصول للبيانات',     super_admin:3, it_admin:3, region_manager:4, sales_rep:4, viewer:4 },
+  { feature: 'لوحة التحكم',      desc:'إجمالي العملاء والأرصدة', super_admin:2, it_admin:2, supervisor:1, region_manager:1, sales_rep:1, fridge_admin:0, viewer:1 },
+  { feature: 'الفواتير',          desc:'عرض وتصفية الفواتير',      super_admin:2, it_admin:2, supervisor:1, region_manager:1, sales_rep:1, fridge_admin:0, viewer:1 },
+  { feature: 'ملف العميل',        desc:'تفاصيل وتاريخ العميل',     super_admin:2, it_admin:2, supervisor:1, region_manager:1, sales_rep:1, fridge_admin:0, viewer:1 },
+  { feature: 'الملاحظات',         desc:'إضافة وتعديل ملاحظات',     super_admin:2, it_admin:2, supervisor:2, region_manager:2, sales_rep:2, fridge_admin:0, viewer:0 },
+  { feature: 'تقرير العملاء',     desc:'نشاط المبيعات والأداء',    super_admin:2, it_admin:2, supervisor:1, region_manager:1, sales_rep:1, fridge_admin:0, viewer:0 },
+  { feature: 'متابعة الثلاجات',   desc:'إدارة الثلاجات والنقل',    super_admin:2, it_admin:2, supervisor:0, region_manager:1, sales_rep:0, fridge_admin:1, viewer:0 },
+  { feature: 'المخزون',            desc:'بيانات المخزون من NetSuite',super_admin:2, it_admin:2, supervisor:0, region_manager:0, sales_rep:0, fridge_admin:0, viewer:0 },
+  { feature: 'تصدير Excel/CSV',   desc:'تنزيل تقارير البيانات',    super_admin:2, it_admin:2, supervisor:2, region_manager:2, sales_rep:2, fridge_admin:0, viewer:0 },
+  { feature: 'رفع البيانات',      desc:'استيراد ملفات Excel',      super_admin:2, it_admin:2, supervisor:0, region_manager:0, sales_rep:0, fridge_admin:0, viewer:0 },
+  { feature: 'إدارة المستخدمين', desc:'إنشاء وتعديل الحسابات',    super_admin:2, it_admin:0, supervisor:0, region_manager:0, sales_rep:0, fridge_admin:0, viewer:0 },
+  { feature: 'نطاق البيانات',     desc:'حدود الوصول للبيانات',     super_admin:3, it_admin:3, supervisor:4, region_manager:4, sales_rep:4, fridge_admin:4, viewer:3 },
 ];
-// 0=لا, 1=قراءة, 2=كامل, 3=كل المناطق, 4=منطقته فقط
+// 0=لا, 1=قراءة/منطقة, 2=كامل, 3=كل المناطق, 4=منطقته فقط
+
+/* ── Online status helper ──────────────────────────── */
+const ONLINE_MS = 5 * 60 * 1000; // 5 minutes
+function isOnline(lastSeen) {
+  if (!lastSeen) return false;
+  return Date.now() - new Date(lastSeen).getTime() < ONLINE_MS;
+}
+function fmtLastSeen(lastSeen) {
+  if (!lastSeen) return null;
+  const d = new Date(lastSeen);
+  const now = new Date();
+  const diffMs = now - d;
+  const diffMin = Math.floor(diffMs / 60000);
+  if (diffMin < 1)  return 'الآن';
+  if (diffMin < 60) return `منذ ${diffMin} د`;
+  const diffH = Math.floor(diffMin / 60);
+  if (diffH < 24)   return `منذ ${diffH} س`;
+  return d.toLocaleDateString('ar-SA', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
 
 const PERM_ICON = {
   0: { icon: '✕', cls: 'pm-no'    },
@@ -164,6 +188,8 @@ export default function Users() {
   };
 
   /* ── Stats ────────────────────────────────────── */
+  const onlineCount = users.filter(u => isOnline(u.last_seen_at)).length;
+
   const stats = Object.keys(ROLES).map(role => ({
     role, count: users.filter(u => u.role === role).length
   })).filter(s => s.count > 0);
@@ -212,6 +238,14 @@ export default function Users() {
           </span>
           <span className="u-stat-lbl">موقوف</span>
         </div>
+        {onlineCount > 0 && (
+          <div className="u-stat u-stat-online">
+            <span className="u-stat-num" style={{color:'#16a34a'}}>
+              {onlineCount}
+            </span>
+            <span className="u-stat-lbl">متصل الآن</span>
+          </div>
+        )}
         {stats.map(s => (
           <div key={s.role} className="u-stat">
             <span className="u-stat-num">{s.count}</span>
@@ -303,8 +337,10 @@ export default function Users() {
               <div className="u-role-hint">
                 {form.role === 'super_admin'    && '⚠️ صلاحية كاملة على جميع البيانات والمستخدمين'}
                 {form.role === 'it_admin'        && '💻 صلاحية رفع البيانات والاطلاع على كل المناطق'}
-                {form.role === 'region_manager'  && '📍 مقيّد بمنطقته — يرى بيانات منطقته فقط'}
+                {form.role === 'supervisor'      && '👔 مشرف — يرى تقارير المبيعات لمنطقته فقط'}
+                {form.role === 'region_manager'  && '📍 مدير منطقة — يرى بيانات منطقته بما فيها الثلاجات'}
                 {form.role === 'sales_rep'        && '👤 مندوب — يرى بياناته ويضيف ملاحظات'}
+                {form.role === 'fridge_admin'    && '🧊 إداري ثلاجات — يرى صفحة الثلاجات لمنطقته فقط'}
                 {form.role === 'viewer'           && '👁️ قراءة فقط — لا يستطيع التعديل أو التصدير'}
               </div>
             </div>
@@ -339,6 +375,7 @@ export default function Users() {
                   <th>الدور</th>
                   <th>المنطقة</th>
                   <th>الحالة</th>
+                  <th>آخر جلسة</th>
                   <th>تاريخ الإنشاء</th>
                   {isSuperAdmin && <th>إجراءات</th>}
                 </tr>
@@ -350,7 +387,10 @@ export default function Users() {
                       {/* User info */}
                       <td>
                         <div className="u-user-cell">
-                          <Avatar name={u.name} email={u.email}/>
+                          <div className="u-avatar-wrap">
+                            <Avatar name={u.name} email={u.email}/>
+                            {isOnline(u.last_seen_at) && <span className="u-online-dot" title="متصل الآن"/>}
+                          </div>
                           <div>
                             <div className="u-user-name">
                               {u.name ?? '—'}
@@ -378,7 +418,14 @@ export default function Users() {
                           : <span className="u-status-inactive"><ShieldOff size={13}/> موقوف</span>}
                       </td>
 
-                      {/* Date */}
+                      {/* Last session */}
+                      <td className="u-session-cell">
+                        {isOnline(u.last_seen_at)
+                          ? <span className="u-session-now">● الآن</span>
+                          : fmtLastSeen(u.last_seen_at) ?? <span style={{color:'var(--color-text-muted)'}}>—</span>}
+                      </td>
+
+                      {/* Created at */}
                       <td className="u-date-cell">
                         {u.created_at ? new Date(u.created_at).toLocaleDateString('ar-SA') : '—'}
                       </td>
@@ -413,7 +460,7 @@ export default function Users() {
                     {/* Inline edit row */}
                     {editId === u.id && (
                       <tr className="u-edit-row">
-                        <td colSpan={isSuperAdmin ? 6 : 5}>
+                        <td colSpan={isSuperAdmin ? 7 : 6}>
                           <form className="u-edit-form" onSubmit={handleEdit}>
                             <div className="u-form-grid">
                               <Field label="الاسم">

@@ -253,35 +253,47 @@
 
 /* ── Bottom nav (mobile) ────────────────────────── */
 .bottom-nav {
-  display: none;
-  position: fixed;
-  bottom: 0;
+  display:    none;
+  position:   fixed;
+  bottom:     0;
   inset-inline: 0;
-  height: 64px;
+  height:     64px;
   background: #fff;
   border-top: 1px solid var(--color-border);
-  z-index: 90;
+  z-index:    90;
   box-shadow: 0 -2px 12px rgba(0,0,0,0.06);
+
+  /* Scrollable when items exceed screen width */
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scroll-snap-type: x proximity;
+  scrollbar-width: none;          /* Firefox */
 }
+.bottom-nav::-webkit-scrollbar { display: none; } /* Chrome/Safari */
 
 @media (max-width: 767px) {
   .bottom-nav { display: flex; }
 }
 
 .bottom-nav-item {
-  flex: 1;
-  display: flex;
+  flex:       0 0 auto;           /* don't shrink — let nav scroll instead */
+  min-width:  68px;
+  display:    flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 3px;
-  font-size: 10px;
+  gap:        3px;
+  padding:    0 6px;
+  font-size:  10px;
   font-weight: 500;
-  color: var(--color-text-muted);
-  position: relative;
+  color:      var(--color-text-muted);
+  position:   relative;
   text-decoration: none;
   transition: var(--transition-fast);
   min-height: 44px;
+  scroll-snap-align: start;
+  white-space: nowrap;
 }
 .bottom-nav-item.active {
   color: var(--color-brand-green);
@@ -296,6 +308,20 @@
   height: 3px;
   background: var(--color-brand-green);
   border-radius: 0 0 3px 3px;
+}
+
+/* Subtle fade hint at edges showing more items are scrollable */
+.bottom-nav::after {
+  content:    '';
+  position:   sticky;
+  left:       0;
+  top:        0;
+  bottom:     0;
+  width:      18px;
+  flex-shrink: 0;
+  background: linear-gradient(to left, #fff 0%, transparent 100%);
+  pointer-events: none;
+  z-index:    1;
 }
 
 /* ── App shell ──────────────────────────────────── */

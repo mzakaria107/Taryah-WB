@@ -2,18 +2,16 @@
    RegionMonthDrawer  —  slide-in customer panel
    ════════════════════════════════════════════════ */
 
-/* ── Overlay — positioned inside .rmm-section ─── */
+/* ── Overlay — full-viewport so drawer has full height ── */
 .rmd-overlay {
-  position:   absolute;   /* anchored to .rmm-section (position:relative) */
+  position:   fixed;
   inset:      0;
-  background: rgba(0,0,0,0.32);
-  z-index:    20;
+  background: rgba(0,0,0,0.40);
+  z-index:    500;
   display:    flex;
   align-items: stretch;
-  justify-content: flex-end; /* drawer slides in from right (RTL "start") */
-  border-radius: var(--radius-lg);
+  justify-content: flex-start; /* RTL: drawer slides in from right side */
   animation:  rmd-fade-in 180ms ease;
-  overflow:   hidden;     /* clip the drawer to card bounds */
 }
 
 @keyframes rmd-fade-in {
@@ -23,19 +21,19 @@
 
 /* ── Drawer panel ─────────────────────────────── */
 .rmd-drawer {
-  width:          min(520px, 60%);
-  height:         100%;
+  width:          min(560px, 92vw);
+  height:         100vh;
   background:     #fff;
-  box-shadow:     -4px 0 28px rgba(0,0,0,0.20);
+  box-shadow:     4px 0 32px rgba(0,0,0,0.22);
   display:        flex;
   flex-direction: column;
   overflow:       hidden;
-  animation:      rmd-slide-in 220ms cubic-bezier(.25,.46,.45,.94);
+  animation:      rmd-slide-in 240ms cubic-bezier(.25,.46,.45,.94);
 }
 
 @keyframes rmd-slide-in {
-  from { transform: translateX(-32px); opacity: 0; }
-  to   { transform: translateX(0);     opacity: 1; }
+  from { transform: translateX(32px); opacity: 0; }
+  to   { transform: translateX(0);    opacity: 1; }
 }
 
 /* ── Header ───────────────────────────────────── */

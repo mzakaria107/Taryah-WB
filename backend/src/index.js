@@ -51,7 +51,15 @@ app.set('trust proxy', 1);
 // Security
 app.use(helmet());
 app.use(cors({
-  origin: process.env.CORS_ORIGIN || '*',
+  origin: function (origin, callback) {
+    // Allow requests with no origin (mobile apps, curl, server-to-server)
+    if (!origin) return callback(null, true);
+    const allowed = process.env.CORS_ORIGIN || '*';
+    if (allowed === '*') return callback(null, true);
+    const allowedList = allowed.split(',').map(s => s.trim());
+    if (allowedList.includes(origin)) return callback(null, true);
+    return callback(new Error('CORS: origin ' + origin + ' not allowed'));
+  },
   credentials: true,
 }));
 

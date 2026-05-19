@@ -53,11 +53,67 @@ function isNumericCol(rows, key) {
   return samples.filter(v => /^=?[\d,.\-+ ]+$/.test(String(v))).length >= samples.length * 0.8;
 }
 
-/* Extract region: "المقر الرئيسي:الرياض:شقرا - المخزن" → "الرياض" */
+/* ══════════════════════════════════════════════════════════
+   LOCATION → REGION DISPLAY NAME
+   ══════════════════════════════════════════════════════════
+
+   Strategy:
+   1. Exact full-string overrides   (special cases, no colon logic)
+   2. Take the LAST colon-segment
+   3. Strip trailing type suffixes
+   4. Segment-level overrides       (group sub-cities under parent)
+
+   To add new mappings: update LOC_OVERRIDES or SEGMENT_OVERRIDES.
+   ══════════════════════════════════════════════════════════ */
+
+/** Full location string → display name (exact match) */
+const LOC_OVERRIDES = {
+  'التصميم المخزن المركزي': 'شقرا - مخزن مركزي',
+};
+
+/**
+ * Segment (after last ":" + suffix strip) → canonical display name.
+ * Used to merge sub-cities/warehouses into a single region column.
+ */
+const SEGMENT_OVERRIDES = {
+  'الخرج':  'الرياض',
+  'الخرج - المخزن المركزي': 'الرياض',
+};
+
+/**
+ * Ordered list of trailing suffixes to strip from the last segment.
+ * { test, remove }:
+ *   test   = substring to detect (simple includes)
+ *   remove = regex to replace (can produce abbreviated name)
+ */
+const TYPE_SUFFIXES = [
+  { test: 'منتج مواد تغذية وتغليف', remove: / - منتج مواد تغذية وتغليف$/i, keep: ' مواد تغذية' },
+  { test: 'منتج دام ميردا',         remove: / - منتج دام ميردا$/i,         keep: '' },
+  { test: 'منتج دام',               remove: / - منتج دام$/i,               keep: '' },
+  { test: '- منتج',                 remove: / - منتج.*$/i,                  keep: '' },
+];
+
 function getRegion(loc) {
   if (!loc) return null;
-  const parts = loc.split(':').map(s => s.trim()).filter(Boolean);
-  return parts[1] || parts[0] || loc;
+  const clean = loc.trim();
+
+  /* 1. Full-string exact override */
+  if (LOC_OVERRIDES[clean]) return LOC_OVERRIDES[clean];
+
+  /* 2. Last colon-separated segment */
+  const parts   = clean.split(':').map(s => s.trim()).filter(Boolean);
+  let   segment = parts[parts.length - 1] || clean;
+
+  /* 3. Strip type suffixes */
+  for (const { test, remove, keep } of TYPE_SUFFIXES) {
+    if (segment.includes(test)) {
+      segment = segment.replace(remove, keep).trim();
+      break;
+    }
+  }
+
+  /* 4. Segment-level canonical mapping */
+  return SEGMENT_OVERRIDES[segment] ?? segment;
 }
 
 function detectTypeCol(headers) {

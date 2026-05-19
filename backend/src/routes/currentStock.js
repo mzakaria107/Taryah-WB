@@ -65,28 +65,46 @@ function parseHTMLTable(html) {
      .replace(/&#\d+;/g, '')
      .trim();
 
-  // Headers
-  const headers = [];
-  const thRe = /<th[^>]*>([\s\S]*?)<\/th>/gi;
+  // Helper: extract all cells (td or th) from a <tr>...</tr> string
+  const extractCells = trHtml => {
+    const cells = [];
+    const re = /<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/gi;
+    let m;
+    while ((m = re.exec(trHtml)) !== null) cells.push(clean(m[1]));
+    return cells;
+  };
+
+  // Collect all <tr> blocks across the whole document
+  const allTrs = [];
+  const trRe = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
   let m;
+  while ((m = trRe.exec(html)) !== null) allTrs.push(m[1]);
+
+  if (!allTrs.length) return { headers: [], rows: [] };
+
+  // Try <th> first; if none found, use first <tr> cells as headers
+  let headers = [];
+  const thRe = /<th[^>]*>([\s\S]*?)<\/th>/gi;
   while ((m = thRe.exec(html)) !== null) headers.push(clean(m[1]));
 
-  // Rows
-  const rows = [];
-  const tbody = html.match(/<tbody[^>]*>([\s\S]*?)<\/tbody>/i);
-  const src   = tbody ? tbody[1] : html;
-  const trRe  = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
-  while ((m = trRe.exec(src)) !== null) {
-    const cells = [];
-    const tdRe  = /<td[^>]*>([\s\S]*?)<\/td>/gi;
-    let td;
-    while ((td = tdRe.exec(m[1])) !== null) cells.push(clean(td[1]));
-    if (cells.length > 0 && cells.some(c => c !== '')) {
-      const row = {};
-      headers.forEach((h, i) => { row[h] = cells[i] ?? ''; });
-      rows.push(row);
-    }
+  let dataStart = 0;
+  if (!headers.length) {
+    // Use first row as headers
+    headers = extractCells(allTrs[0]);
+    dataStart = 1; // skip header row when building data rows
   }
+
+  // Build data rows
+  const rows = [];
+  for (let i = dataStart; i < allTrs.length; i++) {
+    const cells = extractCells(allTrs[i]);
+    if (!cells.length || cells.every(c => c === '')) continue;
+    const row = {};
+    headers.forEach((h, idx) => { row[h] = cells[idx] ?? ''; });
+    rows.push(row);
+  }
+
+  console.log('[CurrentStock] HTML parsed headers:', headers.slice(0, 8));
   return { headers, rows };
 }
 

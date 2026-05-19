@@ -2,19 +2,12 @@
    RegionMonthDrawer  —  slide-in customer panel
    ════════════════════════════════════════════════ */
 
-/* ── Overlay — starts at matrix top, covers to viewport bottom ── */
-.rmd-overlay {
+/* ── Backdrop — full page dim, click to close ─── */
+.rmd-backdrop {
   position:   fixed;
-  /* top is set via inline style (matrix section's getBoundingClientRect().top) */
-  top:        0;
-  left:       0;
-  right:      0;
-  bottom:     0;
+  inset:      0;
   background: rgba(0,0,0,0.40);
   z-index:    500;
-  display:    flex;
-  align-items: stretch;
-  justify-content: flex-start; /* RTL: drawer slides in from right side */
   animation:  rmd-fade-in 180ms ease;
 }
 
@@ -23,15 +16,20 @@
   to   { opacity: 1; }
 }
 
-/* ── Drawer panel ─────────────────────────────── */
+/* ── Drawer panel — anchored to .rmm-section top via position:absolute ── */
+/* .rmm-section must have position:relative (set in RegionMonthMatrix.css) */
 .rmd-drawer {
-  width:          min(560px, 92vw);
-  height:         100%;
+  position:  absolute;   /* starts at .rmm-section's top edge, not viewport top */
+  top:       0;
+  right:     0;
+  width:     min(560px, 92vw);
+  height:    100vh;      /* extends full viewport height downward */
   background:     #fff;
-  box-shadow:     4px 0 32px rgba(0,0,0,0.22);
+  box-shadow:     -4px 0 32px rgba(0,0,0,0.22);
   display:        flex;
   flex-direction: column;
   overflow:       hidden;
+  z-index:        501;   /* above backdrop (500) */
   animation:      rmd-slide-in 240ms cubic-bezier(.25,.46,.45,.94);
 }
 

@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { ChevronRight, ChevronLeft } from 'lucide-react';
 import client from '../../api/client';
@@ -67,8 +67,6 @@ function SkeletonMatrix() {
 export default function RegionMonthMatrix({ defaultYear, matrixParams, availableYears = [] }) {
   const [year,         setYear]         = useState(defaultYear);
   const [selectedCell, setSelectedCell] = useState(null);
-  const [drawerTop,    setDrawerTop]    = useState(0);
-  const sectionRef = useRef(null);
 
   /* Sync when parent's defaultYear changes (e.g. user selects different year) */
   React.useEffect(() => { setYear(defaultYear); }, [defaultYear]);
@@ -112,7 +110,7 @@ export default function RegionMonthMatrix({ defaultYear, matrixParams, available
   if (!regions.length)    return null;
 
   return (
-    <div className="rmm-section" ref={sectionRef}>
+    <div className="rmm-section">
 
       {/* ── Header bar ── */}
       <div className="rmm-header-bar">
@@ -181,17 +179,12 @@ export default function RegionMonthMatrix({ defaultYear, matrixParams, available
                       key={m}
                       className={`rmm-td-cell${!hasDue ? ' rmm-td-cell-paid' : ''}`}
                       style={hasDue ? cellStyle(cell.balance, maxBalance) : {}}
-                      onClick={() => {
-                        if (sectionRef.current) {
-                          setDrawerTop(sectionRef.current.getBoundingClientRect().top);
-                        }
-                        setSelectedCell({
-                          region_id:   region.id,
-                          region_name: region.name,
-                          month: m,
-                          year,
-                        });
-                      }}
+                      onClick={() => setSelectedCell({
+                        region_id:   region.id,
+                        region_name: region.name,
+                        month: m,
+                        year,
+                      })}
                       title={`${region.name} ← ${MONTH_AR[m-1]} ${year}\n✗ ${cell.unpaid} غير مسدد  •  ◑ ${cell.partial} جزئي  •  ✓ ${cell.paid} مسدد\nرصيد: ${fmtBal(cell.balance)} ر.س`}
                     >
                       {hasDue
@@ -251,7 +244,6 @@ export default function RegionMonthMatrix({ defaultYear, matrixParams, available
           cell={selectedCell}
           customerTypeParam={matrixParams?.customer_type}
           onClose={() => setSelectedCell(null)}
-          topOffset={drawerTop}
         />
       )}
     </div>

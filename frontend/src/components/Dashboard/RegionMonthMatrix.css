@@ -4,6 +4,7 @@
 
 .rmm-section {
   margin-bottom: 24px;
+  position: relative; /* anchor for absolute-positioned drawer */
 }
 
 /* ── Header bar ───────────────────────────────── */

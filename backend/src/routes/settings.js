@@ -4,7 +4,9 @@ const { verifyToken } = require('../middleware/auth');
 
 const router = express.Router();
 
-/* ── GET /api/settings  — any authenticated user ── */
+const ADMIN_ROLES = ['super_admin', 'it_admin'];
+
+/* ── GET /api/settings  — all settings, any auth user ── */
 router.get('/', verifyToken, async (req, res) => {
   try {
     const { rows } = await pool.query('SELECT key, value FROM app_settings');
@@ -17,13 +19,31 @@ router.get('/', verifyToken, async (req, res) => {
   }
 });
 
-/* ── PUT /api/settings/:key  — super_admin only ── */
+/* ── GET /api/settings/:key  — single key ── */
+router.get('/:key', verifyToken, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      'SELECT value, updated_at FROM app_settings WHERE key = $1',
+      [req.params.key]
+    );
+    res.json(rows.length
+      ? { value: rows[0].value, updatedAt: rows[0].updated_at }
+      : { value: null }
+    );
+  } catch (err) {
+    console.error('Settings GET/:key error:', err);
+    res.status(500).json({ error: 'خطأ في الخادم' });
+  }
+});
+
+/* ── PUT /api/settings/:key  — super_admin / it_admin ── */
 router.put('/:key', verifyToken, async (req, res) => {
-  if (req.user.role !== 'super_admin') {
-    return res.status(403).json({ error: 'التخصيص متاح للمدير العام فقط' });
+  if (!ADMIN_ROLES.includes(req.user?.role)) {
+    return res.status(403).json({ error: 'التخصيص متاح للمدير والمشرفين فقط' });
   }
   const { key } = req.params;
-  const value = req.body;
+  /* Accept either { value: X } body (preferred) or the body itself as value */
+  const value = req.body?.value !== undefined ? req.body.value : req.body;
   try {
     await pool.query(
       `INSERT INTO app_settings (key, value, updated_by, updated_at)

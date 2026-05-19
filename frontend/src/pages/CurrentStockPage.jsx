@@ -1,12 +1,13 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   RefreshCw, Download, Search, X,
   AlertCircle, Clock, Filter, Warehouse,
   ChevronRight, ChevronDown, LayoutGrid, List,
-  ChevronsDown, ChevronsUp,
+  ChevronsDown, ChevronsUp, Save, BookmarkCheck,
 } from 'lucide-react';
 import client from '../api/client';
+import { useAuth } from '../context/AuthContext';
 import './CurrentStockPage.css';
 
 /* ── Column names (exact from NetSuite) ───────────────────── */
@@ -15,29 +16,28 @@ const COL_TYPE = 'Item Type';
 const COL_ITEM = 'Item';
 const COL_QTY  = 'Ending Inv Qty On-hand';
 
+const SETTING_KEY  = 'matrix_type_filter';
+const LS_USER_KEY  = 'csp-mx-types-v1';   // per-user local preference
+const ADMIN_ROLES  = ['super_admin', 'it_admin'];
+
 /* ── Helpers ──────────────────────────────────────────────── */
-/** Strip leading = sign (NetSuite HTML export uses Excel formula syntax) */
 function cleanNum(v) {
   return String(v ?? '').replace(/^=/, '').replace(/,/g, '').trim();
 }
-
 function parseQty(v) {
   if (v === null || v === undefined || v === '') return null;
   const n = parseFloat(cleanNum(v));
   return isNaN(n) ? null : n;
 }
-
 function fmtNum(v) {
   const n = parseFloat(cleanNum(v));
   if (isNaN(n)) return v || '—';
   return n.toLocaleString('en-SA', { maximumFractionDigits: 2 });
 }
-
 function fmtQty(v) {
   if (v === null || v === undefined) return null;
   return Number(v).toLocaleString('en-SA', { maximumFractionDigits: 1 });
 }
-
 function fmtTime(ts) {
   if (!ts) return '—';
   return new Date(ts).toLocaleString('ar-SA', {
@@ -45,47 +45,22 @@ function fmtTime(ts) {
     hour: '2-digit', minute: '2-digit',
   });
 }
-
 function isNumericCol(rows, key) {
   const samples = rows.slice(0, 30).map(r => r[key]).filter(v => v && v !== '');
   if (samples.length < 2) return false;
-  // Allow leading = (NetSuite formula prefix)
   return samples.filter(v => /^=?[\d,.\-+ ]+$/.test(String(v))).length >= samples.length * 0.8;
 }
 
 /* ══════════════════════════════════════════════════════════
    LOCATION → REGION DISPLAY NAME
-   ══════════════════════════════════════════════════════════
-
-   Strategy:
-   1. Exact full-string overrides   (special cases, no colon logic)
-   2. Take the LAST colon-segment
-   3. Strip trailing type suffixes
-   4. Segment-level overrides       (group sub-cities under parent)
-
-   To add new mappings: update LOC_OVERRIDES or SEGMENT_OVERRIDES.
    ══════════════════════════════════════════════════════════ */
-
-/** Full location string → display name (exact match) */
 const LOC_OVERRIDES = {
   'التصميم المخزن المركزي': 'شقرا - مخزن مركزي',
 };
-
-/**
- * Segment (after last ":" + suffix strip) → canonical display name.
- * Used to merge sub-cities/warehouses into a single region column.
- */
 const SEGMENT_OVERRIDES = {
-  'الخرج':  'الرياض',
+  'الخرج': 'الرياض',
   'الخرج - المخزن المركزي': 'الرياض',
 };
-
-/**
- * Ordered list of trailing suffixes to strip from the last segment.
- * { test, remove }:
- *   test   = substring to detect (simple includes)
- *   remove = regex to replace (can produce abbreviated name)
- */
 const TYPE_SUFFIXES = [
   { test: 'منتج مواد تغذية وتغليف', remove: / - منتج مواد تغذية وتغليف$/i, keep: ' مواد تغذية' },
   { test: 'منتج دام ميردا',         remove: / - منتج دام ميردا$/i,         keep: '' },
@@ -96,26 +71,16 @@ const TYPE_SUFFIXES = [
 function getRegion(loc) {
   if (!loc) return null;
   const clean = loc.trim();
-
-  /* 1. Full-string exact override */
   if (LOC_OVERRIDES[clean]) return LOC_OVERRIDES[clean];
-
-  /* 2. Last colon-separated segment */
   const parts   = clean.split(':').map(s => s.trim()).filter(Boolean);
   let   segment = parts[parts.length - 1] || clean;
-
-  /* 3. Strip type suffixes */
   for (const { test, remove, keep } of TYPE_SUFFIXES) {
-    if (segment.includes(test)) {
-      segment = segment.replace(remove, keep).trim();
-      break;
-    }
+    if (segment.includes(test)) { segment = segment.replace(remove, keep).trim(); break; }
   }
-
-  /* 4. Segment-level canonical mapping */
   return SEGMENT_OVERRIDES[segment] ?? segment;
 }
 
+/* ── Column detection ────────────────────────────────────── */
 function detectTypeCol(headers) {
   return (
     headers.find(h => h.toLowerCase() === 'item type') ||
@@ -168,98 +133,103 @@ function Skeleton({ cols = 7, rows = 12 }) {
 
 /* ══════════════════════════════════════════════════════════
    STOCK MATRIX
-   Rows    = Item Type (collapsible) → Items (children)
-   Columns = Region names (extracted from Location)
-   Cells   = SUM of Ending Inv Qty On-hand
    ══════════════════════════════════════════════════════════ */
-function StockMatrix({ rows, locFilter, search, typeCol, locCol, itemCol, qtyCol }) {
-  const [expanded,     setExpanded]     = useState(new Set());
-  const [sortCol,      setSortCol]      = useState('__total__');
-  const [sortDir,      setSortDir]      = useState('desc');
-  /* null = all types visible; Set = only these types are checked */
-  const [checkedTypes, setCheckedTypes] = useState(null);
+function StockMatrix({
+  rows, locFilter, search,
+  typeCol, locCol, itemCol, qtyCol,
+  defaultTypes,    // Array|null — from saved global or user preference
+  onSaveTypes,     // async (types: Array|null) => void
+  userRole,        // string — current user role
+}) {
+  const isAdmin = ADMIN_ROLES.includes(userRole);
 
-  /* ── All item types available in the unfiltered rows ── */
+  /* ── Type multi-select ── */
+  const [checkedTypes, setCheckedTypes]   = useState(null);
+  const [saveStatus,   setSaveStatus]     = useState('idle'); // idle|saving|saved|error
+
+  /* ── Region multi-select ── */
+  const [checkedRegions, setCheckedRegions] = useState(null);
+
+  /* ── Table sorting ── */
+  const [expanded, setExpanded] = useState(new Set());
+  const [sortCol,  setSortCol]  = useState('__total__');
+  const [sortDir,  setSortDir]  = useState('desc');
+
+  /* Apply defaultTypes once when first loaded */
+  const defaultApplied = useRef(false);
+  useEffect(() => {
+    if (!defaultApplied.current && defaultTypes !== undefined) {
+      if (Array.isArray(defaultTypes) && defaultTypes.length > 0) {
+        setCheckedTypes(new Set(defaultTypes));
+      }
+      defaultApplied.current = true;
+    }
+  }, [defaultTypes]);
+
+  /* ── All item types in this dataset ── */
   const allTypes = useMemo(() =>
     [...new Set(rows.map(r => r[typeCol]).filter(Boolean))].sort()
   , [rows, typeCol]);
 
-  /* ── Effective checked set (null → all) ── */
   const activeTypes = checkedTypes === null ? new Set(allTypes) : checkedTypes;
 
-  /* ── Toggle helpers ── */
-  const toggleType = type =>
-    setCheckedTypes(prev => {
-      const cur = prev === null ? new Set(allTypes) : new Set(prev);
-      cur.has(type) ? cur.delete(type) : cur.add(type);
-      return cur.size === allTypes.length ? null : cur; // null = all = same as reset
-    });
+  const toggleType   = type => setCheckedTypes(prev => {
+    const cur = prev === null ? new Set(allTypes) : new Set(prev);
+    cur.has(type) ? cur.delete(type) : cur.add(type);
+    return cur.size === allTypes.length ? null : cur;
+  });
+  const selectAllTypes  = () => setCheckedTypes(null);
+  const clearAllTypes   = () => setCheckedTypes(new Set());
 
-  const selectAll  = () => setCheckedTypes(null);
-  const clearAll   = () => setCheckedTypes(new Set());
+  /* ── Save handler ── */
+  const handleSave = async () => {
+    const arr = checkedTypes === null ? null : [...checkedTypes];
+    setSaveStatus('saving');
+    try {
+      await onSaveTypes(arr);
+      setSaveStatus('saved');
+      setTimeout(() => setSaveStatus('idle'), 2500);
+    } catch {
+      setSaveStatus('error');
+      setTimeout(() => setSaveStatus('idle'), 2500);
+    }
+  };
 
   /* ── Build matrix data ── */
   const { regions, typeMap, grandByRegion, grandTotal, maxTypeTotal } = useMemo(() => {
     const q = search?.toLowerCase() || '';
     let filtered = rows;
-
-    // Apply page-level location filter
     if (locFilter) filtered = filtered.filter(r => r[locCol] === locFilter);
-
-    // Apply matrix-level type filter (multi-select chips)
-    if (checkedTypes !== null && checkedTypes.size > 0) {
+    if (checkedTypes !== null && checkedTypes.size > 0)
       filtered = filtered.filter(r => checkedTypes.has(r[typeCol]));
-    } else if (checkedTypes !== null && checkedTypes.size === 0) {
+    else if (checkedTypes !== null && checkedTypes.size === 0)
       filtered = [];
-    }
-
-    // Apply search
     if (q) filtered = filtered.filter(r =>
       Object.values(r).some(v => String(v ?? '').toLowerCase().includes(q))
     );
 
-    /* Collect unique regions */
     const regionSet = new Set();
-    filtered.forEach(r => {
-      const reg = getRegion(r[locCol]);
-      if (reg) regionSet.add(reg);
-    });
+    filtered.forEach(r => { const reg = getRegion(r[locCol]); if (reg) regionSet.add(reg); });
     const regions = [...regionSet].sort();
 
-    /*
-     * typeMap: type → {
-     *   locTotals : Map<region, number>   (totals per region for this type)
-     *   items     : Map<item,   Map<region, number>>
-     * }
-     */
-    const typeMap     = new Map();
-    let   maxTypeTotal = 1;
+    const typeMap    = new Map();
+    let maxTypeTotal = 1;
 
     filtered.forEach(r => {
       const type   = r[typeCol] || '(بدون نوع)';
       const item   = r[itemCol] || '—';
       const region = getRegion(r[locCol]);
       if (!region) return;
+      const qty = parseQty(r[qtyCol]) ?? 0;
 
-      // Parse qty — use parseQty so we keep null vs 0 distinction
-      const rawQty = parseQty(r[qtyCol]);
-      const qty    = rawQty ?? 0;   // treat null as 0 for aggregation
-
-      if (!typeMap.has(type)) {
-        typeMap.set(type, { locTotals: new Map(), items: new Map() });
-      }
+      if (!typeMap.has(type)) typeMap.set(type, { locTotals: new Map(), items: new Map() });
       const td = typeMap.get(type);
-
-      /* Type totals */
       td.locTotals.set(region, (td.locTotals.get(region) ?? 0) + qty);
-
-      /* Item totals */
       if (!td.items.has(item)) td.items.set(item, new Map());
       const im = td.items.get(item);
       im.set(region, (im.get(region) ?? 0) + qty);
     });
 
-    /* Grand totals */
     const grandByRegion = new Map();
     let grandTotal = 0;
     typeMap.forEach(td => {
@@ -274,10 +244,21 @@ function StockMatrix({ rows, locFilter, search, typeCol, locCol, itemCol, qtyCol
     return { regions, typeMap, grandByRegion, grandTotal, maxTypeTotal };
   }, [rows, locFilter, search, checkedTypes, typeCol, locCol, itemCol, qtyCol]);
 
-  /* ── Sorted type rows ── */
+  /* ── Region multi-select helpers ── */
+  const activeRegions   = checkedRegions === null ? new Set(regions) : checkedRegions;
+  const visibleRegions  = regions.filter(r => activeRegions.has(r));
+
+  const toggleRegion    = reg => setCheckedRegions(prev => {
+    const cur = prev === null ? new Set(regions) : new Set(prev);
+    cur.has(reg) ? cur.delete(reg) : cur.add(reg);
+    return cur.size === regions.length ? null : cur;
+  });
+  const selectAllRegions  = () => setCheckedRegions(null);
+  const clearAllRegions   = () => setCheckedRegions(new Set());
+
+  /* ── Sorted types ── */
   const sortedTypes = useMemo(() => {
-    const entries = [...typeMap.entries()];
-    return entries.sort(([, aD], [, bD]) => {
+    return [...typeMap.entries()].sort(([, aD], [, bD]) => {
       if (sortCol === '__total__') {
         const aS = [...aD.locTotals.values()].reduce((s, v) => s + v, 0);
         const bS = [...bD.locTotals.values()].reduce((s, v) => s + v, 0);
@@ -289,42 +270,31 @@ function StockMatrix({ rows, locFilter, search, typeCol, locCol, itemCol, qtyCol
     });
   }, [typeMap, sortCol, sortDir]);
 
-  /* ── Expand/collapse rows ── */
   const toggleRow    = type => setExpanded(prev => {
-    const n = new Set(prev);
-    n.has(type) ? n.delete(type) : n.add(type);
-    return n;
+    const n = new Set(prev); n.has(type) ? n.delete(type) : n.add(type); return n;
   });
   const expandAll   = () => setExpanded(new Set(typeMap.keys()));
   const collapseAll = () => setExpanded(new Set());
-
-  /* ── Column sort ── */
   const handleColSort = col => {
     if (sortCol === col) setSortDir(d => d === 'desc' ? 'asc' : 'desc');
     else { setSortCol(col); setSortDir('desc'); }
   };
 
-  /* ── Heat-map cell background ── */
+  /* ── Heat-map ── */
   const heatBg = (qty, max) => {
     if (!qty || qty <= 0) return {};
     const ratio   = Math.min(qty / (max || 1), 1);
     const opacity = 0.06 + ratio * 0.55;
-    return {
-      background: `rgba(46,125,50,${opacity.toFixed(2)})`,
-      color: ratio > 0.6 ? '#fff' : ratio > 0.3 ? '#1b5e20' : 'inherit',
-    };
+    return { background: `rgba(46,125,50,${opacity.toFixed(2)})`,
+             color: ratio > 0.6 ? '#fff' : ratio > 0.3 ? '#1b5e20' : 'inherit' };
   };
 
-  /* ── Cell value renderer
-       hasEntry = type/item exists in that region (even if qty=0)
-       !hasEntry = region simply has no record for this type/item → show —
-  ── */
-  const cellVal = (map, reg, max, small = false) => {
+  /* ── Cell renderer — distinguishes 0-entry vs missing ── */
+  const cellVal = (map, reg) => {
     if (!map.has(reg)) return <span className="csp-mx-dash">—</span>;
     const qty = map.get(reg);
     if (qty === 0) return <span className="csp-mx-zero">0</span>;
-    const style = small ? heatBg(qty, max) : {};
-    return <span style={style}>{fmtQty(qty)}</span>;
+    return fmtQty(qty);
   };
 
   const SortIcon = ({ col }) => (
@@ -337,25 +307,23 @@ function StockMatrix({ rows, locFilter, search, typeCol, locCol, itemCol, qtyCol
   return (
     <div className="csp-matrix-section">
 
-      {/* ── Item Type multi-select chips ─────────────────── */}
+      {/* ══ 1. TYPE FILTER CHIPS ══ */}
       {allTypes.length > 0 && (
         <div className="csp-mx-type-filter">
           <span className="csp-mx-type-filter-label">نوع الصنف:</span>
 
-          {/* الكل */}
           <button
             className={`csp-mx-type-chip csp-mx-type-chip-all${checkedTypes === null ? ' active' : ''}`}
-            onClick={selectAll}
+            onClick={selectAllTypes}
             title="عرض جميع الأنواع"
           >
             الكل
             <span className="csp-mx-type-chip-count">{allTypes.length}</span>
           </button>
 
-          {/* لا شيء */}
           <button
             className={`csp-mx-type-chip csp-mx-type-chip-none${checkedTypes !== null && checkedTypes.size === 0 ? ' active-none' : ''}`}
-            onClick={clearAll}
+            onClick={clearAllTypes}
             title="إلغاء تحديد الكل"
           >
             لا شيء
@@ -372,32 +340,100 @@ function StockMatrix({ rows, locFilter, search, typeCol, locCol, itemCol, qtyCol
                 onClick={() => toggleType(type)}
                 title={isActive ? `استثناء: ${type}` : `إضافة: ${type}`}
               >
-                {!isActive && <X size={10} style={{ opacity: 0.6 }} />}
+                {!isActive && <X size={10} style={{ opacity: 0.6, flexShrink: 0 }} />}
                 {type}
               </button>
             );
           })}
 
-          {/* Show active count hint */}
           {checkedTypes !== null && (
             <span className="csp-mx-type-filter-hint">
-              {checkedTypes.size === 0
-                ? 'لا شيء محدد'
-                : `${checkedTypes.size} من ${allTypes.length} نوع`
+              {checkedTypes.size === 0 ? 'لا شيء محدد' : `${checkedTypes.size} من ${allTypes.length}`}
+            </span>
+          )}
+
+          {/* ── Save button ── */}
+          <span className="csp-mx-type-filter-sep" style={{ marginRight: 'auto' }} />
+          <button
+            className={`csp-mx-save-btn${saveStatus === 'saved' ? ' saved' : saveStatus === 'error' ? ' error' : ''}`}
+            onClick={handleSave}
+            disabled={saveStatus === 'saving'}
+            title={isAdmin ? 'حفظ الاختيارات الحالية كافتراضي لجميع المستخدمين' : 'حفظ اختياراتي الشخصية'}
+          >
+            {saveStatus === 'saving' && <RefreshCw size={13} className="csp-spin" />}
+            {saveStatus === 'saved'  && <BookmarkCheck size={13} />}
+            {saveStatus === 'error'  && <AlertCircle size={13} />}
+            {saveStatus === 'idle'   && <Save size={13} />}
+            <span>
+              {saveStatus === 'saved'  ? 'تم الحفظ'
+               : saveStatus === 'error' ? 'خطأ في الحفظ'
+               : saveStatus === 'saving' ? 'جاري الحفظ…'
+               : isAdmin ? 'حفظ للجميع' : 'حفظ تفضيلاتي'
               }
+            </span>
+            {isAdmin && saveStatus === 'idle' && (
+              <span className="csp-mx-save-badge">Admin</span>
+            )}
+          </button>
+        </div>
+      )}
+
+      {/* ══ 2. REGION FILTER CHIPS ══ */}
+      {regions.length > 1 && (
+        <div className="csp-mx-region-filter">
+          <span className="csp-mx-type-filter-label">المناطق:</span>
+
+          <button
+            className={`csp-mx-reg-chip${checkedRegions === null ? ' active' : ''}`}
+            onClick={selectAllRegions}
+          >
+            الكل
+            <span className="csp-mx-type-chip-count">{regions.length}</span>
+          </button>
+
+          <button
+            className={`csp-mx-reg-chip${checkedRegions !== null && checkedRegions.size === 0 ? ' active-none' : ''}`}
+            onClick={clearAllRegions}
+          >
+            لا شيء
+          </button>
+
+          <span className="csp-mx-type-filter-sep" />
+
+          {regions.map(reg => {
+            const isActive = activeRegions.has(reg);
+            return (
+              <button
+                key={reg}
+                className={`csp-mx-reg-chip${isActive ? ' active' : ' inactive'}`}
+                onClick={() => toggleRegion(reg)}
+                title={isActive ? `إخفاء: ${reg}` : `إظهار: ${reg}`}
+              >
+                {!isActive && <X size={10} style={{ opacity: 0.6, flexShrink: 0 }} />}
+                {reg}
+              </button>
+            );
+          })}
+
+          {checkedRegions !== null && checkedRegions.size > 0 && (
+            <span className="csp-mx-type-filter-hint">
+              {`${checkedRegions.size} من ${regions.length} منطقة`}
             </span>
           )}
         </div>
       )}
 
-      {/* ── Matrix toolbar ─────────────────────────────── */}
+      {/* ══ 3. TOOLBAR ══ */}
       <div className="csp-matrix-bar">
         <div className="csp-matrix-bar-right">
-          <span className="csp-matrix-title">
-            🗂 مصفوفة المخزون — إجمالي الكمية المتاحة
-          </span>
+          <span className="csp-matrix-title">🗂 مصفوفة المخزون — إجمالي الكمية المتاحة</span>
           <span className="csp-matrix-meta">
-            {typeMap.size} نوع · {regions.length} منطقة
+            {typeMap.size} نوع · {visibleRegions.length} منطقة ظاهرة
+            {visibleRegions.length < regions.length && (
+              <span style={{ color: 'var(--color-warning, #d97706)', marginRight: 4 }}>
+                ({regions.length - visibleRegions.length} مخفية)
+              </span>
+            )}
           </span>
           {(!typeCol || !locCol || !qtyCol) && (
             <span style={{ fontSize: 10, color: '#c00', fontWeight: 700 }}>
@@ -415,24 +451,24 @@ function StockMatrix({ rows, locFilter, search, typeCol, locCol, itemCol, qtyCol
         </div>
       </div>
 
-      {/* ── Empty state ─────────────────────────────────── */}
-      {(!regions.length || !typeMap.size) && (
+      {/* ══ EMPTY STATE ══ */}
+      {(!regions.length || !typeMap.size || !visibleRegions.length) && (
         <div className="csp-empty" style={{ padding: '40px 0' }}>
           <Warehouse size={36} />
           <p>
             {checkedTypes !== null && checkedTypes.size === 0
-              ? 'لم يتم تحديد أي نوع — اختر نوعاً واحداً على الأقل'
-              : 'لا توجد بيانات للمصفوفة'
-            }
+              ? 'اختر نوعاً واحداً على الأقل من شريط الأنواع'
+              : checkedRegions !== null && checkedRegions.size === 0
+              ? 'اختر منطقة واحدة على الأقل من شريط المناطق'
+              : 'لا توجد بيانات للمصفوفة'}
           </p>
         </div>
       )}
 
-      {/* ── Matrix table ────────────────────────────────── */}
-      {regions.length > 0 && typeMap.size > 0 && (
+      {/* ══ 4. MATRIX TABLE ══ */}
+      {regions.length > 0 && typeMap.size > 0 && visibleRegions.length > 0 && (
         <div className="csp-matrix-wrap">
           <table className="csp-matrix-table">
-
             <thead>
               <tr>
                 <th className="csp-mx-th-label">النوع / الصنف</th>
@@ -442,7 +478,7 @@ function StockMatrix({ rows, locFilter, search, typeCol, locCol, itemCol, qtyCol
                 >
                   الإجمالي <SortIcon col="__total__" />
                 </th>
-                {regions.map(reg => (
+                {visibleRegions.map(reg => (
                   <th
                     key={reg}
                     className={`csp-mx-th-reg${sortCol === reg ? ' sorted' : ''}`}
@@ -460,7 +496,6 @@ function StockMatrix({ rows, locFilter, search, typeCol, locCol, itemCol, qtyCol
               {sortedTypes.map(([type, td]) => {
                 const isOpen    = expanded.has(type);
                 const typeTotal = [...td.locTotals.values()].reduce((a, b) => a + b, 0);
-
                 const sortedItems = [...td.items.entries()].sort(([, aM], [, bM]) => {
                   const aS = [...aM.values()].reduce((a, b) => a + b, 0);
                   const bS = [...bM.values()].reduce((a, b) => a + b, 0);
@@ -469,8 +504,7 @@ function StockMatrix({ rows, locFilter, search, typeCol, locCol, itemCol, qtyCol
 
                 return (
                   <React.Fragment key={type}>
-
-                    {/* ── Type row (parent) ── */}
+                    {/* Type row */}
                     <tr
                       className={`csp-mx-type-row${isOpen ? ' open' : ''}`}
                       onClick={() => toggleRow(type)}
@@ -483,26 +517,21 @@ function StockMatrix({ rows, locFilter, search, typeCol, locCol, itemCol, qtyCol
                         <span className="csp-mx-count">({td.items.size})</span>
                       </td>
                       <td className="csp-mx-td-type-total">
-                        {typeTotal > 0
-                          ? fmtQty(typeTotal)
-                          : <span className="csp-mx-zero">0</span>
-                        }
+                        {typeTotal > 0 ? fmtQty(typeTotal) : <span className="csp-mx-zero">0</span>}
                       </td>
-                      {regions.map(reg => (
+                      {visibleRegions.map(reg => (
                         <td
                           key={reg}
                           className="csp-mx-td-type-cell"
                           style={td.locTotals.has(reg) && (td.locTotals.get(reg) ?? 0) > 0
-                            ? heatBg(td.locTotals.get(reg), maxTypeTotal)
-                            : {}
-                          }
+                            ? heatBg(td.locTotals.get(reg), maxTypeTotal) : {}}
                         >
-                          {cellVal(td.locTotals, reg, maxTypeTotal)}
+                          {cellVal(td.locTotals, reg)}
                         </td>
                       ))}
                     </tr>
 
-                    {/* ── Item rows (children) ── */}
+                    {/* Item rows */}
                     {isOpen && sortedItems.map(([item, itemLocs]) => {
                       const itemTotal = [...itemLocs.values()].reduce((a, b) => a + b, 0);
                       return (
@@ -512,21 +541,16 @@ function StockMatrix({ rows, locFilter, search, typeCol, locCol, itemCol, qtyCol
                             <span className="csp-mx-item-name">{item}</span>
                           </td>
                           <td className="csp-mx-td-item-total">
-                            {itemTotal > 0
-                              ? fmtQty(itemTotal)
-                              : <span className="csp-mx-zero">0</span>
-                            }
+                            {itemTotal > 0 ? fmtQty(itemTotal) : <span className="csp-mx-zero">0</span>}
                           </td>
-                          {regions.map(reg => (
+                          {visibleRegions.map(reg => (
                             <td
                               key={reg}
                               className="csp-mx-td-item-cell"
                               style={itemLocs.has(reg) && (itemLocs.get(reg) ?? 0) > 0
-                                ? heatBg(itemLocs.get(reg), maxTypeTotal * 0.4)
-                                : {}
-                              }
+                                ? heatBg(itemLocs.get(reg), maxTypeTotal * 0.4) : {}}
                             >
-                              {cellVal(itemLocs, reg, maxTypeTotal * 0.4)}
+                              {cellVal(itemLocs, reg)}
                             </td>
                           ))}
                         </tr>
@@ -537,21 +561,19 @@ function StockMatrix({ rows, locFilter, search, typeCol, locCol, itemCol, qtyCol
               })}
             </tbody>
 
-            {/* ── Grand total footer ── */}
             <tfoot>
               <tr className="csp-mx-grand-row">
                 <td className="csp-mx-grand-label">الإجمالي الكلي</td>
                 <td className="csp-mx-grand-total">
                   {grandTotal > 0 ? fmtQty(grandTotal) : <span className="csp-mx-zero">0</span>}
                 </td>
-                {regions.map(reg => (
+                {visibleRegions.map(reg => (
                   <td key={reg} className="csp-mx-grand-cell">
-                    {cellVal(grandByRegion, reg, maxTypeTotal)}
+                    {cellVal(grandByRegion, reg)}
                   </td>
                 ))}
               </tr>
             </tfoot>
-
           </table>
         </div>
       )}
@@ -563,6 +585,9 @@ function StockMatrix({ rows, locFilter, search, typeCol, locCol, itemCol, qtyCol
    MAIN PAGE
    ══════════════════════════════════════════════════════════ */
 export default function CurrentStockPage() {
+  const { user } = useAuth();
+  const userRole = user?.role ?? '';
+
   const [search,     setSearch]     = useState('');
   const [typeFilter, setTypeFilter] = useState('');
   const [locFilter,  setLocFilter]  = useState('');
@@ -570,13 +595,48 @@ export default function CurrentStockPage() {
   const [exporting,  setExporting]  = useState(false);
   const [view,       setView]       = useState('matrix');
 
-  /* ── Data fetch ── */
+  /* ── Load global saved default from backend ── */
+  const { data: globalSetting } = useQuery({
+    queryKey: ['settings', SETTING_KEY],
+    queryFn:  () => client.get(`/settings/${SETTING_KEY}`).then(r => r.data?.value ?? null),
+    staleTime: 30 * 60 * 1000,
+  });
+
+  /* ── User's personal preference (localStorage) ── */
+  const [localTypes, setLocalTypes] = useState(() => {
+    try {
+      const raw = localStorage.getItem(LS_USER_KEY);
+      if (raw === null) return undefined;  // not set → use global default
+      return JSON.parse(raw);              // null (all) or Array
+    } catch { return undefined; }
+  });
+
+  /* Effective default: local preference > global default > undefined */
+  const defaultTypes = localTypes !== undefined ? localTypes : globalSetting;
+
+  /* ── Save handler (passed to StockMatrix) ── */
+  const handleSaveTypes = async (types) => {
+    const isAdmin = ADMIN_ROLES.includes(userRole);
+    if (isAdmin) {
+      /* Save to backend (affects all users without personal preference) */
+      await client.put(`/settings/${SETTING_KEY}`, { value: types });
+    }
+    /* Always also save to localStorage for this user */
+    if (types === null) {
+      localStorage.removeItem(LS_USER_KEY);
+      setLocalTypes(undefined); // revert to global default
+    } else {
+      localStorage.setItem(LS_USER_KEY, JSON.stringify(types));
+      setLocalTypes(types);
+    }
+  };
+
+  /* ── NetSuite data fetch ── */
   const { data, isLoading, isError, error, isFetching } = useQuery({
     queryKey: ['current-stock', refreshKey],
-    queryFn: () =>
-      client
-        .get('/current-stock', { params: refreshKey > 0 ? { refresh: '1' } : {} })
-        .then(r => r.data),
+    queryFn:  () =>
+      client.get('/current-stock', { params: refreshKey > 0 ? { refresh: '1' } : {} })
+            .then(r => r.data),
     staleTime: 5 * 60 * 1000,
     retry: 1,
   });
@@ -604,7 +664,6 @@ export default function CurrentStockPage() {
     [allRows, locColName]
   );
 
-  /* ── Filtered rows (table view) ── */
   const filtered = useMemo(() => {
     if (!search && !typeFilter && !locFilter) return allRows;
     const q = search.toLowerCase();
@@ -629,7 +688,7 @@ export default function CurrentStockPage() {
         params: {
           ...(typeFilter && { type_filter: typeFilter }),
           ...(locFilter  && { loc_filter:  locFilter  }),
-          ...(search     && { search                  }),
+          ...(search     && { search }),
         },
       });
       const url  = URL.createObjectURL(res.data);
@@ -658,18 +717,12 @@ export default function CurrentStockPage() {
           <div>
             <h1 className="csp-title">المخزون الحالي</h1>
             <div className="csp-meta">
-              {data?.stale && (
-                <span className="csp-badge csp-badge-warn">⚠ بيانات قديمة</span>
-              )}
+              {data?.stale && <span className="csp-badge csp-badge-warn">⚠ بيانات قديمة</span>}
               {data?.fromCache && !data?.stale && (
-                <span className="csp-badge csp-badge-cache">
-                  <Clock size={10} /> محفوظ مؤقتاً
-                </span>
+                <span className="csp-badge csp-badge-cache"><Clock size={10} /> محفوظ مؤقتاً</span>
               )}
               {data?.fetchedAt && (
-                <span className="csp-fetch-time">
-                  آخر تحديث: {fmtTime(data.fetchedAt)}
-                </span>
+                <span className="csp-fetch-time">آخر تحديث: {fmtTime(data.fetchedAt)}</span>
               )}
             </div>
           </div>
@@ -677,34 +730,20 @@ export default function CurrentStockPage() {
 
         <div className="csp-actions">
           <div className="csp-view-toggle">
-            <button
-              className={`csp-view-btn${view === 'matrix' ? ' active' : ''}`}
-              onClick={() => setView('matrix')}
-            >
+            <button className={`csp-view-btn${view === 'matrix' ? ' active' : ''}`} onClick={() => setView('matrix')}>
               <LayoutGrid size={14} /> مصفوفة
             </button>
-            <button
-              className={`csp-view-btn${view === 'table' ? ' active' : ''}`}
-              onClick={() => setView('table')}
-            >
+            <button className={`csp-view-btn${view === 'table' ? ' active' : ''}`} onClick={() => setView('table')}>
               <List size={14} /> جدول
             </button>
           </div>
 
-          <button
-            className="csp-btn csp-btn-secondary"
-            onClick={handleRefresh}
-            disabled={isFetching}
-          >
+          <button className="csp-btn csp-btn-secondary" onClick={handleRefresh} disabled={isFetching}>
             <RefreshCw size={14} className={isFetching ? 'csp-spin' : ''} />
             {isFetching ? 'جاري التحديث…' : 'تحديث'}
           </button>
 
-          <button
-            className="csp-btn csp-btn-primary"
-            onClick={handleExport}
-            disabled={!allRows.length || exporting}
-          >
+          <button className="csp-btn csp-btn-primary" onClick={handleExport} disabled={!allRows.length || exporting}>
             <Download size={14} className={exporting ? 'csp-spin' : ''} />
             {exporting ? 'جاري التصدير…' : 'تصدير Excel'}
           </button>
@@ -724,9 +763,7 @@ export default function CurrentStockPage() {
           </div>
           <div className="csp-kpi">
             <span className="csp-kpi-val">
-              {[...new Set(
-                allRows.map(r => getRegion(r[locColName])).filter(v => v && v !== '—')
-              )].length}
+              {[...new Set(allRows.map(r => getRegion(r[locColName])).filter(v => v && v !== '—'))].length}
             </span>
             <span className="csp-kpi-lbl">المناطق</span>
           </div>
@@ -748,9 +785,7 @@ export default function CurrentStockPage() {
             onChange={e => setSearch(e.target.value)}
           />
           {search && (
-            <button className="csp-input-clear" onClick={() => setSearch('')}>
-              <X size={12} />
-            </button>
+            <button className="csp-input-clear" onClick={() => setSearch('')}><X size={12} /></button>
           )}
         </div>
 
@@ -783,20 +818,17 @@ export default function CurrentStockPage() {
       {activeFilters > 0 && (
         <div className="csp-chips">
           {typeFilter && (
-            <span className="csp-chip">
-              النوع: {typeFilter}
+            <span className="csp-chip">النوع: {typeFilter}
               <button onClick={() => setTypeFilter('')}><X size={11} /></button>
             </span>
           )}
           {locFilter && (
-            <span className="csp-chip">
-              الموقع: {locFilter}
+            <span className="csp-chip">الموقع: {locFilter}
               <button onClick={() => setLocFilter('')}><X size={11} /></button>
             </span>
           )}
           {search && (
-            <span className="csp-chip">
-              بحث: "{search}"
+            <span className="csp-chip">بحث: "{search}"
               <button onClick={() => setSearch('')}><X size={11} /></button>
             </span>
           )}
@@ -808,9 +840,7 @@ export default function CurrentStockPage() {
         <div className="csp-error">
           <AlertCircle size={36} />
           <p>تعذّر الاتصال بـ NetSuite</p>
-          <span className="csp-error-msg">
-            {error?.response?.data?.error || error?.message}
-          </span>
+          <span className="csp-error-msg">{error?.response?.data?.error || error?.message}</span>
           <button className="csp-btn csp-btn-secondary" onClick={handleRefresh}>
             <RefreshCw size={14} /> إعادة المحاولة
           </button>
@@ -830,7 +860,6 @@ export default function CurrentStockPage() {
 
       ) : (
         <>
-          {/* ══ MATRIX VIEW ══ */}
           {view === 'matrix' && (
             <StockMatrix
               rows={allRows}
@@ -840,10 +869,12 @@ export default function CurrentStockPage() {
               locCol={locColName}
               itemCol={itemColName}
               qtyCol={qtyColName}
+              defaultTypes={defaultTypes}
+              onSaveTypes={handleSaveTypes}
+              userRole={userRole}
             />
           )}
 
-          {/* ══ TABLE VIEW ══ */}
           {view === 'table' && (
             <>
               {filtered.length === 0 ? (
@@ -881,7 +912,6 @@ export default function CurrentStockPage() {
                       </tbody>
                     </table>
                   </div>
-
                   <div className="csp-footer">
                     <span>
                       عرض <strong>{filtered.length.toLocaleString('en-SA')}</strong> من أصل{' '}
@@ -890,9 +920,7 @@ export default function CurrentStockPage() {
                         <> — <button className="csp-footer-clear" onClick={clearFilters}>مسح الفلاتر</button></>
                       )}
                     </span>
-                    {data?.warning && (
-                      <span className="csp-footer-warn">⚠ {data.warning}</span>
-                    )}
+                    {data?.warning && <span className="csp-footer-warn">⚠ {data.warning}</span>}
                   </div>
                 </>
               )}

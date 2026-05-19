@@ -1,0 +1,2 @@
+-- app_settings table already created in 011_create_app_settings.sql
+-- This migration is intentionally a no-op.

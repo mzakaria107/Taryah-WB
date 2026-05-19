@@ -40,7 +40,7 @@ router.put('/:id', verifyToken, requireRoles('super_admin'), async (req, res) =>
   const params  = [];
   let p = 1;
 
-  const allowed = ['super_admin','it_admin','supervisor','region_manager','sales_rep','fridge_admin','viewer'];
+  const allowed = ['super_admin','it_admin','sales_manager','top_management','supervisor','region_manager','sales_rep','fridge_admin','viewer'];
 
   if (name !== undefined)      { updates.push(`name = $${p++}`);      params.push(name); }
   if (email !== undefined)     { updates.push(`email = $${p++}`);     params.push(email); }

@@ -23,7 +23,7 @@ router.post('/register', verifyToken, async (req, res) => {
     return res.status(400).json({ error: 'كلمة المرور يجب أن تكون 6 أحرف على الأقل' });
   }
 
-  const allowed = ['super_admin','it_admin','supervisor','region_manager','sales_rep','fridge_admin','viewer'];
+  const allowed = ['super_admin','it_admin','sales_manager','top_management','supervisor','region_manager','sales_rep','fridge_admin','viewer'];
   if (role && !allowed.includes(role)) {
     return res.status(400).json({ error: 'الدور غير صالح' });
   }

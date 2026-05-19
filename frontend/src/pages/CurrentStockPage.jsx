@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import {
   RefreshCw, Download, Search, X,
   AlertCircle, Clock, Filter, Warehouse,
-  ChevronRight, ChevronDown, LayoutGrid, List,
+  ChevronRight, ChevronDown,
   ChevronsDown, ChevronsUp, Save, BookmarkCheck,
 } from 'lucide-react';
 import client from '../api/client';
@@ -593,7 +593,6 @@ export default function CurrentStockPage() {
   const [locFilter,  setLocFilter]  = useState('');
   const [refreshKey, setRefreshKey] = useState(0);
   const [exporting,  setExporting]  = useState(false);
-  const [view,       setView]       = useState('matrix');
 
   /* ── Load global saved default from backend ── */
   const { data: globalSetting } = useQuery({
@@ -649,32 +648,10 @@ export default function CurrentStockPage() {
   const itemColName = useMemo(() => detectItemCol(headers), [headers]);
   const qtyColName  = useMemo(() => detectQtyCol(headers),  [headers]);
 
-  const numericCols = useMemo(
-    () => new Set(headers.filter(h => isNumericCol(allRows, h))),
-    [headers, allRows]
-  );
-
-  const itemTypes = useMemo(
-    () => [...new Set(allRows.map(r => r[typeColName]).filter(Boolean))].sort(),
-    [allRows, typeColName]
-  );
-
   const locations = useMemo(
     () => [...new Set(allRows.map(r => r[locColName]).filter(Boolean))].sort(),
     [allRows, locColName]
   );
-
-  const filtered = useMemo(() => {
-    if (!search && !typeFilter && !locFilter) return allRows;
-    const q = search.toLowerCase();
-    return allRows.filter(row => {
-      if (typeFilter && row[typeColName] !== typeFilter) return false;
-      if (locFilter  && row[locColName]  !== locFilter)  return false;
-      if (q && !Object.values(row).some(v => String(v ?? '').toLowerCase().includes(q)))
-        return false;
-      return true;
-    });
-  }, [allRows, typeFilter, locFilter, search, typeColName, locColName]);
 
   const handleRefresh = () => setRefreshKey(k => k + 1);
   const activeFilters = [typeFilter, locFilter, search].filter(Boolean).length;
@@ -729,15 +706,6 @@ export default function CurrentStockPage() {
         </div>
 
         <div className="csp-actions">
-          <div className="csp-view-toggle">
-            <button className={`csp-view-btn${view === 'matrix' ? ' active' : ''}`} onClick={() => setView('matrix')}>
-              <LayoutGrid size={14} /> مصفوفة
-            </button>
-            <button className={`csp-view-btn${view === 'table' ? ' active' : ''}`} onClick={() => setView('table')}>
-              <List size={14} /> جدول
-            </button>
-          </div>
-
           <button className="csp-btn csp-btn-secondary" onClick={handleRefresh} disabled={isFetching}>
             <RefreshCw size={14} className={isFetching ? 'csp-spin' : ''} />
             {isFetching ? 'جاري التحديث…' : 'تحديث'}
@@ -788,16 +756,6 @@ export default function CurrentStockPage() {
             <button className="csp-input-clear" onClick={() => setSearch('')}><X size={12} /></button>
           )}
         </div>
-
-        {view === 'table' && (
-          <div className="csp-select-wrap">
-            <Filter size={13} className="csp-select-icon" />
-            <select className="csp-select" value={typeFilter} onChange={e => setTypeFilter(e.target.value)}>
-              <option value="">كل أنواع الأصناف</option>
-              {itemTypes.map(t => <option key={t} value={t}>{t}</option>)}
-            </select>
-          </div>
-        )}
 
         <div className="csp-select-wrap">
           <Filter size={13} className="csp-select-icon" />
@@ -859,74 +817,18 @@ export default function CurrentStockPage() {
         </div>
 
       ) : (
-        <>
-          {view === 'matrix' && (
-            <StockMatrix
-              rows={allRows}
-              locFilter={locFilter}
-              search={search}
-              typeCol={typeColName}
-              locCol={locColName}
-              itemCol={itemColName}
-              qtyCol={qtyColName}
-              defaultTypes={defaultTypes}
-              onSaveTypes={handleSaveTypes}
-              userRole={userRole}
-            />
-          )}
-
-          {view === 'table' && (
-            <>
-              {filtered.length === 0 ? (
-                <div className="csp-empty">
-                  <Filter size={40} />
-                  <p>لا توجد نتائج تطابق الفلتر</p>
-                  <button className="csp-clear-btn" onClick={clearFilters}>مسح الفلاتر</button>
-                </div>
-              ) : (
-                <>
-                  <div className="csp-table-wrap">
-                    <table className="csp-table">
-                      <thead>
-                        <tr>
-                          <th className="csp-th-seq">#</th>
-                          {headers.map(h => (
-                            <th key={h} className={numericCols.has(h) ? 'csp-num' : ''}>{h}</th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {filtered.map((row, i) => (
-                          <tr key={i} className={i % 2 === 0 ? '' : 'csp-alt'}>
-                            <td className="csp-td-seq">{(i + 1).toLocaleString('en-SA')}</td>
-                            {headers.map(h => (
-                              <td key={h} className={numericCols.has(h) ? 'csp-num' : ''}>
-                                {numericCols.has(h)
-                                  ? fmtNum(row[h])
-                                  : (row[h] || <span className="csp-null">—</span>)
-                                }
-                              </td>
-                            ))}
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                  <div className="csp-footer">
-                    <span>
-                      عرض <strong>{filtered.length.toLocaleString('en-SA')}</strong> من أصل{' '}
-                      <strong>{allRows.length.toLocaleString('en-SA')}</strong> صنف
-                      {activeFilters > 0 && (
-                        <> — <button className="csp-footer-clear" onClick={clearFilters}>مسح الفلاتر</button></>
-                      )}
-                    </span>
-                    {data?.warning && <span className="csp-footer-warn">⚠ {data.warning}</span>}
-                  </div>
-                </>
-              )}
-            </>
-          )}
-        </>
+        <StockMatrix
+          rows={allRows}
+          locFilter={locFilter}
+          search={search}
+          typeCol={typeColName}
+          locCol={locColName}
+          itemCol={itemColName}
+          qtyCol={qtyColName}
+          defaultTypes={defaultTypes}
+          onSaveTypes={handleSaveTypes}
+          userRole={userRole}
+        />
       )}
     </div>
   );

@@ -137,19 +137,34 @@ Standard implementation per page:
 
 ## Production Deployment
 
-**Server**: Windows Server 2016, IP 176.9.85.242, Docker Engine (Mirantis Container Runtime — Linux containers mode), domain `www.sales.taryahpoultry.com.sa`
+**Server**: Windows Server 2016, IP 176.9.85.242, **native stack (no Docker)**, domain `www.sales.taryahpoultry.com.sa`
 
-**SSL certs**: Managed by win-acme (Let's Encrypt), stored at `C:\certs\` on host, mounted into nginx container as `/etc/ssl/certs:ro`. Cert files must be named `fullchain.pem` and `privkey.pem`.
+**Stack**:
+- PostgreSQL 15 → Windows Service (auto-start)
+- Node.js 20 backend → PM2 (`taryah-backend`), auto-starts via pm2-windows-startup
+- nginx (Windows exe, `C:\tools\nginx-*\`) → NSSM Windows Service (`TaryahNginx`, auto-start)
+- React frontend → built to `C:\apps\Taryah-WB\frontend\dist`, served as static files by nginx
+
+**DB connection**: `pool.js` accepts both `DATABASE_URL` (single connection string) **or** individual `DB_HOST` / `DB_PORT` / `DB_USER` / `DB_PASSWORD` / `DB_NAME` vars. The `.env` on the server uses the individual vars.
+
+**SSL certs**: win-acme (Let's Encrypt), stored at `C:\certs\fullchain.pem` and `C:\certs\privkey.pem`. nginx references them directly (no container mount needed).
+
+**nginx config**: `nginx.conf` is Windows-native — no Docker upstreams. Serves static files from `C:/apps/Taryah-WB/frontend/dist`, proxies `/api/` to `http://127.0.0.1:3000`.
 
 **Deploy workflow**:
 1. Make changes locally → push to `main` on GitHub
-2. On server: run `C:\apps\Taryah-WB\deploy.ps1` (git pull → build → up -d)
+2. On server: `powershell -File C:\apps\Taryah-WB\deploy.ps1`
+   (git pull → npm build → npm install → pm2 restart → nginx reload)
+
+**Scripts**:
+- `scripts/install-server.ps1` — one-time setup (Chocolatey, all tools, DB, clone)
+- `scripts/start-services.ps1` — first start after install + SSL setup
+- `scripts/deploy.ps1` — routine updates
+- `scripts/backup.ps1` — nightly DB dump, 7-day retention (Task Scheduler, 2AM)
 
 **Environment**: Copy `.env.example` → `.env` on server and fill real values. Never commit `.env`.
 
-**Backups**: `scripts\backup.ps1` runs daily at 2am via Windows Task Scheduler, dumps DB to `C:\backups\db_YYYYMMDD.sql`, retains 7 days.
-
-**Port exposure**: Only 80 (→301 redirect) and 443 (HTTPS) are public. 3000 and 5432 are firewalled off.
+**Port exposure**: Only 80 (→301 HTTPS redirect) and 443 are public. 3000 and 5432 are firewalled off.
 
 ## Ongoing Rules
 - Always update this CLAUDE.md when adding new pages, routes, migrations, or significant business logic changes.

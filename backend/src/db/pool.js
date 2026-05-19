@@ -1,12 +1,22 @@
 const { Pool } = require('pg');
 require('dotenv').config();
 
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  // Only use SSL when explicitly set via DB_SSL=true (e.g. cloud-hosted Postgres)
-  // Docker internal network between containers never needs SSL
-  ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false,
-});
+// Support both DATABASE_URL (Docker / cloud) and individual DB_* vars (native install)
+const pool = new Pool(
+  process.env.DATABASE_URL
+    ? {
+        connectionString: process.env.DATABASE_URL,
+        ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false,
+      }
+    : {
+        host:     process.env.DB_HOST     || 'localhost',
+        port:     parseInt(process.env.DB_PORT  || '5432', 10),
+        user:     process.env.DB_USER,
+        password: process.env.DB_PASSWORD,
+        database: process.env.DB_NAME,
+        ssl:      process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false,
+      }
+);
 
 pool.on('error', (err) => {
   console.error('Unexpected DB client error', err);

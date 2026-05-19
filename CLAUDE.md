@@ -135,37 +135,76 @@ Standard implementation per page:
 - Migration 014: `sales_activity` table (invoice_number, customer_code, report_year, qty, ...), unique on `(invoice_number, report_year)`
 - Migration 020: `sales_tasks`, `sales_supervisors`, `sales_task_files`, `sales_task_notes` tables
 
+## Local Development (Docker)
+
+The local machine runs the full stack via Docker Compose. No local PostgreSQL/nginx installation needed.
+
+```bash
+# Full rebuild after any code change (required — code is baked into images)
+docker compose build && docker compose up -d
+
+# Check container status
+docker ps
+
+# View backend logs
+docker logs cb_backend --tail 30
+
+# Access DB directly
+docker exec -it cb_postgres psql -U cbuser -d customer_balance_db
+```
+
+**nginx.conf** for Docker: proxies `/api/` → `backend:3000`, `/uploads/` → `backend:3000`, everything else → `frontend:80`. HTTP only (no SSL locally).
+
+**DB credentials (Docker)**: `cbuser` / `cbpassword` / `customer_balance_db`
+
 ## Production Deployment
 
 **Server**: Windows Server 2016, IP 176.9.85.242, **native stack (no Docker)**, domain `www.sales.taryahpoultry.com.sa`
 
 **Stack**:
-- PostgreSQL 15 → Windows Service (auto-start)
-- Node.js 20 backend → PM2 (`taryah-backend`), auto-starts via pm2-windows-startup
-- nginx (Windows exe, `C:\tools\nginx-*\`) → NSSM Windows Service (`TaryahNginx`, auto-start)
-- React frontend → built to `C:\apps\Taryah-WB\frontend\dist`, served as static files by nginx
+- PostgreSQL 16 → Windows Service (`postgresql-x64-16`, auto-start)
+- Node.js backend → PM2 (`taryah-backend`, port 3001), auto-starts via `pm2-windows-startup`
+- IIS with ARR (Application Request Routing) + URL Rewrite → HTTPS proxy to port 3001
+- React frontend → built to `C:\inetpub\wwwroot\sales`, served by IIS
 
-**DB connection**: `pool.js` accepts both `DATABASE_URL` (single connection string) **or** individual `DB_HOST` / `DB_PORT` / `DB_USER` / `DB_PASSWORD` / `DB_NAME` vars. The `.env` on the server uses the individual vars.
+**App location on server**: `C:\apps\Taryah-WB\` (git clone of this repo)
 
-**SSL certs**: win-acme (Let's Encrypt), stored at `C:\certs\fullchain.pem` and `C:\certs\privkey.pem`. nginx references them directly (no container mount needed).
+**DB connection** (`pool.js`): accepts both `DATABASE_URL` string **or** individual `DB_HOST`/`DB_PORT`/`DB_USER`/`DB_PASSWORD`/`DB_NAME` vars. Server `.env` uses individual vars.
 
-**nginx config**: `nginx.conf` is Windows-native — no Docker upstreams. Serves static files from `C:/apps/Taryah-WB/frontend/dist`, proxies `/api/` to `http://127.0.0.1:3000`.
+**SSL**: Let's Encrypt cert (win-acme), thumbprint E0500C5BFD366114870C73556CCC71377B00FBC6, bound to IIS site "sales" on port 443.
 
-**Deploy workflow**:
-1. Make changes locally → push to `main` on GitHub
-2. On server: `powershell -File C:\apps\Taryah-WB\deploy.ps1`
-   (git pull → npm build → npm install → pm2 restart → nginx reload)
+**Port layout**: IIS on 80/443 (public). PM2 backend on 127.0.0.1:3001 (internal). Port 3000 is used by `commission-app` — backend MUST run on 3001.
 
-**Scripts**:
-- `scripts/install-server.ps1` — one-time setup (Chocolatey, all tools, DB, clone)
-- `scripts/start-services.ps1` — first start after install + SSL setup
-- `scripts/deploy.ps1` — routine updates
-- `scripts/backup.ps1` — nightly DB dump, 7-day retention (Task Scheduler, 2AM)
+**Deploy workflow** (run on server):
+```powershell
+cd C:\apps\Taryah-WB
+git pull
+cd frontend; npm run build; cd ..
+cd backend; npm install; cd ..
+robocopy frontend\dist C:\inetpub\wwwroot\sales /E /IS /IT /NFL /NDL
+pm2 restart taryah-backend
+```
 
-**Environment**: Copy `.env.example` → `.env` on server and fill real values. Never commit `.env`.
+**Backend `.env`** on server (at `C:\apps\Taryah-WB\backend\.env`):
+```
+PORT=3001
+DB_HOST=localhost
+DB_PORT=5432
+DB_USER=cbuser
+DB_PASSWORD=TaryahDB@Prod2024!
+DB_NAME=customer_balance_db
+JWT_SECRET=<long random string>
+JWT_EXPIRY=24h
+UPLOAD_DIR=./uploads
+MAX_FILE_SIZE_MB=50
+NODE_ENV=production
+```
 
-**Port exposure**: Only 80 (→301 HTTPS redirect) and 443 are public. 3000 and 5432 are firewalled off.
+**IIS web.config**: `frontend/public/web.config` — API proxy to 127.0.0.1:3001, HTTPS redirect, SPA fallback, 60MB limit, 10min proxy timeout.
+
+**Backup**: `C:\apps\Taryah-WB\scripts\backup.ps1` — nightly pg_dump, 7-day retention (Task Scheduler, 2AM).
 
 ## Ongoing Rules
 - Always update this CLAUDE.md when adding new pages, routes, migrations, or significant business logic changes.
-- After any code change, a Docker rebuild is required: `docker compose build && docker compose up -d`
+- After any local code change: `docker compose build && docker compose up -d`
+- After pushing to GitHub, deploy on server with the workflow above.

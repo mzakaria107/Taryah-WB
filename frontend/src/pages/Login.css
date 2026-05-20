@@ -44,8 +44,6 @@
   height: auto;
   max-height: 120px;
   object-fit: contain;
-  animation: logoBounce 2.5s ease-in-out infinite;
-  will-change: transform;
   display: block;
 }
 .login-logo-fallback {
@@ -58,7 +56,6 @@
   font-size: 28px;
   font-weight: 800;
   color: #fff;
-  animation: logoBounce 2.5s ease-in-out infinite;
 }
 
 /* ── Text ───────────────────────────────────────── */

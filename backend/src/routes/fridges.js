@@ -18,7 +18,7 @@ const multer  = require('multer');
 const xlsx    = require('xlsx');
 const router  = express.Router();
 const pool    = require('../db/pool');
-const { verifyToken, requireRoles } = require('../middleware/auth');
+const { verifyToken, requireRoles, applyRegionFilter } = require('../middleware/auth');
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
 
@@ -26,7 +26,7 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 
 const FRIDGE_EDITORS = ['super_admin', 'it_admin'];
 const canEdit = requireRoles(...FRIDGE_EDITORS);
 
-router.use(verifyToken);
+router.use(verifyToken, applyRegionFilter);
 
 /* ── Status labels ─────────────────────────────────────────── */
 const STATUS_AR = {
@@ -115,20 +115,23 @@ router.get('/customer-lookup', async (req, res) => {
 
 /* ── Stats ─────────────────────────────────────────────────── */
 router.get('/stats', async (req, res) => {
+  const regionWhere = req.regionFilter ? `WHERE f.region_id = ${Number(req.regionFilter)}` : '';
+  const regionAnd   = req.regionFilter ? `AND f.region_id = ${Number(req.regionFilter)}` : '';
   try {
     const [statusRes, regionRes, multiRes, regionStatusRes] = await Promise.all([
       pool.query(
-        `SELECT status, COUNT(*) AS cnt FROM fridges GROUP BY status ORDER BY cnt DESC`
+        `SELECT status, COUNT(*) AS cnt FROM fridges f ${regionWhere} GROUP BY status ORDER BY cnt DESC`
       ),
       pool.query(
         `SELECT r.name_ar AS region, COUNT(*) AS cnt
          FROM fridges f
          LEFT JOIN regions r ON r.id = f.region_id
+         ${regionWhere}
          GROUP BY r.name_ar ORDER BY cnt DESC`
       ),
       pool.query(
         `SELECT customer_code, customer_name, COUNT(*) AS fridge_count
-         FROM fridges WHERE customer_code IS NOT NULL
+         FROM fridges f WHERE customer_code IS NOT NULL ${regionAnd}
          GROUP BY customer_code, customer_name
          HAVING COUNT(*) > 1
          ORDER BY fridge_count DESC`
@@ -142,6 +145,7 @@ router.get('/stats', async (req, res) => {
            COUNT(*)::int                   AS cnt
          FROM fridges f
          LEFT JOIN regions r ON r.id = f.region_id
+         ${regionWhere}
          GROUP BY r.id, r.name_ar, f.status
          ORDER BY r.name_ar NULLS LAST, f.status`
       ),
@@ -396,7 +400,9 @@ router.post('/import', canEdit, upload.single('file'), async (req, res) => {
 
 /* ── List ──────────────────────────────────────────────────── */
 router.get('/', async (req, res) => {
-  const { status, region_id, search, customer_code } = req.query;
+  const { status, search, customer_code } = req.query;
+  // Region-restricted users always see only their region
+  const effectiveRegionId = req.regionFilter ?? (req.query.region_id ? Number(req.query.region_id) : null);
 
   const conds = [];
   const vals  = [];
@@ -406,9 +412,9 @@ router.get('/', async (req, res) => {
     conds.push(`f.status = $${p++}`);
     vals.push(status);
   }
-  if (region_id) {
+  if (effectiveRegionId) {
     conds.push(`f.region_id = $${p++}`);
-    vals.push(Number(region_id));
+    vals.push(effectiveRegionId);
   }
   if (customer_code) {
     conds.push(`f.customer_code = $${p++}`);
@@ -503,7 +509,9 @@ router.post('/', canEdit, async (req, res) => {
  *   search     — text search            (optional)
  */
 router.get('/sales-report', async (req, res) => {
-  const { year, month, day, region_id, trading, search } = req.query;
+  const { year, month, day, trading, search } = req.query;
+  // Region-restricted users always see only their region
+  const region_id = req.regionFilter ?? (req.query.region_id ? Number(req.query.region_id) : null);
 
   /*
    * Strategy:

@@ -4,7 +4,7 @@ const multer   = require('multer');
 const path     = require('path');
 const fs       = require('fs');
 const pool     = require('../db/pool');
-const { verifyToken } = require('../middleware/auth');
+const { verifyToken, applyRegionFilter } = require('../middleware/auth');
 
 const router = express.Router();
 
@@ -56,6 +56,15 @@ function lookupMonth(name) {
 }
 
 const BATCH_SIZE = 500;
+
+/* Resolve a region_id to its branch_name (name_ar) for sales_activity filtering */
+async function resolveRegionBranch(regionId) {
+  if (!regionId) return null;
+  try {
+    const res = await pool.query('SELECT name_ar FROM regions WHERE id = $1', [regionId]);
+    return res.rows[0]?.name_ar || null;
+  } catch { return null; }
+}
 
 // ── Robust CSV parser (handles quoted fields with commas) ───
 function parseCSV(text) {
@@ -125,7 +134,7 @@ function parseFile(filePath) {
 }
 
 // ── POST /upload ─────────────────────────────────────────────
-router.post('/upload', verifyToken, csvUpload.single('file'), async (req, res) => {
+router.post('/upload', verifyToken, applyRegionFilter, csvUpload.single('file'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'لم يتم رفع ملف' });
 
   try {
@@ -309,10 +318,11 @@ function filterClause(branch, rep, startAt) {
 }
 
 // ── GET /kpi ─────────────────────────────────────────────────
-router.get('/kpi', verifyToken, async (req, res) => {
+router.get('/kpi', verifyToken, applyRegionFilter, async (req, res) => {
   const year   = parseInt(req.query.year || '2026', 10);
-  const branch = (req.query.branch || '').trim() || null;
+  let   branch = (req.query.branch || '').trim() || null;
   const rep    = (req.query.rep    || '').trim() || null;
+  if (req.regionFilter) branch = await resolveRegionBranch(req.regionFilter);
 
   try {
     // Max month & prev month (no filter needed here)
@@ -405,10 +415,11 @@ router.get('/kpi', verifyToken, async (req, res) => {
 });
 
 // ── GET /region-stats ─────────────────────────────────────────
-router.get('/region-stats', verifyToken, async (req, res) => {
+router.get('/region-stats', verifyToken, applyRegionFilter, async (req, res) => {
   const year   = parseInt(req.query.year || '2026', 10);
-  const branch = (req.query.branch || '').trim() || null;
+  let   branch = (req.query.branch || '').trim() || null;
   const rep    = (req.query.rep    || '').trim() || null;
+  if (req.regionFilter) branch = await resolveRegionBranch(req.regionFilter);
 
   try {
     const maxRes = await pool.query(
@@ -519,10 +530,11 @@ router.get('/region-stats', verifyToken, async (req, res) => {
 
 // ── GET /stopped-customers ───────────────────────────────────
 // Customers active in prevMonth but NOT in current (max) month
-router.get('/stopped-customers', verifyToken, async (req, res) => {
+router.get('/stopped-customers', verifyToken, applyRegionFilter, async (req, res) => {
   const year   = parseInt(req.query.year || '2026', 10);
-  const branch = (req.query.branch || '').trim() || null;
+  let   branch = (req.query.branch || '').trim() || null;
   const rep    = (req.query.rep    || '').trim() || null;
+  if (req.regionFilter) branch = await resolveRegionBranch(req.regionFilter);
 
   try {
     const maxRes = await pool.query(
@@ -579,10 +591,11 @@ router.get('/stopped-customers', verifyToken, async (req, res) => {
 });
 
 // ── GET /report ──────────────────────────────────────────────
-router.get('/report', verifyToken, async (req, res) => {
+router.get('/report', verifyToken, applyRegionFilter, async (req, res) => {
   const year   = parseInt(req.query.year || '2026', 10);
-  const branch = (req.query.branch || '').trim() || null;
+  let   branch = (req.query.branch || '').trim() || null;
   const rep    = (req.query.rep    || '').trim() || null;
+  if (req.regionFilter) branch = await resolveRegionBranch(req.regionFilter);
 
   try {
     // Build WHERE conditions
@@ -679,10 +692,11 @@ router.get('/report', verifyToken, async (req, res) => {
 });
 
 // ── GET /new-customers ───────────────────────────────────────
-router.get('/new-customers', verifyToken, async (req, res) => {
+router.get('/new-customers', verifyToken, applyRegionFilter, async (req, res) => {
   const year   = parseInt(req.query.year || '2026', 10);
-  const branch = (req.query.branch || '').trim() || null;
+  let   branch = (req.query.branch || '').trim() || null;
   const rep    = (req.query.rep    || '').trim() || null;
+  if (req.regionFilter) branch = await resolveRegionBranch(req.regionFilter);
 
   try {
     // Max month
@@ -761,9 +775,10 @@ router.get('/new-customers', verifyToken, async (req, res) => {
 });
 
 // ── GET /meta ────────────────────────────────────────────────
-router.get('/meta', verifyToken, async (req, res) => {
+router.get('/meta', verifyToken, applyRegionFilter, async (req, res) => {
   const year   = parseInt(req.query.year || '2026', 10);
-  const branch = (req.query.branch || '').trim() || null;
+  let   branch = (req.query.branch || '').trim() || null;
+  if (req.regionFilter) branch = await resolveRegionBranch(req.regionFilter);
 
   try {
     // Reps are filtered by branch when a branch is selected
@@ -781,13 +796,22 @@ router.get('/meta', verifyToken, async (req, res) => {
           [year]
         );
 
+    const branchQuery = req.regionFilter
+      ? pool.query(
+          `SELECT DISTINCT branch_name FROM sales_activity
+           WHERE report_year = $1 AND branch_name = $2 AND branch_name IS NOT NULL
+           ORDER BY branch_name`,
+          [year, branch]
+        )
+      : pool.query(
+          `SELECT DISTINCT branch_name FROM sales_activity
+           WHERE report_year = $1 AND branch_name IS NOT NULL
+           ORDER BY branch_name`,
+          [year]
+        );
+
     const [branchRes, repRes, yearsRes] = await Promise.all([
-      pool.query(
-        `SELECT DISTINCT branch_name FROM sales_activity
-         WHERE report_year = $1 AND branch_name IS NOT NULL
-         ORDER BY branch_name`,
-        [year]
-      ),
+      branchQuery,
       repQuery,
       pool.query(
         `SELECT DISTINCT report_year FROM sales_activity ORDER BY report_year DESC`
@@ -807,10 +831,11 @@ router.get('/meta', verifyToken, async (req, res) => {
 
 // ── GET /category-stats ──────────────────────────────────────
 // Returns customer-count per category for current month AND previous month
-router.get('/category-stats', verifyToken, async (req, res) => {
+router.get('/category-stats', verifyToken, applyRegionFilter, async (req, res) => {
   const year   = parseInt(req.query.year || '2026', 10);
-  const branch = (req.query.branch || '').trim() || null;
+  let   branch = (req.query.branch || '').trim() || null;
   const rep    = (req.query.rep    || '').trim() || null;
+  if (req.regionFilter) branch = await resolveRegionBranch(req.regionFilter);
 
   try {
     // Resolve max and prev months
@@ -933,10 +958,11 @@ router.get('/note-history/:customerCode', verifyToken, async (req, res) => {
 });
 
 // ── GET /export ──────────────────────────────────────────────
-router.get('/export', verifyToken, async (req, res) => {
+router.get('/export', verifyToken, applyRegionFilter, async (req, res) => {
   const year   = parseInt(req.query.year || '2026', 10);
-  const branch = (req.query.branch || '').trim() || null;
+  let   branch = (req.query.branch || '').trim() || null;
   const rep    = (req.query.rep    || '').trim() || null;
+  if (req.regionFilter) branch = await resolveRegionBranch(req.regionFilter);
   // tab: 'report' (default) | 'new' | 'stopped'
   const tab    = (req.query.tab || 'report').trim();
 

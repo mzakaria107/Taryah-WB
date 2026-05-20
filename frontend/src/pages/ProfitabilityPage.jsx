@@ -369,7 +369,7 @@ function DailyPerformanceSection({ selectedYear, selectedMonth, onMonthChange, o
       {snapshots.length === 0 ? (
         <div className="prf-daily-empty">
           <TrendingDown size={18}/>
-          <span>لا توجد بيانات يومية لهذا الشهر — اضغط "حفظ الآن" أو انتظر الحفظ التلقائي (11:55 م)</span>
+          <span>لا توجد بيانات يومية لهذا الشهر — اضغط "حفظ الآن" أو انتظر الحفظ التلقائي (11:59 م)</span>
         </div>
       ) : (
         <>

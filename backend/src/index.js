@@ -88,10 +88,10 @@ app.use('/api/current-stock', currentStockRoutes);
 app.use('/api/permissions',   permissionsRoutes);
 app.use('/api/profitability', profitabilityRoutes);
 
-/* ── Daily profitability snapshot — 11:55 PM every day ──────── */
+/* ── Daily profitability snapshot — 11:59 PM every day ──────── */
 const cron = require('node-cron');
 const { fetchFromNetSuite } = require('./routes/profitability');
-cron.schedule('55 23 * * *', async () => {
+cron.schedule('59 23 * * *', async () => {
   console.log('[Cron] Daily profitability snapshot starting...');
   try {
     await fetchFromNetSuite();

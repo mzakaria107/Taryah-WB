@@ -2,7 +2,7 @@ import React from 'react';
 import { NavLink } from 'react-router-dom';
 import {
   LayoutDashboard, FileText, MessageSquare, UserSearch,
-  ClipboardList, Thermometer, Package, Warehouse, Upload, Users, ShieldCheck,
+  ClipboardList, Thermometer, Package, Warehouse, Upload, Users, ShieldCheck, TrendingUp,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { usePermissions } from '../../context/PermissionsContext';
@@ -18,7 +18,8 @@ const ITEMS = [
   { to: '/current-stock',  pageKey: 'current_stock',  label: 'الحالي',    icon: <Warehouse       size={20}/> },
   { to: '/upload',         pageKey: 'upload',         label: 'رفع',       icon: <Upload          size={20}/> },
   { to: '/users',          pageKey: 'users',          label: 'المستخدمون',icon: <Users           size={20}/> },
-  { to: '/permissions',    pageKey: 'permissions',    label: 'الصلاحيات', icon: <ShieldCheck     size={20}/> },
+  { to: '/permissions',    pageKey: 'permissions',    label: 'الصلاحيات', icon: <ShieldCheck  size={20}/> },
+  { to: '/profitability',  pageKey: 'profitability',  label: 'الربحية',   icon: <TrendingUp   size={20}/> },
 ];
 
 export default function BottomNav() {

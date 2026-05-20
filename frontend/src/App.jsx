@@ -18,6 +18,7 @@ const FridgesPage         = lazy(() => import('./pages/FridgesPage'));
 const StockPage           = lazy(() => import('./pages/StockPage'));
 const CurrentStockPage    = lazy(() => import('./pages/CurrentStockPage'));
 const PermissionsPage     = lazy(() => import('./pages/PermissionsPage'));
+const ProfitabilityPage   = lazy(() => import('./pages/ProfitabilityPage'));
 
 /* ── Guards ──────────────────────────────────────── */
 function PrivateRoute({ children }) {
@@ -148,6 +149,14 @@ export default function App() {
         <RoleRoute pageKey="current_stock">
           <AppLayout>
             <PageSuspense><CurrentStockPage /></PageSuspense>
+          </AppLayout>
+        </RoleRoute>
+      } />
+
+      <Route path="/profitability" element={
+        <RoleRoute pageKey="profitability">
+          <AppLayout>
+            <PageSuspense><ProfitabilityPage /></PageSuspense>
           </AppLayout>
         </RoleRoute>
       } />

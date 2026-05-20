@@ -25,6 +25,7 @@ export const PAGES = [
   { key: 'upload',          label: 'رفع البيانات',       path: '/upload',         desc: 'استيراد ملفات Excel لتحديث البيانات' },
   { key: 'users',           label: 'إدارة المستخدمين',  path: '/users',          desc: 'إنشاء وتعديل الحسابات وتغيير الأدوار' },
   { key: 'permissions',     label: 'الصلاحيات',          path: '/permissions',    desc: 'عرض وتعديل جدول صلاحيات الأدوار' },
+  { key: 'profitability',   label: 'الربحية',            path: '/profitability',  desc: 'تقرير ربحية المنتجات من NetSuite' },
 ];
 
 /* Default access matrix — fallback before API loads */
@@ -41,6 +42,7 @@ export const DEFAULT_PERMS = {
   upload:          { super_admin:2, it_admin:2, top_management:0, sales_manager:0, supervisor:0, region_manager:0, sales_rep:0, fridge_admin:0, viewer:0 },
   users:           { super_admin:2, it_admin:0, top_management:0, sales_manager:0, supervisor:0, region_manager:0, sales_rep:0, fridge_admin:0, viewer:0 },
   permissions:     { super_admin:2, it_admin:1, top_management:0, sales_manager:0, supervisor:0, region_manager:0, sales_rep:0, fridge_admin:0, viewer:0 },
+  profitability:   { super_admin:2, it_admin:2, top_management:1, sales_manager:2, supervisor:0, region_manager:0, sales_rep:0, fridge_admin:0, viewer:0 },
 };
 
 /* Access level display config */

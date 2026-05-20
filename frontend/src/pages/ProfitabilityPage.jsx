@@ -295,30 +295,33 @@ function DailyPerformanceSection({ selectedYear, selectedMonth, onMonthChange, o
     return d.toLocaleDateString('ar-SA', { day: 'numeric', month: 'short', weekday: 'short' });
   });
 
-  // 1. Daily GP trend: avg last 3 days vs avg previous 3 days
-  const recentGP     = snapshots.slice(0, 3).map(s => parseFloat(s.daily_gross_profit || 0));
-  const olderGP      = snapshots.slice(3, 6).map(s => parseFloat(s.daily_gross_profit || 0));
-  const recentAvgGP  = recentGP.reduce((a, b) => a + b, 0) / (recentGP.length || 1);
-  const olderAvgGP   = olderGP.reduce((a, b) => a + b, 0)  / (olderGP.length  || 1);
-  const gpDailyTrend = olderAvgGP > 0 ? ((recentAvgGP - olderAvgGP) / olderAvgGP) * 100 : 0;
+  // ── Trend: today vs avg of previous 3 days ────────────────────
+  // snapshots[0] = today (DESC order), snapshots[1..3] = previous 3 days
+  // This ensures the badge matches what the user sees:
+  //   if today's value > prev-3-day avg → ارتفاع
+  //   if today's value < prev-3-day avg → انخفاض
+
+  // 1. Daily GP trend
+  const todayGP      = parseFloat(snapshots[0]?.daily_gross_profit || 0);
+  const prevGP       = snapshots.slice(1, 4).map(s => parseFloat(s.daily_gross_profit || 0));
+  const prevAvgGP    = prevGP.length ? prevGP.reduce((a, b) => a + b, 0) / prevGP.length : 0;
+  const gpDailyTrend = prevAvgGP > 0 ? ((todayGP - prevAvgGP) / prevAvgGP) * 100 : 0;
   const dailyGPSpark = sparkSnaps.map(s => parseFloat(s.daily_gross_profit || 0));
 
-  // 2. Cumulative GP% trend: avg last 3 days vs avg previous 3 days
-  const recentGPPct     = snapshots.slice(0, 3).map(s => parseFloat(s.gross_profit_pct || 0));
-  const olderGPPct      = snapshots.slice(3, 6).map(s => parseFloat(s.gross_profit_pct || 0));
-  const recentAvgGPPct  = recentGPPct.reduce((a, b) => a + b, 0) / (recentGPPct.length || 1);
-  const olderAvgGPPct   = olderGPPct.reduce((a, b)  => a + b, 0) / (olderGPPct.length  || 1);
-  const gpPctTrend      = olderAvgGPPct > 0
-    ? ((recentAvgGPPct - olderAvgGPPct) / Math.abs(olderAvgGPPct)) * 100
+  // 2. Cumulative GP% trend (cumulative metric — compare today vs prev-3-day avg)
+  const todayGPPct      = parseFloat(snapshots[0]?.gross_profit_pct || 0);
+  const prevGPPct       = snapshots.slice(1, 4).map(s => parseFloat(s.gross_profit_pct || 0));
+  const prevAvgGPPct    = prevGPPct.length ? prevGPPct.reduce((a, b) => a + b, 0) / prevGPPct.length : 0;
+  const gpPctTrend      = prevAvgGPPct !== 0
+    ? ((todayGPPct - prevAvgGPPct) / Math.abs(prevAvgGPPct)) * 100
     : 0;
   const gpPctSpark = sparkSnaps.map(s => parseFloat(s.gross_profit_pct || 0));
 
-  // 3. Daily qty trend: avg last 3 days vs avg previous 3 days
-  const recentQty    = snapshots.slice(0, 3).map(s => parseFloat(s.daily_qty || 0));
-  const olderQty     = snapshots.slice(3, 6).map(s => parseFloat(s.daily_qty || 0));
-  const recentAvgQty = recentQty.reduce((a, b) => a + b, 0) / (recentQty.length || 1);
-  const olderAvgQty  = olderQty.reduce((a, b)  => a + b, 0) / (olderQty.length  || 1);
-  const qtyTrend     = olderAvgQty > 0 ? ((recentAvgQty - olderAvgQty) / olderAvgQty) * 100 : 0;
+  // 3. Daily qty trend
+  const todayQty     = parseFloat(snapshots[0]?.daily_qty || 0);
+  const prevQty      = snapshots.slice(1, 4).map(s => parseFloat(s.daily_qty || 0));
+  const prevAvgQty   = prevQty.length ? prevQty.reduce((a, b) => a + b, 0) / prevQty.length : 0;
+  const qtyTrend     = prevAvgQty > 0 ? ((todayQty - prevAvgQty) / prevAvgQty) * 100 : 0;
   const qtySpark     = sparkSnaps.map(s => parseFloat(s.daily_qty || 0));
 
   return (
@@ -378,8 +381,8 @@ function DailyPerformanceSection({ selectedYear, selectedMonth, onMonthChange, o
             <div className="prf-trend-row">
               <TrendCard
                 title="ترند الربح اليومي"
-                value={`ر.س ${fmtNum(parseFloat(snapshots[0]?.daily_gross_profit || 0))}`}
-                subValue={`متوسط آخر 3 أيام: ر.س ${fmtNum(recentAvgGP)}`}
+                value={`ر.س ${fmtNum(todayGP)}`}
+                subValue={`متوسط 3 أيام سابقة: ر.س ${fmtNum(prevAvgGP)}`}
                 trendPct={gpDailyTrend}
                 sparkData={dailyGPSpark}
                 sparkLabels={sparkLabels}
@@ -390,7 +393,7 @@ function DailyPerformanceSection({ selectedYear, selectedMonth, onMonthChange, o
               <TrendCard
                 title="هامش الربحية التراكمي"
                 value={fmtPct(cumGPPct)}
-                subValue={`الربح التراكمي: ر.س ${fmtNum(cumGP)}`}
+                subValue={`متوسط 3 أيام سابقة: ${fmtPct(prevAvgGPPct)}`}
                 trendPct={gpPctTrend}
                 sparkData={gpPctSpark}
                 sparkLabels={sparkLabels}
@@ -400,8 +403,8 @@ function DailyPerformanceSection({ selectedYear, selectedMonth, onMonthChange, o
               />
               <TrendCard
                 title="الكميات المباعة يومياً"
-                value={fmtQty(parseFloat(snapshots[0]?.daily_qty || 0))}
-                subValue={`متوسط آخر 3 أيام: ${fmtQty(recentAvgQty)}`}
+                value={fmtQty(todayQty)}
+                subValue={`متوسط 3 أيام سابقة: ${fmtQty(prevAvgQty)}`}
                 trendPct={qtyTrend}
                 sparkData={qtySpark}
                 sparkLabels={sparkLabels}

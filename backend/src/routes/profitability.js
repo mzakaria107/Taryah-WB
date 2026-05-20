@@ -356,22 +356,22 @@ router.post('/import-daily', verifyToken, requireRoles('super_admin', 'it_admin'
       return res.status(400).json({ error: 'snapshot_date and daily_revenue are required' });
     }
 
-    // Compute running cumulative: sum all previous days in the same month + this day
+    // Get the previous day's cumulative total (most recent row in same month)
     const { rows: prev } = await pool.query(`
-      SELECT COALESCE(SUM(total_revenue),0)    AS cum_rev,
-             COALESCE(SUM(total_cost),0)       AS cum_cost,
-             COALESCE(SUM(gross_profit),0)     AS cum_gp,
-             COALESCE(SUM(qty),0)              AS cum_qty
+      SELECT total_revenue, total_cost, gross_profit, qty
       FROM profitability_snapshots
       WHERE snapshot_date >= date_trunc('month', $1::date)
         AND snapshot_date <  $1::date
         AND source = 'excel'
+      ORDER BY snapshot_date DESC
+      LIMIT 1
     `, [snapshot_date]);
 
-    const cumRev  = parseFloat(prev[0].cum_rev)  + parseFloat(daily_revenue);
-    const cumCost = parseFloat(prev[0].cum_cost) + parseFloat(daily_cost || 0);
-    const cumGP   = parseFloat(prev[0].cum_gp)   + parseFloat(daily_gross_profit || 0);
-    const cumQty  = parseInt(prev[0].cum_qty)    + parseInt(daily_qty || 0);
+    const prevRow = prev[0] || {};
+    const cumRev  = (parseFloat(prevRow.total_revenue) || 0) + parseFloat(daily_revenue);
+    const cumCost = (parseFloat(prevRow.total_cost)    || 0) + parseFloat(daily_cost || 0);
+    const cumGP   = (parseFloat(prevRow.gross_profit)  || 0) + parseFloat(daily_gross_profit || 0);
+    const cumQty  = (parseInt(prevRow.qty)             || 0) + parseInt(daily_qty || 0);
     const cumGPPct = cumRev > 0 ? (cumGP / cumRev) * 100 : 0;
 
     await pool.query(`

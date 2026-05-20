@@ -504,18 +504,20 @@
   border-bottom: 1px solid var(--color-border);
 }
 .prf-trend-card {
-  padding: 14px 16px;
-  border-left: 1px solid var(--color-border);
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  border-left: 1px solid var(--color-border);
+  overflow: hidden;
 }
 .prf-trend-card:last-child { border-left: 0; }
 
-.prf-trend-top {
+/* Header inside card */
+.prf-trend-header {
   display: flex;
   align-items: flex-start;
   gap: 10px;
+  padding: 14px 14px 6px;
+  flex-wrap: nowrap;
 }
 .prf-trend-icon-wrap {
   width: 34px; height: 34px;
@@ -523,63 +525,56 @@
   display: flex; align-items: center; justify-content: center;
   flex-shrink: 0;
 }
+.prf-trend-main { flex: 1; min-width: 0; }
 .prf-trend-val {
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 800;
   color: var(--color-text-primary);
   font-family: var(--font-en);
   line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: color 0.15s;
 }
 .prf-trend-sub {
   font-size: 10px;
   color: var(--color-text-muted);
   margin-top: 2px;
   font-family: var(--font-en);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .prf-trend-lbl {
   font-size: 10px;
   color: var(--color-text-muted);
-  margin-top: 3px;
+  margin-top: 2px;
 }
 
-.prf-trend-bottom {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 8px;
-}
+/* Trend badge */
 .prf-trend-badge {
   display: inline-flex;
   align-items: center;
   gap: 3px;
-  font-size: 11px;
+  font-size: 10.5px;
   font-weight: 700;
-  padding: 3px 8px;
+  padding: 3px 7px;
   border-radius: 20px;
   white-space: nowrap;
   flex-shrink: 0;
+  align-self: flex-start;
 }
 .prf-trend-up   { background: #e8f5e9; color: #2e7d32; }
 .prf-trend-down { background: #ffebee; color: #c62828; }
 .prf-trend-flat { background: #f5f5f5; color: #757575; }
 
-/* Sparkline */
-.prf-sparkline {
-  display: flex;
-  align-items: flex-end;
-  gap: 2px;
-  height: 30px;
-  flex: 1;
-  justify-content: flex-end;
-  max-width: 80px;
-}
-.prf-spark-bar {
-  flex: 1;
-  max-width: 8px;
-  min-width: 4px;
-  border-radius: 2px 2px 0 0;
-  background: var(--color-border);
-  transition: height 0.3s ease;
+/* SVG sparkline — fills card bottom, no padding */
+.prf-spark-svg {
+  display: block;
+  width: 100%;
+  margin-top: 2px;
+  cursor: crosshair;
 }
 
 @media (max-width: 700px) {

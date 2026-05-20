@@ -97,50 +97,144 @@ function DataRow({ row, isGroup, isExpanded, onToggle, depth = 0 }) {
   );
 }
 
-/* ── Trend Card ───────────────────────────────────────────── */
-function TrendCard({ title, value, subValue, trendPct, sparkData, color, icon }) {
-  const dir = trendPct > 1 ? 'up' : trendPct < -1 ? 'down' : 'flat';
-  const maxSpark = Math.max(...sparkData.map(Math.abs), 1);
+/* ── Trend Sparkline (SVG line chart) ─────────────────────── */
+function TrendSparkline({ data, labels, color, hov, onHov, formatVal }) {
+  const W = 300, H = 58;
+  const pad = { t: 16, b: 6, l: 8, r: 8 };
+  const iW = W - pad.l - pad.r;
+  const iH = H - pad.t - pad.b;
+  const n   = data.length;
+  if (n === 0) return null;
+
+  const vals  = data.filter(v => isFinite(v));
+  const maxV  = Math.max(...vals, 0.001);
+  const minV  = Math.min(...vals, 0);
+  const range = maxV - minV || maxV || 1;
+
+  const px = i  => pad.l + (n <= 1 ? iW / 2 : (i / (n - 1)) * iW);
+  const py = v  => pad.t + iH - ((v - minV) / range) * iH;
+  const pts = data.map((v, i) => ({ x: px(i), y: py(v), v, i }));
+
+  const pathD = pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
+  const last  = pts[pts.length - 1];
+  const areaD = n >= 2
+    ? `${pathD} L${last.x.toFixed(1)},${H} L${pad.l},${H} Z`
+    : '';
+
+  const gradId = `spk_${color.replace(/[^a-z0-9]/gi, '')}`;
 
   return (
-    <div className="prf-trend-card">
-      <div className="prf-trend-top">
-        <div className="prf-trend-icon-wrap" style={{ background: color + '22', color }}>
+    <svg
+      viewBox={`0 0 ${W} ${H}`}
+      width="100%" height={H}
+      preserveAspectRatio="none"
+      className="prf-spark-svg"
+      onMouseLeave={() => onHov(null)}
+    >
+      <defs>
+        <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%"   stopColor={color} stopOpacity="0.22"/>
+          <stop offset="100%" stopColor={color} stopOpacity="0"/>
+        </linearGradient>
+      </defs>
+
+      {areaD && <path d={areaD} fill={`url(#${gradId})`}/>}
+      {n >= 2 && (
+        <path d={pathD} stroke={color} strokeWidth="1.6" fill="none"
+          strokeLinejoin="round" strokeLinecap="round"
+          vectorEffect="non-scaling-stroke"/>
+      )}
+
+      {/* Hover vertical guide */}
+      {hov !== null && (
+        <line x1={pts[hov].x} y1={pad.t - 2} x2={pts[hov].x} y2={H}
+          stroke={color} strokeWidth="1" strokeDasharray="3,2"
+          opacity="0.45" vectorEffect="non-scaling-stroke"/>
+      )}
+
+      {/* Value label above hovered / latest point */}
+      {pts.map((p) => {
+        const isLatest = p.i === n - 1;
+        const isHov    = hov === p.i;
+        if (!isLatest && !isHov) return null;
+        const lx = Math.max(14, Math.min(W - 14, p.x));
+        const ly = Math.max(10, p.y - 5);
+        const txt = formatVal ? formatVal(p.v) : fmtNum(p.v);
+        return (
+          <text key={`lbl-${p.i}`}
+            x={lx} y={ly}
+            textAnchor="middle"
+            fontSize="7.5" fill={color} fontWeight="700"
+            vectorEffect="non-scaling-stroke"
+            style={{ fontFamily: 'var(--font-en)', pointerEvents: 'none' }}
+          >
+            {txt}
+          </text>
+        );
+      })}
+
+      {/* Dots */}
+      {pts.map((p) => {
+        const isLatest = p.i === n - 1;
+        const isHov    = hov === p.i;
+        return (
+          <circle key={p.i}
+            cx={p.x} cy={p.y}
+            r={isLatest ? 3.5 : isHov ? 3 : 2}
+            fill={isLatest || isHov ? color : '#fff'}
+            stroke={color} strokeWidth="1.5"
+            opacity={isLatest || isHov ? 1 : 0.55}
+            vectorEffect="non-scaling-stroke"
+            onMouseEnter={() => onHov(p.i)}
+            style={{ cursor: 'crosshair', pointerEvents: 'all' }}
+          />
+        );
+      })}
+    </svg>
+  );
+}
+
+/* ── Trend Card ───────────────────────────────────────────── */
+function TrendCard({ title, value, subValue, trendPct, sparkData, sparkLabels, color, icon, formatVal }) {
+  const [hov, setHov] = useState(null);
+  const dir = trendPct > 1 ? 'up' : trendPct < -1 ? 'down' : 'flat';
+
+  // Value and subtitle change on hover
+  const displayVal = hov !== null
+    ? (formatVal ? formatVal(sparkData[hov]) : `ر.س ${fmtNum(sparkData[hov])}`)
+    : value;
+  const displaySub = hov !== null && sparkLabels?.[hov] ? sparkLabels[hov] : subValue;
+
+  return (
+    <div className="prf-trend-card" onMouseLeave={() => setHov(null)}>
+      {/* Header: icon + value + badge */}
+      <div className="prf-trend-header">
+        <div className="prf-trend-icon-wrap" style={{ background: color + '20', color }}>
           {icon}
         </div>
-        <div>
-          <div className="prf-trend-val">{value}</div>
-          {subValue && <div className="prf-trend-sub">{subValue}</div>}
+        <div className="prf-trend-main">
+          <div className="prf-trend-val">{displayVal}</div>
+          <div className="prf-trend-sub">{displaySub}</div>
           <div className="prf-trend-lbl">{title}</div>
         </div>
-      </div>
-      <div className="prf-trend-bottom">
         <span className={`prf-trend-badge prf-trend-${dir}`}>
           {dir === 'up'   ? <TrendingUp   size={10}/> :
            dir === 'down' ? <TrendingDown size={10}/> :
                             <Minus        size={10}/>}
           {' '}{Math.abs(trendPct).toFixed(1)}%
-          {' '}<span>{dir === 'up' ? 'ارتفاع' : dir === 'down' ? 'انخفاض' : 'مستقر'}</span>
+          {' '}{dir === 'up' ? 'ارتفاع' : dir === 'down' ? 'انخفاض' : 'مستقر'}
         </span>
-        <div className="prf-sparkline">
-          {sparkData.map((v, i) => {
-            const h = Math.max((Math.abs(v) / maxSpark) * 100, 5);
-            const isLatest = i === sparkData.length - 1;
-            return (
-              <div
-                key={i}
-                className={`prf-spark-bar${isLatest ? ' prf-spark-latest' : ''}`}
-                style={{
-                  height: `${h}%`,
-                  background: isLatest ? color : undefined,
-                  opacity: 0.4 + (i / sparkData.length) * 0.6,
-                }}
-                title={String(fmtNum(v))}
-              />
-            );
-          })}
-        </div>
       </div>
+
+      {/* Line sparkline */}
+      <TrendSparkline
+        data={sparkData}
+        labels={sparkLabels}
+        color={color}
+        hov={hov}
+        onHov={setHov}
+        formatVal={formatVal}
+      />
     </div>
   );
 }
@@ -190,7 +284,11 @@ function DailyPerformanceSection({ selectedYear, selectedMonth, onMonthChange, o
   const timePct          = totalWorkingDays > 0 ? (workingDaysElapsed / totalWorkingDays) * 100 : 0;
 
   // ── Trend calculations (snapshots = DESC, sparkline needs ASC) ──
-  const sparkSnaps = [...snapshots].reverse();
+  const sparkSnaps  = [...snapshots].reverse();
+  const sparkLabels = sparkSnaps.map(s => {
+    const d = new Date(String(s.snapshot_date).slice(0, 10) + 'T12:00:00');
+    return d.toLocaleDateString('ar-SA', { day: 'numeric', month: 'short', weekday: 'short' });
+  });
 
   // 1. Daily GP trend: avg last 3 days vs avg previous 3 days
   const recentGP     = snapshots.slice(0, 3).map(s => parseFloat(s.daily_gross_profit || 0));
@@ -279,8 +377,10 @@ function DailyPerformanceSection({ selectedYear, selectedMonth, onMonthChange, o
                 subValue={`متوسط آخر 3 أيام: ر.س ${fmtNum(recentAvgGP)}`}
                 trendPct={gpDailyTrend}
                 sparkData={dailyGPSpark}
+                sparkLabels={sparkLabels}
                 color="#1565c0"
                 icon={<DollarSign size={15}/>}
+                formatVal={v => `ر.س ${fmtNum(v)}`}
               />
               <TrendCard
                 title="هامش الربحية التراكمي"
@@ -288,8 +388,10 @@ function DailyPerformanceSection({ selectedYear, selectedMonth, onMonthChange, o
                 subValue={`الربح التراكمي: ر.س ${fmtNum(cumGP)}`}
                 trendPct={gpPctTrend}
                 sparkData={gpPctSpark}
+                sparkLabels={sparkLabels}
                 color="#2e7d32"
                 icon={<Percent size={15}/>}
+                formatVal={v => fmtPct(v)}
               />
               <TrendCard
                 title="الكميات المباعة يومياً"
@@ -297,8 +399,10 @@ function DailyPerformanceSection({ selectedYear, selectedMonth, onMonthChange, o
                 subValue={`متوسط آخر 3 أيام: ${fmtQty(recentAvgQty)}`}
                 trendPct={qtyTrend}
                 sparkData={qtySpark}
+                sparkLabels={sparkLabels}
                 color="#6a1b9a"
                 icon={<Package size={15}/>}
+                formatVal={v => fmtQty(v)}
               />
             </div>
           )}

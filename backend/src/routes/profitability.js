@@ -273,6 +273,12 @@ router.get('/', verifyToken, async (req, res) => {
     console.log('[Profitability] Fetching from NetSuite...');
     const html   = await fetchUrl(NETSUITE_URL);
     const parsed = parseProfitability(html);
+    if (parsed) {
+      console.log('[Profitability] colMap:', parsed.colMap);
+      const firstGroup = parsed.groups[0];
+      if (firstGroup?.summary) console.log('[Profitability] first summary:', JSON.stringify(firstGroup.summary));
+      if (firstGroup?.items[0]) console.log('[Profitability] first item:', JSON.stringify(firstGroup.items[0]));
+    }
 
     if (!parsed) {
       if (_cache.data) {

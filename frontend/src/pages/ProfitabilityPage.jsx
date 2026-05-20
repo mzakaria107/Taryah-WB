@@ -313,22 +313,22 @@ export default function ProfitabilityPage() {
                 );
               })}
 
-              {/* Grand total row */}
-              {total && (
+              {/* Grand total row — always shown when there is data */}
+              {groups.length > 0 && (
                 <tr className="prf-total-row">
-                  <td className="prf-td-item"><strong>الإجمالي</strong></td>
+                  <td className="prf-td-item"><strong>الإجمالي الكلي</strong></td>
                   <td className="prf-td-desc"></td>
-                  <td className="prf-td-num"><strong>{fmtQty(total.qty)}</strong></td>
-                  <td className="prf-td-num"><strong>{fmtNum(total.totalCost)}</strong></td>
-                  <td className="prf-td-num prf-revenue"><strong>{fmtNum(total.totalRevenue)}</strong></td>
-                  <td className="prf-td-num"><strong>{fmtPct(total.pctRevenue)}</strong></td>
-                  <td className="prf-td-num"><strong>{fmtNum(total.avgCost)}</strong></td>
-                  <td className="prf-td-num"><strong>{fmtNum(total.avgPrice)}</strong></td>
-                  <td className={`prf-td-num prf-profit ${gpClass(total.grossProfitPct)}`}>
-                    <strong>{fmtNum(total.grossProfit)}</strong>
+                  <td className="prf-td-num"><strong>{fmtQty(kpi.qty)}</strong></td>
+                  <td className="prf-td-num"><strong>{fmtNum(kpi.cost)}</strong></td>
+                  <td className="prf-td-num prf-revenue"><strong>{fmtNum(kpi.revenue)}</strong></td>
+                  <td className="prf-td-num"><strong>{total ? fmtPct(total.pctRevenue) : '—'}</strong></td>
+                  <td className="prf-td-num"><strong>{total ? fmtNum(total.avgCost) : '—'}</strong></td>
+                  <td className="prf-td-num"><strong>{total ? fmtNum(total.avgPrice) : '—'}</strong></td>
+                  <td className={`prf-td-num prf-profit ${gpClass(kpi.margin)}`}>
+                    <strong>{fmtNum(kpi.grossProfit)}</strong>
                   </td>
-                  <td className={`prf-td-num prf-pct-cell ${gpClass(total.grossProfitPct)}`}>
-                    <strong>{fmtPct(total.grossProfitPct)}</strong>
+                  <td className={`prf-td-num prf-pct-cell ${gpClass(kpi.margin)}`}>
+                    <strong>{fmtPct(kpi.margin)}</strong>
                   </td>
                 </tr>
               )}

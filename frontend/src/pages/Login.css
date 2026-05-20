@@ -45,8 +45,8 @@
   max-height: 120px;
   object-fit: contain;
   animation: logoBounce 2.5s ease-in-out infinite;
-  /* logo PNG has white background — clip it cleanly */
-  mix-blend-mode: multiply;
+  will-change: transform;
+  display: block;
 }
 .login-logo-fallback {
   width: 64px;

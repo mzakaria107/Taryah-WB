@@ -31,6 +31,7 @@ export default function Login() {
             alt="طرية"
             className="login-logo"
             onError={(e) => {
+              e.currentTarget.onerror = null; // prevent repeated retries
               e.currentTarget.style.display = 'none';
               e.currentTarget.nextElementSibling.style.display = 'flex';
             }}

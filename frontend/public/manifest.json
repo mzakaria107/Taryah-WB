@@ -1,13 +1,13 @@
 {
-  "name": "Customer Balance Dashboard",
-  "short_name": "Collections",
-  "description": "لوحة تحكم أرصدة العملاء — نظام متابعة التحصيل",
+  "name": "Taryah Poultry Dashboard",
+  "short_name": "Taryah",
+  "description": "دواجن طرية — لوحة متابعة المبيعات والتحصيل",
   "display": "standalone",
   "orientation": "any",
   "start_url": "/",
   "scope": "/",
-  "theme_color": "#1f2937",
-  "background_color": "#f4f6fa",
+  "theme_color": "#2E7D32",
+  "background_color": "#0d1f0f",
   "lang": "ar",
   "dir": "rtl",
   "icons": [

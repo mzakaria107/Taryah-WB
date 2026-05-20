@@ -122,8 +122,8 @@ function DailyPerformanceSection({ selectedYear, selectedMonth, onMonthChange, o
     availableMonths = [], year: resYear, month: resMonth,
   } = dailyData || {};
 
-  // Use days up to the latest snapshot date (not today) so average reflects actual data coverage
-  const avgDenominator = workingDaysWithData || workingDaysElapsed;
+  // Denominator = actual number of snapshot days with data
+  const avgDenominator = snapshots.length || 1;
 
   const now = new Date();
   const isCurrentMonth = resYear === now.getFullYear() && resMonth === (now.getMonth() + 1);
@@ -175,7 +175,7 @@ function DailyPerformanceSection({ selectedYear, selectedMonth, onMonthChange, o
           )}
           <div className="prf-daily-days">
             <CalendarDays size={13}/>
-            <span>{avgDenominator} من {totalWorkingDays} يوم عمل</span>
+            <span>{snapshots.length} يوم بيانات من {totalWorkingDays} يوم عمل</span>
           </div>
         </div>
       </div>

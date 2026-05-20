@@ -40,7 +40,7 @@ export default function Login() {
 
         {/* Title */}
         <h1 className="login-title">مرحباً بك</h1>
-        <p className="login-sub">لوحة تحصيل طرية — سجّل دخولك للمتابعة</p>
+        <p className="login-sub">دواجن طرية Dashboard — سجّل دخولك للمتابعة</p>
 
         {/* Gold divider */}
         <div className="login-divider" />

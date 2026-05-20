@@ -135,9 +135,24 @@ function buildDataRow(cells, colMap) {
   obj.item        = obj.item        ?? '';
   obj.description = obj.description ?? '';
   obj.itemType    = obj.itemType    ?? '';
-  if ((!obj.grossProfit || obj.grossProfit === 0) && obj.totalRevenue != null && obj.totalCost != null) {
-    obj.grossProfit = obj.totalRevenue - obj.totalCost;
-  }
+
+  // Derive missing fields for every row (item-level and group-level)
+  const rev  = obj.totalRevenue;
+  const cost = obj.totalCost;
+  const qty  = obj.qty;
+
+  if ((!obj.grossProfit || obj.grossProfit === 0) && rev != null && cost != null)
+    obj.grossProfit = rev - cost;
+
+  if ((!obj.grossProfitPct || obj.grossProfitPct === 0) && obj.grossProfit != null && rev)
+    obj.grossProfitPct = (obj.grossProfit / rev) * 100;
+
+  if ((!obj.avgCost || obj.avgCost === 0) && cost != null && qty)
+    obj.avgCost = cost / qty;
+
+  if ((!obj.avgPrice || obj.avgPrice === 0) && rev != null && qty)
+    obj.avgPrice = rev / qty;
+
   return obj;
 }
 

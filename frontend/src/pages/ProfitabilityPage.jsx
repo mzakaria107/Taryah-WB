@@ -526,8 +526,8 @@ export default function ProfitabilityPage() {
                   <td className="prf-td-num"><strong>{fmtNum(kpi.cost)}</strong></td>
                   <td className="prf-td-num prf-revenue"><strong>{fmtNum(kpi.revenue)}</strong></td>
                   <td className="prf-td-num"><strong>{total ? fmtPct(total.pctRevenue) : '—'}</strong></td>
-                  <td className="prf-td-num"><strong>{total ? fmtNum(total.avgCost) : '—'}</strong></td>
-                  <td className="prf-td-num"><strong>{total ? fmtNum(total.avgPrice) : '—'}</strong></td>
+                  <td className="prf-td-num"><strong>{kpi.qty > 0 ? fmtNum(kpi.cost / kpi.qty) : '—'}</strong></td>
+                  <td className="prf-td-num"><strong>{kpi.qty > 0 ? fmtNum(kpi.revenue / kpi.qty) : '—'}</strong></td>
                   <td className={`prf-td-num prf-profit ${gpClass(kpi.margin)}`}>
                     <strong>{fmtNum(kpi.grossProfit)}</strong>
                   </td>

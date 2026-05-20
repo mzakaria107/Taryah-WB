@@ -119,8 +119,14 @@ function detectHeader(rows) {
       const f = mapCol(cells[j]);
       if (f) { mapped[j] = f; hits++; }
     }
-    if (hits >= 3) return { headerIdx: i, colMap: mapped };
+    if (hits >= 3) {
+      console.log('[Profitability] Header row cells:', cells);
+      console.log('[Profitability] Column map:', mapped);
+      return { headerIdx: i, colMap: mapped };
+    }
   }
+  // Log first 3 rows if no header found
+  console.log('[Profitability] No header found. First 3 rows:', rows.slice(0, 3).map(r => r.cells));
   return null;
 }
 

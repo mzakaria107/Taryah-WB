@@ -147,6 +147,12 @@ function buildDataRow(cells, colMap) {
   obj.item        = obj.item        ?? '';
   obj.description = obj.description ?? '';
   obj.itemType    = obj.itemType    ?? '';
+
+  // Compute grossProfit from revenue - cost when not directly parsed or is 0
+  if ((!obj.grossProfit || obj.grossProfit === 0) &&
+      obj.totalRevenue != null && obj.totalCost != null) {
+    obj.grossProfit = obj.totalRevenue - obj.totalCost;
+  }
   return obj;
 }
 
@@ -222,25 +228,32 @@ function parseProfitability(html) {
   // For groups with no summary, compute from items
   for (const g of groups) {
     if (!g.summary && g.items.length) {
+      const rev  = g.items.reduce((s, r) => s + (r.totalRevenue || 0), 0);
+      const cost = g.items.reduce((s, r) => s + (r.totalCost    || 0), 0);
+      const qty  = g.items.reduce((s, r) => s + (r.qty          || 0), 0);
+      const gp   = rev - cost;
       g.summary = {
-        item:          g.type,
-        description:   '',
-        qty:           g.items.reduce((s, r) => s + (r.qty || 0), 0),
-        totalCost:     g.items.reduce((s, r) => s + (r.totalCost || 0), 0),
-        totalRevenue:  g.items.reduce((s, r) => s + (r.totalRevenue || 0), 0),
-        grossProfit:   g.items.reduce((s, r) => s + (r.grossProfit || 0), 0),
-        pctRevenue:    null,
-        avgCost:       null,
-        avgPrice:      null,
-        grossProfitPct: null,
-        _computed:     true,
+        item:           g.type,
+        description:    '',
+        qty,
+        totalCost:      cost,
+        totalRevenue:   rev,
+        grossProfit:    gp,
+        pctRevenue:     null,
+        avgCost:        qty > 0 ? cost / qty : null,
+        avgPrice:       qty > 0 ? rev  / qty : null,
+        grossProfitPct: rev > 0 ? (gp / rev) * 100 : null,
+        _computed:      true,
       };
-      const rev = g.summary.totalRevenue;
+    } else if (g.summary) {
+      // Ensure grossProfit is set even when summary came from the HTML
+      const rev  = g.summary.totalRevenue;
       const cost = g.summary.totalCost;
-      if (rev)        g.summary.grossProfitPct = ((rev - cost) / rev) * 100;
-      if (g.summary.qty) {
-        g.summary.avgCost  = cost / g.summary.qty;
-        g.summary.avgPrice = rev  / g.summary.qty;
+      if ((!g.summary.grossProfit || g.summary.grossProfit === 0) && rev != null && cost != null) {
+        g.summary.grossProfit = rev - cost;
+      }
+      if (rev && (!g.summary.grossProfitPct || g.summary.grossProfitPct === 0)) {
+        g.summary.grossProfitPct = ((rev - cost) / rev) * 100;
       }
     }
   }

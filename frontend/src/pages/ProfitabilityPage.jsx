@@ -157,14 +157,19 @@ function TrendSparkline({ data, labels, color, hov, onHov, formatVal }) {
         const isLatest = p.i === n - 1;
         const isHov    = hov === p.i;
         if (!isLatest && !isHov) return null;
-        const lx = Math.max(14, Math.min(W - 14, p.x));
-        const ly = Math.max(10, p.y - 5);
+        const lx  = Math.max(16, Math.min(W - 16, p.x));
+        // Latest label: fixed near top so it never overlaps hovered labels
+        // Hovered label: floats just above its dot
+        const ly  = isLatest
+          ? Math.max(8, pad.t - 3)
+          : Math.max(pad.t + 4, p.y - 7);
         const txt = formatVal ? formatVal(p.v) : fmtNum(p.v);
+        const fs  = isLatest ? 8 : 7.5;
         return (
           <text key={`lbl-${p.i}`}
             x={lx} y={ly}
             textAnchor="middle"
-            fontSize="7.5" fill={color} fontWeight="700"
+            fontSize={fs} fill={color} fontWeight="700"
             vectorEffect="non-scaling-stroke"
             style={{ fontFamily: 'var(--font-en)', pointerEvents: 'none' }}
           >

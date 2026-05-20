@@ -301,3 +301,38 @@
   .prf-th-item { min-width: 160px; }
   .prf-th-desc { min-width: 120px; }
 }
+
+@media (max-width: 480px) {
+  .prf-kpi-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  /* Qty card spans full width since it's the 5th (odd) card */
+  .prf-kpi-qty {
+    grid-column: 1 / -1;
+  }
+  .prf-kpi {
+    min-width: 0;
+    flex: none;
+    width: 100%;
+    padding: 10px 12px;
+    gap: 10px;
+  }
+  .prf-kpi-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    flex-shrink: 0;
+  }
+  .prf-kpi-val {
+    font-size: 13px;
+    font-weight: 800;
+    line-height: 1.2;
+    word-break: break-all;
+  }
+  .prf-kpi-lbl {
+    font-size: 10px;
+    margin-top: 1px;
+  }
+}

@@ -328,6 +328,61 @@
   color: var(--color-text-muted);
 }
 
+/* Daily loading */
+.prf-daily-loading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 20px 16px;
+  font-size: 13px;
+  color: var(--color-text-muted);
+}
+
+/* Header actions */
+.prf-daily-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* Month select */
+.prf-month-select {
+  padding: 5px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: #fff;
+  font-size: 12px;
+  font-family: inherit;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  outline: none;
+}
+.prf-month-select:focus { border-color: var(--color-brand-green); }
+
+/* Save Now button */
+.prf-save-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 12px;
+  border: 1px solid var(--color-brand-green);
+  border-radius: var(--radius-md);
+  background: var(--color-brand-green-pale);
+  color: var(--color-brand-green);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 120ms;
+  white-space: nowrap;
+}
+.prf-save-btn:hover:not(:disabled) { background: var(--color-brand-green); color: #fff; }
+.prf-save-btn:disabled { opacity: 0.7; cursor: not-allowed; }
+
+/* Highlighted columns (daily values) */
+.prf-daily-col-highlight { background: rgba(21,101,192,0.04); }
+
 /* Progress bar */
 .prf-progress-wrap {
   position: relative;

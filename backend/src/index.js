@@ -88,6 +88,19 @@ app.use('/api/current-stock', currentStockRoutes);
 app.use('/api/permissions',   permissionsRoutes);
 app.use('/api/profitability', profitabilityRoutes);
 
+/* ── Daily profitability snapshot — 11:55 PM every day ──────── */
+const cron = require('node-cron');
+const { fetchFromNetSuite } = require('./routes/profitability');
+cron.schedule('55 23 * * *', async () => {
+  console.log('[Cron] Daily profitability snapshot starting...');
+  try {
+    await fetchFromNetSuite();
+    console.log('[Cron] Daily profitability snapshot complete.');
+  } catch (err) {
+    console.error('[Cron] Profitability snapshot failed:', err.message);
+  }
+}, { timezone: 'Asia/Riyadh' });
+
 // Last-upload timestamps for the three daily reports
 const { verifyToken: _vt } = require('./middleware/auth');
 app.get('/api/last-uploads', _vt, async (_req, res) => {

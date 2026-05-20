@@ -104,26 +104,76 @@ const AR_MONTHS = [
 ];
 
 /* ── Daily Performance Section ───────────────────────────── */
-function DailyPerformanceSection({ dailyData, kpi }) {
-  const { snapshots = [], workingDaysElapsed = 0, totalWorkingDays = 1 } = dailyData;
-  const now = new Date();
-  const monthLabel = `${AR_MONTHS[now.getMonth()]} ${now.getFullYear()}`;
+function DailyPerformanceSection({ selectedYear, selectedMonth, onMonthChange, onSaveNow, isSaving }) {
+  const { data: dailyData, isLoading } = useQuery({
+    queryKey: ['profitability-daily', selectedYear, selectedMonth],
+    queryFn:  () => client.get(`/profitability/daily?year=${selectedYear}&month=${selectedMonth}`).then(r => r.data),
+    staleTime: 5 * 60 * 1000,
+  });
 
-  const dailyAvgRevenue = workingDaysElapsed > 0 ? kpi.revenue / workingDaysElapsed : 0;
+  if (isLoading) return (
+    <div className="prf-daily-card">
+      <div className="prf-daily-loading"><RefreshCw size={16} className="prf-spin"/> جاري تحميل البيانات اليومية…</div>
+    </div>
+  );
+
+  const {
+    snapshots = [], workingDaysElapsed = 0, totalWorkingDays = 1,
+    availableMonths = [], year: resYear, month: resMonth,
+  } = dailyData || {};
+
+  const now = new Date();
+  const isCurrentMonth = resYear === now.getFullYear() && resMonth === (now.getMonth() + 1);
+  const monthLabel = `${AR_MONTHS[(resMonth || now.getMonth() + 1) - 1]} ${resYear || now.getFullYear()}`;
+
+  // KPIs from snapshots (latest snapshot = cumulative total for the month)
+  const latest = snapshots[0];
+  const cumRevenue    = parseFloat(latest?.total_revenue   || 0);
+  const cumCost       = parseFloat(latest?.total_cost      || 0);
+  const cumGP         = parseFloat(latest?.gross_profit    || 0);
+  const cumGPPct      = parseFloat(latest?.gross_profit_pct || 0);
+
+  const dailyAvgRevenue  = workingDaysElapsed > 0 ? cumRevenue / workingDaysElapsed : 0;
   const projectedRevenue = dailyAvgRevenue * totalWorkingDays;
-  const dailyAvgGP      = workingDaysElapsed > 0 ? kpi.grossProfit / workingDaysElapsed : 0;
-  const timePct         = totalWorkingDays > 0 ? (workingDaysElapsed / totalWorkingDays) * 100 : 0;
+  const dailyAvgGP       = workingDaysElapsed > 0 ? cumGP / workingDaysElapsed : 0;
+  const timePct          = totalWorkingDays > 0 ? (workingDaysElapsed / totalWorkingDays) * 100 : 0;
 
   return (
     <div className="prf-daily-card">
+      {/* Header */}
       <div className="prf-daily-header">
         <div className="prf-daily-title">
           <Activity size={16}/>
           <span>الأداء اليومي التراكمي — {monthLabel}</span>
         </div>
-        <div className="prf-daily-days">
-          <CalendarDays size={13}/>
-          <span>{workingDaysElapsed} من {totalWorkingDays} يوم عمل</span>
+        <div className="prf-daily-header-actions">
+          {/* Month picker */}
+          {availableMonths.length > 0 && (
+            <select
+              className="prf-month-select"
+              value={`${selectedYear}-${selectedMonth}`}
+              onChange={e => {
+                const [y, m] = e.target.value.split('-');
+                onMonthChange(parseInt(y), parseInt(m));
+              }}
+            >
+              {availableMonths.map(m => (
+                <option key={`${m.year}-${m.month}`} value={`${m.year}-${m.month}`}>
+                  {AR_MONTHS[m.month - 1]} {m.year}
+                </option>
+              ))}
+            </select>
+          )}
+          {isCurrentMonth && (
+            <button className={`prf-save-btn${isSaving ? ' prf-fetching' : ''}`} onClick={onSaveNow} disabled={isSaving}>
+              <RefreshCw size={13} className={isSaving ? 'prf-spin' : ''}/>
+              {isSaving ? 'جاري الحفظ…' : 'حفظ الآن'}
+            </button>
+          )}
+          <div className="prf-daily-days">
+            <CalendarDays size={13}/>
+            <span>{workingDaysElapsed} من {totalWorkingDays} يوم عمل</span>
+          </div>
         </div>
       </div>
 
@@ -133,89 +183,92 @@ function DailyPerformanceSection({ dailyData, kpi }) {
         <span className="prf-progress-label">{timePct.toFixed(0)}% من الشهر</span>
       </div>
 
-      {/* KPI row */}
-      <div className="prf-daily-kpi-row">
-        <div className="prf-daily-kpi">
-          <div className="prf-daily-kpi-icon" style={{ background:'#e3f2fd', color:'#1565c0' }}>
-            <TrendingUp size={16}/>
-          </div>
-          <div>
-            <div className="prf-daily-kpi-val">ر.س {fmtNum(dailyAvgRevenue)}</div>
-            <div className="prf-daily-kpi-lbl">متوسط الإيرادات اليومي</div>
-          </div>
-        </div>
-        <div className="prf-daily-kpi">
-          <div className="prf-daily-kpi-icon" style={{ background:'#e8f5e9', color:'#2e7d32' }}>
-            <BarChart2 size={16}/>
-          </div>
-          <div>
-            <div className="prf-daily-kpi-val">ر.س {fmtNum(projectedRevenue)}</div>
-            <div className="prf-daily-kpi-lbl">الإيرادات المتوقعة للشهر</div>
-          </div>
-        </div>
-        <div className="prf-daily-kpi">
-          <div className="prf-daily-kpi-icon" style={{ background:'#f3e5f5', color:'#6a1b9a' }}>
-            <DollarSign size={16}/>
-          </div>
-          <div>
-            <div className="prf-daily-kpi-val">ر.س {fmtNum(dailyAvgGP)}</div>
-            <div className="prf-daily-kpi-lbl">متوسط الربح اليومي</div>
-          </div>
-        </div>
-        <div className="prf-daily-kpi">
-          <div className={`prf-daily-kpi-icon ${gpClass(kpi.margin)}`} style={{ background:'#fff8e1' }}>
-            <Percent size={16}/>
-          </div>
-          <div>
-            <div className={`prf-daily-kpi-val ${gpClass(kpi.margin)}`}>{fmtPct(kpi.margin)}</div>
-            <div className="prf-daily-kpi-lbl">هامش الربح التراكمي</div>
-          </div>
-        </div>
-      </div>
-
-      {/* Snapshots table */}
-      {snapshots.length > 0 ? (
-        <div className="prf-daily-table-wrap">
-          <table className="prf-daily-table">
-            <thead>
-              <tr>
-                <th>التاريخ</th>
-                <th>إيرادات اليوم</th>
-                <th>إيرادات تراكمية</th>
-                <th>ربح إجمالي تراكمي</th>
-                <th>هامش %</th>
-                <th>كمية تراكمية</th>
-              </tr>
-            </thead>
-            <tbody>
-              {snapshots.map((s, i) => {
-                const gp = parseFloat(s.gross_profit_pct);
-                return (
-                  <tr key={i} className={i === 0 ? 'prf-daily-today' : ''}>
-                    <td className="prf-daily-date">
-                      {i === 0 && <span className="prf-today-badge">اليوم</span>}
-                      {new Date(s.snapshot_date).toLocaleDateString('ar-SA', {
-                        day: 'numeric', month: 'short', weekday: 'short',
-                      })}
-                    </td>
-                    <td className="prf-daily-num prf-revenue">
-                      {s.daily_revenue != null ? `ر.س ${fmtNum(s.daily_revenue)}` : '—'}
-                    </td>
-                    <td className="prf-daily-num">{`ر.س ${fmtNum(s.total_revenue)}`}</td>
-                    <td className="prf-daily-num">{`ر.س ${fmtNum(s.gross_profit)}`}</td>
-                    <td className={`prf-daily-num prf-pct-cell ${gpClass(gp)}`}>{fmtPct(gp)}</td>
-                    <td className="prf-daily-num">{fmtQty(s.qty)}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      ) : (
+      {snapshots.length === 0 ? (
         <div className="prf-daily-empty">
           <TrendingDown size={18}/>
-          <span>لا توجد بيانات يومية بعد — اضغط "تحديث البيانات" لحفظ أول snapshot اليوم</span>
+          <span>لا توجد بيانات يومية لهذا الشهر — اضغط "حفظ الآن" أو انتظر الحفظ التلقائي (11:55 م)</span>
         </div>
+      ) : (
+        <>
+          {/* KPI row */}
+          <div className="prf-daily-kpi-row">
+            <div className="prf-daily-kpi">
+              <div className="prf-daily-kpi-icon" style={{ background:'#e3f2fd', color:'#1565c0' }}><TrendingUp size={16}/></div>
+              <div>
+                <div className="prf-daily-kpi-val">ر.س {fmtNum(dailyAvgRevenue)}</div>
+                <div className="prf-daily-kpi-lbl">متوسط الإيرادات اليومي</div>
+              </div>
+            </div>
+            <div className="prf-daily-kpi">
+              <div className="prf-daily-kpi-icon" style={{ background:'#e8f5e9', color:'#2e7d32' }}><BarChart2 size={16}/></div>
+              <div>
+                <div className="prf-daily-kpi-val">ر.س {fmtNum(projectedRevenue)}</div>
+                <div className="prf-daily-kpi-lbl">{isCurrentMonth ? 'الإيرادات المتوقعة للشهر' : 'إجمالي الشهر'}</div>
+              </div>
+            </div>
+            <div className="prf-daily-kpi">
+              <div className="prf-daily-kpi-icon" style={{ background:'#f3e5f5', color:'#6a1b9a' }}><DollarSign size={16}/></div>
+              <div>
+                <div className="prf-daily-kpi-val">ر.س {fmtNum(dailyAvgGP)}</div>
+                <div className="prf-daily-kpi-lbl">متوسط الربح الإجمالي اليومي</div>
+              </div>
+            </div>
+            <div className="prf-daily-kpi">
+              <div className={`prf-daily-kpi-icon`} style={{ background:'#fff8e1', color:'#f57f17' }}><Percent size={16}/></div>
+              <div>
+                <div className={`prf-daily-kpi-val ${gpClass(cumGPPct)}`}>{fmtPct(cumGPPct)}</div>
+                <div className="prf-daily-kpi-lbl">هامش الربح التراكمي</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Daily snapshots table */}
+          <div className="prf-daily-table-wrap">
+            <table className="prf-daily-table">
+              <thead>
+                <tr>
+                  <th>التاريخ</th>
+                  <th className="prf-daily-col-highlight">إيرادات اليوم</th>
+                  <th className="prf-daily-col-highlight">ربح اليوم</th>
+                  <th>إيرادات تراكمية</th>
+                  <th>ربح تراكمي</th>
+                  <th>هامش %</th>
+                  <th>كمية اليوم</th>
+                  <th>كمية تراكمية</th>
+                </tr>
+              </thead>
+              <tbody>
+                {snapshots.map((s, i) => {
+                  const gp = parseFloat(s.gross_profit_pct);
+                  const isToday = i === 0 && isCurrentMonth;
+                  const dailyRev = parseFloat(s.daily_revenue);
+                  const dailyGP  = parseFloat(s.daily_gross_profit);
+                  return (
+                    <tr key={i} className={isToday ? 'prf-daily-today' : ''}>
+                      <td className="prf-daily-date">
+                        {isToday && <span className="prf-today-badge">اليوم</span>}
+                        {new Date(s.snapshot_date).toLocaleDateString('ar-SA', {
+                          day: 'numeric', month: 'short', weekday: 'short',
+                        })}
+                      </td>
+                      <td className={`prf-daily-num prf-daily-col-highlight prf-revenue ${dailyRev < 0 ? 'prf-gp-neg' : ''}`}>
+                        {s.daily_revenue != null ? `ر.س ${fmtNum(dailyRev)}` : '—'}
+                      </td>
+                      <td className={`prf-daily-num prf-daily-col-highlight ${gpClass(dailyGP > 0 && dailyRev > 0 ? (dailyGP/dailyRev)*100 : 0)}`}>
+                        {s.daily_gross_profit != null ? `ر.س ${fmtNum(dailyGP)}` : '—'}
+                      </td>
+                      <td className="prf-daily-num">{`ر.س ${fmtNum(s.total_revenue)}`}</td>
+                      <td className="prf-daily-num">{`ر.س ${fmtNum(s.gross_profit)}`}</td>
+                      <td className={`prf-daily-num prf-pct-cell ${gpClass(gp)}`}>{fmtPct(gp)}</td>
+                      <td className="prf-daily-num">{s.daily_qty != null ? fmtQty(s.daily_qty) : '—'}</td>
+                      <td className="prf-daily-num">{fmtQty(s.qty)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
     </div>
   );
@@ -237,7 +290,7 @@ export default function ProfitabilityPage() {
   };
   const collapseAll = () => setExpanded({});
 
-  /* ── Fetch ── */
+  /* ── Fetch main report ── */
   const [forceRefresh, setForceRefresh] = useState(false);
 
   const {
@@ -257,12 +310,19 @@ export default function ProfitabilityPage() {
   const groups = data?.groups ?? [];
   const total  = data?.total  ?? null;
 
-  /* ── Daily snapshots fetch ── */
-  const { data: dailyData, refetch: refetchDaily } = useQuery({
-    queryKey: ['profitability-daily'],
-    queryFn:  () => client.get('/profitability/daily').then(r => r.data),
-    staleTime: 5 * 60 * 1000,
-  });
+  /* ── Daily section state ── */
+  const now = new Date();
+  const [dailyYear,  setDailyYear]  = useState(now.getFullYear());
+  const [dailyMonth, setDailyMonth] = useState(now.getMonth() + 1);
+  const [isSaving,   setIsSaving]   = useState(false);
+
+  const handleSaveNow = async () => {
+    setIsSaving(true);
+    try {
+      await client.post('/profitability/snapshot');
+    } catch (e) { /* ignore */ }
+    setIsSaving(false);
+  };
 
   /* ── KPI summary from total row or computed ── */
   const kpi = useMemo(() => {
@@ -385,13 +445,13 @@ export default function ProfitabilityPage() {
       </div>
 
       {/* ── Daily Performance Section ── */}
-      {dailyData && (
-        <DailyPerformanceSection
-          dailyData={dailyData}
-          kpi={kpi}
-          onRefresh={() => { handleRefresh(); setTimeout(refetchDaily, 3000); }}
-        />
-      )}
+      <DailyPerformanceSection
+        selectedYear={dailyYear}
+        selectedMonth={dailyMonth}
+        onMonthChange={(y, m) => { setDailyYear(y); setDailyMonth(m); }}
+        onSaveNow={handleSaveNow}
+        isSaving={isSaving}
+      />
 
       {/* ── Table card ── */}
       <div className="prf-card">

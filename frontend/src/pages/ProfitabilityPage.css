@@ -497,6 +497,100 @@
   color: var(--color-text-muted);
 }
 
+/* ── Trend indicators row ────────────────────────── */
+.prf-trend-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  border-bottom: 1px solid var(--color-border);
+}
+.prf-trend-card {
+  padding: 14px 16px;
+  border-left: 1px solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.prf-trend-card:last-child { border-left: 0; }
+
+.prf-trend-top {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+.prf-trend-icon-wrap {
+  width: 34px; height: 34px;
+  border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.prf-trend-val {
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--color-text-primary);
+  font-family: var(--font-en);
+  line-height: 1.2;
+}
+.prf-trend-sub {
+  font-size: 10px;
+  color: var(--color-text-muted);
+  margin-top: 2px;
+  font-family: var(--font-en);
+}
+.prf-trend-lbl {
+  font-size: 10px;
+  color: var(--color-text-muted);
+  margin-top: 3px;
+}
+
+.prf-trend-bottom {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 8px;
+}
+.prf-trend-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 20px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.prf-trend-up   { background: #e8f5e9; color: #2e7d32; }
+.prf-trend-down { background: #ffebee; color: #c62828; }
+.prf-trend-flat { background: #f5f5f5; color: #757575; }
+
+/* Sparkline */
+.prf-sparkline {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 30px;
+  flex: 1;
+  justify-content: flex-end;
+  max-width: 80px;
+}
+.prf-spark-bar {
+  flex: 1;
+  max-width: 8px;
+  min-width: 4px;
+  border-radius: 2px 2px 0 0;
+  background: var(--color-border);
+  transition: height 0.3s ease;
+}
+
+@media (max-width: 700px) {
+  .prf-trend-row { grid-template-columns: 1fr; }
+  .prf-trend-card {
+    border-left: 0;
+    border-bottom: 1px solid var(--color-border);
+  }
+  .prf-trend-card:last-child { border-bottom: 0; }
+}
+
 /* ── Responsive ──────────────────────────────────── */
 @media (max-width: 700px) {
   .prf-kpi-row { gap: 8px; }

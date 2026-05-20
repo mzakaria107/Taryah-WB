@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import {
   TrendingUp, RefreshCw, ChevronDown, ChevronLeft,
   AlertCircle, Clock, DollarSign, BarChart2, Percent, Package,
-  CalendarDays, TrendingDown, Activity,
+  CalendarDays, TrendingDown, Activity, Minus,
 } from 'lucide-react';
 import client from '../api/client';
 import './ProfitabilityPage.css';
@@ -97,6 +97,54 @@ function DataRow({ row, isGroup, isExpanded, onToggle, depth = 0 }) {
   );
 }
 
+/* ── Trend Card ───────────────────────────────────────────── */
+function TrendCard({ title, value, subValue, trendPct, sparkData, color, icon }) {
+  const dir = trendPct > 1 ? 'up' : trendPct < -1 ? 'down' : 'flat';
+  const maxSpark = Math.max(...sparkData.map(Math.abs), 1);
+
+  return (
+    <div className="prf-trend-card">
+      <div className="prf-trend-top">
+        <div className="prf-trend-icon-wrap" style={{ background: color + '22', color }}>
+          {icon}
+        </div>
+        <div>
+          <div className="prf-trend-val">{value}</div>
+          {subValue && <div className="prf-trend-sub">{subValue}</div>}
+          <div className="prf-trend-lbl">{title}</div>
+        </div>
+      </div>
+      <div className="prf-trend-bottom">
+        <span className={`prf-trend-badge prf-trend-${dir}`}>
+          {dir === 'up'   ? <TrendingUp   size={10}/> :
+           dir === 'down' ? <TrendingDown size={10}/> :
+                            <Minus        size={10}/>}
+          {' '}{Math.abs(trendPct).toFixed(1)}%
+          {' '}<span>{dir === 'up' ? 'ارتفاع' : dir === 'down' ? 'انخفاض' : 'مستقر'}</span>
+        </span>
+        <div className="prf-sparkline">
+          {sparkData.map((v, i) => {
+            const h = Math.max((Math.abs(v) / maxSpark) * 100, 5);
+            const isLatest = i === sparkData.length - 1;
+            return (
+              <div
+                key={i}
+                className={`prf-spark-bar${isLatest ? ' prf-spark-latest' : ''}`}
+                style={{
+                  height: `${h}%`,
+                  background: isLatest ? color : undefined,
+                  opacity: 0.4 + (i / sparkData.length) * 0.6,
+                }}
+                title={String(fmtNum(v))}
+              />
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ── Arabic month name ────────────────────────────────────── */
 const AR_MONTHS = [
   'يناير','فبراير','مارس','أبريل','مايو','يونيو',
@@ -140,6 +188,35 @@ function DailyPerformanceSection({ selectedYear, selectedMonth, onMonthChange, o
   const projectedRevenue = dailyAvgRevenue * totalWorkingDays;
   const dailyAvgGP       = avgDenominator > 0 ? cumGP / avgDenominator : 0;
   const timePct          = totalWorkingDays > 0 ? (workingDaysElapsed / totalWorkingDays) * 100 : 0;
+
+  // ── Trend calculations (snapshots = DESC, sparkline needs ASC) ──
+  const sparkSnaps = [...snapshots].reverse();
+
+  // 1. Daily GP trend: avg last 3 days vs avg previous 3 days
+  const recentGP     = snapshots.slice(0, 3).map(s => parseFloat(s.daily_gross_profit || 0));
+  const olderGP      = snapshots.slice(3, 6).map(s => parseFloat(s.daily_gross_profit || 0));
+  const recentAvgGP  = recentGP.reduce((a, b) => a + b, 0) / (recentGP.length || 1);
+  const olderAvgGP   = olderGP.reduce((a, b) => a + b, 0)  / (olderGP.length  || 1);
+  const gpDailyTrend = olderAvgGP > 0 ? ((recentAvgGP - olderAvgGP) / olderAvgGP) * 100 : 0;
+  const dailyGPSpark = sparkSnaps.map(s => parseFloat(s.daily_gross_profit || 0));
+
+  // 2. Cumulative GP% trend: avg last 3 days vs avg previous 3 days
+  const recentGPPct     = snapshots.slice(0, 3).map(s => parseFloat(s.gross_profit_pct || 0));
+  const olderGPPct      = snapshots.slice(3, 6).map(s => parseFloat(s.gross_profit_pct || 0));
+  const recentAvgGPPct  = recentGPPct.reduce((a, b) => a + b, 0) / (recentGPPct.length || 1);
+  const olderAvgGPPct   = olderGPPct.reduce((a, b)  => a + b, 0) / (olderGPPct.length  || 1);
+  const gpPctTrend      = olderAvgGPPct > 0
+    ? ((recentAvgGPPct - olderAvgGPPct) / Math.abs(olderAvgGPPct)) * 100
+    : 0;
+  const gpPctSpark = sparkSnaps.map(s => parseFloat(s.gross_profit_pct || 0));
+
+  // 3. Daily qty trend: avg last 3 days vs avg previous 3 days
+  const recentQty    = snapshots.slice(0, 3).map(s => parseFloat(s.daily_qty || 0));
+  const olderQty     = snapshots.slice(3, 6).map(s => parseFloat(s.daily_qty || 0));
+  const recentAvgQty = recentQty.reduce((a, b) => a + b, 0) / (recentQty.length || 1);
+  const olderAvgQty  = olderQty.reduce((a, b)  => a + b, 0) / (olderQty.length  || 1);
+  const qtyTrend     = olderAvgQty > 0 ? ((recentAvgQty - olderAvgQty) / olderAvgQty) * 100 : 0;
+  const qtySpark     = sparkSnaps.map(s => parseFloat(s.daily_qty || 0));
 
   return (
     <div className="prf-daily-card">
@@ -193,6 +270,39 @@ function DailyPerformanceSection({ selectedYear, selectedMonth, onMonthChange, o
         </div>
       ) : (
         <>
+          {/* Trend indicators */}
+          {snapshots.length >= 2 && (
+            <div className="prf-trend-row">
+              <TrendCard
+                title="ترند الربح اليومي"
+                value={`ر.س ${fmtNum(parseFloat(snapshots[0]?.daily_gross_profit || 0))}`}
+                subValue={`متوسط آخر 3 أيام: ر.س ${fmtNum(recentAvgGP)}`}
+                trendPct={gpDailyTrend}
+                sparkData={dailyGPSpark}
+                color="#1565c0"
+                icon={<DollarSign size={15}/>}
+              />
+              <TrendCard
+                title="هامش الربحية التراكمي"
+                value={fmtPct(cumGPPct)}
+                subValue={`الربح التراكمي: ر.س ${fmtNum(cumGP)}`}
+                trendPct={gpPctTrend}
+                sparkData={gpPctSpark}
+                color="#2e7d32"
+                icon={<Percent size={15}/>}
+              />
+              <TrendCard
+                title="الكميات المباعة يومياً"
+                value={fmtQty(parseFloat(snapshots[0]?.daily_qty || 0))}
+                subValue={`متوسط آخر 3 أيام: ${fmtQty(recentAvgQty)}`}
+                trendPct={qtyTrend}
+                sparkData={qtySpark}
+                color="#6a1b9a"
+                icon={<Package size={15}/>}
+              />
+            </div>
+          )}
+
           {/* KPI row */}
           <div className="prf-daily-kpi-row">
             <div className="prf-daily-kpi">

@@ -181,9 +181,10 @@
 }
 
 .upload-row__batch {
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr auto auto;
   align-items: center;
-  justify-content: space-between;
+  gap: 6px;
   font-size: 11px;
   color: var(--color-text-secondary);
 }
@@ -192,7 +193,6 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  max-width: 60%;
   font-family: var(--font-en);
 }
 

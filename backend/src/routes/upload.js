@@ -295,13 +295,23 @@ router.post(
   async (req, res) => {
     if (!req.file) return res.status(400).json({ error: 'لم يتم رفع ملف' });
 
+    const batchId = uuidv4();
+    await pool.query(
+      `INSERT INTO upload_batches (id, file_name, file_type, uploaded_by, status)
+       VALUES ($1, $2, 'route_master', $3, 'processing')`,
+      [batchId, req.file.originalname, req.user.id]
+    );
+
     try {
       console.log(`[RouteMaster] Reading: ${req.file.originalname}`);
       const workbook  = xlsx.readFile(req.file.path, { cellDates: false, raw: true });
       const sheetName = workbook.SheetNames[0];
       const rows      = xlsx.utils.sheet_to_json(workbook.Sheets[sheetName], { defval: '' });
 
-      if (!rows.length) return res.status(400).json({ error: 'الملف فارغ' });
+      if (!rows.length) {
+        await pool.query(`UPDATE upload_batches SET status='failed', error_message='الملف فارغ' WHERE id=$1`, [batchId]);
+        return res.status(400).json({ error: 'الملف فارغ' });
+      }
 
       // ── Detect column names ─────────────────────────────────────
       const cols = Object.keys(rows[0]);
@@ -460,6 +470,11 @@ router.post(
         dbClient.release();
       }
 
+      await pool.query(
+        `UPDATE upload_batches SET status='success', row_count=$1 WHERE id=$2`,
+        [routeMap.size, batchId]
+      );
+
       res.json({
         success:        true,
         rowsProcessed:  routeMap.size,
@@ -473,22 +488,31 @@ router.post(
 
     } catch (err) {
       console.error('[RouteMaster] Error:', err.message);
+      await pool.query(
+        `UPDATE upload_batches SET status='failed', error_message=$1 WHERE id=$2`,
+        [err.message.substring(0, 500), batchId]
+      );
       res.status(500).json({ error: 'فشل في معالجة الملف: ' + err.message });
     }
   }
 );
 
 // ─────────────────────────────────────────────
-// GET /api/upload/batches
+// GET /api/upload/batches[?file_type=xxx]
 // ─────────────────────────────────────────────
 router.get('/batches', verifyToken, requireRoles('super_admin', 'it_admin'), async (req, res) => {
   try {
+    const { file_type } = req.query;
+    const where  = file_type ? `WHERE ub.file_type = $1` : '';
+    const params = file_type ? [file_type] : [];
     const { rows } = await pool.query(
       `SELECT ub.*, u.name AS uploader_name
        FROM upload_batches ub
        LEFT JOIN users u ON u.id = ub.uploaded_by
+       ${where}
        ORDER BY ub.created_at DESC
-       LIMIT 20`
+       LIMIT 50`,
+      params
     );
     res.json(rows);
   } catch (err) {

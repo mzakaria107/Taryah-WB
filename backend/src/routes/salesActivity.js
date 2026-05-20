@@ -3,6 +3,7 @@ const xlsx     = require('xlsx');
 const multer   = require('multer');
 const path     = require('path');
 const fs       = require('fs');
+const { v4: uuidv4 } = require('uuid');
 const pool     = require('../db/pool');
 const { verifyToken, applyRegionFilter } = require('../middleware/auth');
 
@@ -137,13 +138,22 @@ function parseFile(filePath) {
 router.post('/upload', verifyToken, applyRegionFilter, csvUpload.single('file'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'لم يتم رفع ملف' });
 
+  const batchId = uuidv4();
+  await pool.query(
+    `INSERT INTO upload_batches (id, file_name, file_type, uploaded_by, status)
+     VALUES ($1, $2, 'sales_activity', $3, 'processing')`,
+    [batchId, req.file.originalname, req.user.id]
+  );
+
   try {
     console.log(`[SalesActivity] Reading: ${req.file.originalname}`);
     const rawRows = parseFile(req.file.path);
     console.log(`[SalesActivity] Parsed ${rawRows.length} rows`);
 
-    if (!rawRows.length)
+    if (!rawRows.length) {
+      await pool.query(`UPDATE upload_batches SET status='failed', error_message='الملف فارغ' WHERE id=$1`, [batchId]);
       return res.status(400).json({ error: 'الملف فارغ أو لا يحتوي على بيانات' });
+    }
 
     // Detect columns (handle BOM in first key)
     const sampleKeys = Object.keys(rawRows[0]);
@@ -291,6 +301,10 @@ router.post('/upload', verifyToken, applyRegionFilter, csvUpload.single('file'),
     try { fs.unlinkSync(req.file.path); } catch (_) {}
 
     console.log(`[SalesActivity] inserted=${inserted}, deleted=${deleted}, months=${uploadMonths.join(',')}`);
+    await pool.query(
+      `UPDATE upload_batches SET status='success', row_count=$1 WHERE id=$2`,
+      [inserted, batchId]
+    );
     res.json({
       success: true,
       inserted,
@@ -303,6 +317,10 @@ router.post('/upload', verifyToken, applyRegionFilter, csvUpload.single('file'),
 
   } catch (err) {
     console.error('[SalesActivity] Upload error:', err.message);
+    await pool.query(
+      `UPDATE upload_batches SET status='failed', error_message=$1 WHERE id=$2`,
+      [err.message.substring(0, 500), batchId]
+    );
     res.status(500).json({ error: 'فشل في معالجة الملف: ' + err.message });
   }
 });

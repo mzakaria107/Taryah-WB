@@ -95,6 +95,13 @@ router.post(
   async (req, res) => {
     if (!req.file) return res.status(400).json({ error: 'لم يتم رفع ملف' });
 
+    const batchId = uuidv4();
+    await pool.query(
+      `INSERT INTO upload_batches (id, file_name, file_type, uploaded_by, status)
+       VALUES ($1, $2, 'payments', $3, 'processing')`,
+      [batchId, req.file.originalname, req.user.id]
+    );
+
     try {
       console.log(`[Payments] Reading: ${req.file.originalname}`);
       const workbook = xlsx.readFile(req.file.path, {
@@ -105,8 +112,10 @@ router.post(
       });
       console.log(`[Payments] Parsed ${rawRows.length} rows`);
 
-      if (!rawRows.length)
+      if (!rawRows.length) {
+        await pool.query(`UPDATE upload_batches SET status='failed', error_message='الملف فارغ' WHERE id=$1`, [batchId]);
         return res.status(400).json({ error: 'الملف فارغ' });
+      }
 
       // ── Parse & aggregate by document_number ────────────────────
       // Some documents span multiple rows (e.g. cash on row A, POS on row B).
@@ -173,6 +182,10 @@ router.post(
       }
 
       console.log(`[Payments] Upserted ${processed} rows`);
+      await pool.query(
+        `UPDATE upload_batches SET status='success', row_count=$1 WHERE id=$2`,
+        [processed, batchId]
+      );
       res.json({
         success:       true,
         rowsProcessed: processed,
@@ -182,6 +195,10 @@ router.post(
 
     } catch (err) {
       console.error('[Payments] Upload error:', err.message);
+      await pool.query(
+        `UPDATE upload_batches SET status='failed', error_message=$1 WHERE id=$2`,
+        [err.message.substring(0, 500), batchId]
+      );
       res.status(500).json({ error: 'فشل في معالجة الملف: ' + err.message });
     }
   }

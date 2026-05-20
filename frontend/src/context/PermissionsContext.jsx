@@ -15,6 +15,8 @@ export function PermissionsProvider({ children }) {
   const [perms, setPerms] = useState(loadCache);
 
   useEffect(() => {
+    // Don't fetch permissions if there is no token — avoids a 401 on the login page
+    if (!localStorage.getItem('token')) return;
     client.get('/permissions')
       .then(res => {
         // Merge API data over defaults so any missing keys still have a fallback

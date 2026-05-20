@@ -344,6 +344,59 @@ router.get('/daily', verifyToken, async (req, res) => {
 });
 
 /* ══════════════════════════════════════════════════════════════
+   POST /api/profitability/import-daily
+   Import one day's individual (non-cumulative) data.
+   Body: { snapshot_date, daily_revenue, daily_cost, daily_gross_profit, daily_qty }
+   The endpoint computes the running cumulative from existing rows.
+   ══════════════════════════════════════════════════════════════ */
+router.post('/import-daily', verifyToken, requireRoles('super_admin', 'it_admin', 'sales_manager', 'top_management'), async (req, res) => {
+  try {
+    const { snapshot_date, daily_revenue, daily_cost, daily_gross_profit, daily_qty } = req.body;
+    if (!snapshot_date || daily_revenue == null) {
+      return res.status(400).json({ error: 'snapshot_date and daily_revenue are required' });
+    }
+
+    // Compute running cumulative: sum all previous days in the same month + this day
+    const { rows: prev } = await pool.query(`
+      SELECT COALESCE(SUM(total_revenue),0)    AS cum_rev,
+             COALESCE(SUM(total_cost),0)       AS cum_cost,
+             COALESCE(SUM(gross_profit),0)     AS cum_gp,
+             COALESCE(SUM(qty),0)              AS cum_qty
+      FROM profitability_snapshots
+      WHERE snapshot_date >= date_trunc('month', $1::date)
+        AND snapshot_date <  $1::date
+        AND source = 'excel'
+    `, [snapshot_date]);
+
+    const cumRev  = parseFloat(prev[0].cum_rev)  + parseFloat(daily_revenue);
+    const cumCost = parseFloat(prev[0].cum_cost) + parseFloat(daily_cost || 0);
+    const cumGP   = parseFloat(prev[0].cum_gp)   + parseFloat(daily_gross_profit || 0);
+    const cumQty  = parseInt(prev[0].cum_qty)    + parseInt(daily_qty || 0);
+    const cumGPPct = cumRev > 0 ? (cumGP / cumRev) * 100 : 0;
+
+    await pool.query(`
+      INSERT INTO profitability_snapshots
+        (snapshot_date, total_revenue, total_cost, gross_profit, gross_profit_pct, qty, source)
+      VALUES ($1,$2,$3,$4,$5,$6,'excel')
+      ON CONFLICT (snapshot_date) DO UPDATE SET
+        total_revenue    = EXCLUDED.total_revenue,
+        total_cost       = EXCLUDED.total_cost,
+        gross_profit     = EXCLUDED.gross_profit,
+        gross_profit_pct = EXCLUDED.gross_profit_pct,
+        qty              = EXCLUDED.qty,
+        source           = 'excel',
+        created_at       = NOW()
+    `, [snapshot_date, cumRev, cumCost, cumGP, cumGPPct, cumQty]);
+
+    console.log(`[Profitability/import-daily] ${snapshot_date}: daily=${daily_revenue} cumulative=${cumRev}`);
+    res.json({ ok: true, snapshot_date, daily_revenue, cumulative_revenue: cumRev });
+  } catch (err) {
+    console.error('[Profitability/import-daily]', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/* ══════════════════════════════════════════════════════════════
    POST /api/profitability/snapshot  — manual snapshot (admin)
    ══════════════════════════════════════════════════════════════ */
 router.post('/snapshot', verifyToken, requireRoles('super_admin', 'it_admin', 'sales_manager', 'top_management'), async (req, res) => {

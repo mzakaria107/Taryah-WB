@@ -11,6 +11,7 @@ const https   = require('https');
 const http    = require('http');
 const router  = express.Router();
 const { verifyToken } = require('../middleware/auth');
+const pool    = require('../db/pool');
 
 const NETSUITE_URL =
   'https://9275514.app.netsuite.com/app/reporting/webquery.nl' +
@@ -271,6 +272,85 @@ function clean(r) {
   return o;
 }
 
+/* ── Working-days helpers ───────────────────────────────────── */
+function countWorkingDays(year, month, fromDay, toDay) {
+  let count = 0;
+  for (let d = fromDay; d <= toDay; d++) {
+    if (new Date(year, month, d).getDay() !== 5) count++;
+  }
+  return count;
+}
+
+/* ── Save today's snapshot to DB ────────────────────────────── */
+async function saveSnapshot(data) {
+  try {
+    const totalRevenue  = data.groups.reduce((s, g) => s + (g.summary?.totalRevenue  || 0), 0);
+    const totalCost     = data.groups.reduce((s, g) => s + (g.summary?.totalCost     || 0), 0);
+    const grossProfit   = totalRevenue - totalCost;
+    const grossProfitPct = totalRevenue > 0 ? (grossProfit / totalRevenue) * 100 : 0;
+    const qty           = data.groups.reduce((s, g) => s + (g.summary?.qty           || 0), 0);
+
+    const today = new Date().toISOString().slice(0, 10);
+    await pool.query(`
+      INSERT INTO profitability_snapshots
+        (snapshot_date, total_revenue, total_cost, gross_profit, gross_profit_pct, qty)
+      VALUES ($1,$2,$3,$4,$5,$6)
+      ON CONFLICT (snapshot_date) DO UPDATE SET
+        total_revenue    = EXCLUDED.total_revenue,
+        total_cost       = EXCLUDED.total_cost,
+        gross_profit     = EXCLUDED.gross_profit,
+        gross_profit_pct = EXCLUDED.gross_profit_pct,
+        qty              = EXCLUDED.qty,
+        created_at       = NOW()
+    `, [today, totalRevenue, totalCost, grossProfit, grossProfitPct, qty]);
+    console.log('[Profitability] Snapshot saved for', today);
+  } catch (e) {
+    console.error('[Profitability] Snapshot save error:', e.message);
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   GET /api/profitability/daily
+   ══════════════════════════════════════════════════════════════ */
+router.get('/daily', verifyToken, async (req, res) => {
+  try {
+    const today = new Date();
+    const year  = today.getFullYear();
+    const month = today.getMonth();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+    const workingDaysElapsed = countWorkingDays(year, month, 1, today.getDate());
+    const totalWorkingDays   = countWorkingDays(year, month, 1, daysInMonth);
+
+    // Snapshots for current month with daily increment via LAG
+    const { rows } = await pool.query(`
+      SELECT
+        snapshot_date,
+        total_revenue,
+        total_cost,
+        gross_profit,
+        gross_profit_pct,
+        qty,
+        ROUND(
+          total_revenue - LAG(total_revenue) OVER (ORDER BY snapshot_date),
+          2
+        ) AS daily_revenue,
+        ROUND(
+          gross_profit - LAG(gross_profit) OVER (ORDER BY snapshot_date),
+          2
+        ) AS daily_gross_profit
+      FROM profitability_snapshots
+      WHERE snapshot_date >= date_trunc('month', CURRENT_DATE)
+      ORDER BY snapshot_date DESC
+    `);
+
+    res.json({ snapshots: rows, workingDaysElapsed, totalWorkingDays });
+  } catch (err) {
+    console.error('[Profitability/daily]', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 /* ══════════════════════════════════════════════════════════════
    GET /api/profitability
    ══════════════════════════════════════════════════════════════ */
@@ -311,6 +391,7 @@ router.get('/', verifyToken, async (req, res) => {
 
     _cache = { data, fetchedAt: Date.now() };
     console.log(`[Profitability] Parsed ${data.groups.length} groups`);
+    saveSnapshot(data); // fire-and-forget daily snapshot
     res.json({ ...data, fromCache: false, fetchedAt: Date.now() });
 
   } catch (err) {

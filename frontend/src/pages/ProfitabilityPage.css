@@ -294,12 +294,168 @@
 .prf-dot.prf-gp-low  { background: #bf6000; }
 .prf-dot.prf-gp-neg  { background: #c62828; }
 
+/* ── Daily Performance Card ──────────────────────── */
+.prf-daily-card {
+  background: #fff;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-card);
+  overflow: hidden;
+}
+.prf-daily-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: var(--color-bg-alt);
+  border-bottom: 1px solid var(--color-border);
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.prf-daily-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+}
+.prf-daily-days {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+/* Progress bar */
+.prf-progress-wrap {
+  position: relative;
+  height: 6px;
+  background: var(--color-border);
+  overflow: visible;
+}
+.prf-progress-bar {
+  height: 100%;
+  background: var(--color-brand-green);
+  transition: width 0.4s ease;
+  border-radius: 0 3px 3px 0;
+}
+.prf-progress-label {
+  position: absolute;
+  left: 8px;
+  top: 8px;
+  font-size: 10px;
+  color: var(--color-text-muted);
+}
+
+/* Daily KPI row */
+.prf-daily-kpi-row {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid var(--color-border);
+}
+.prf-daily-kpi {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  padding: 14px 16px;
+  border-left: 1px solid var(--color-border);
+}
+.prf-daily-kpi:last-child { border-left: 0; }
+.prf-daily-kpi-icon {
+  width: 32px; height: 32px;
+  border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.prf-daily-kpi-val {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--color-text-primary);
+  font-family: var(--font-en);
+  line-height: 1.2;
+}
+.prf-daily-kpi-lbl {
+  font-size: 10px;
+  color: var(--color-text-muted);
+  margin-top: 2px;
+}
+
+/* Snapshots table */
+.prf-daily-table-wrap { overflow-x: auto; }
+.prf-daily-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+  direction: rtl;
+}
+.prf-daily-table thead tr { background: var(--color-bg-alt); }
+.prf-daily-table th {
+  padding: 9px 12px;
+  text-align: center;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  border-bottom: 1px solid var(--color-border);
+  white-space: nowrap;
+}
+.prf-daily-table tbody tr { border-bottom: 1px solid var(--color-border); }
+.prf-daily-table tbody tr:last-child { border-bottom: 0; }
+.prf-daily-table tbody tr:hover { background: var(--color-bg-alt); }
+
+.prf-daily-today { background: #f0f7ff !important; }
+.prf-daily-today:hover { background: #e5f0ff !important; }
+
+.prf-daily-date {
+  padding: 9px 12px;
+  text-align: right;
+  white-space: nowrap;
+  color: var(--color-text-secondary);
+  font-size: 12px;
+}
+.prf-daily-num {
+  padding: 9px 12px;
+  text-align: center;
+  font-family: var(--font-en);
+  white-space: nowrap;
+}
+.prf-today-badge {
+  display: inline-block;
+  background: var(--color-brand-green);
+  color: #fff;
+  font-size: 9px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  margin-left: 5px;
+  vertical-align: middle;
+}
+
+/* Empty state */
+.prf-daily-empty {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 20px 16px;
+  font-size: 13px;
+  color: var(--color-text-muted);
+}
+
 /* ── Responsive ──────────────────────────────────── */
 @media (max-width: 700px) {
   .prf-kpi-row { gap: 8px; }
   .prf-kpi { min-width: 140px; padding: 10px 12px; }
   .prf-th-item { min-width: 160px; }
   .prf-th-desc { min-width: 120px; }
+}
+
+@media (max-width: 700px) {
+  .prf-daily-kpi-row { flex-wrap: wrap; }
+  .prf-daily-kpi {
+    flex: 1 1 calc(50% - 1px);
+    min-width: 0;
+  }
 }
 
 @media (max-width: 480px) {

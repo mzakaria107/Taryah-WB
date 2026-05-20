@@ -318,6 +318,7 @@ router.get('/daily', verifyToken, async (req, res) => {
         gross_profit,
         gross_profit_pct,
         qty,
+        EXTRACT(DAY FROM snapshot_date)::int AS snap_day,
         ROUND(total_revenue - COALESCE(prev_revenue, 0), 2) AS daily_revenue,
         ROUND(gross_profit  - COALESCE(prev_gross_profit, 0), 2) AS daily_gross_profit,
         ROUND(qty           - COALESCE(prev_qty, 0)::numeric, 0)::int AS daily_qty
@@ -325,6 +326,11 @@ router.get('/daily', verifyToken, async (req, res) => {
       WHERE snapshot_date >= date_trunc('month', $1::date)
       ORDER BY snapshot_date DESC
     `, [`${year}-${String(month).padStart(2,'0')}-01`]);
+
+    // Working days up to the latest snapshot date (not today), used for accurate daily averages
+    const workingDaysWithData = rows.length > 0
+      ? countWorkingDays(year, jsMonth, 1, rows[0].snap_day)
+      : workingDaysElapsed;
 
     // Available months list for the month picker
     const { rows: months } = await pool.query(`
@@ -336,7 +342,7 @@ router.get('/daily', verifyToken, async (req, res) => {
       LIMIT 24
     `);
 
-    res.json({ snapshots: rows, workingDaysElapsed, totalWorkingDays, year, month, availableMonths: months });
+    res.json({ snapshots: rows, workingDaysElapsed, workingDaysWithData, totalWorkingDays, year, month, availableMonths: months });
   } catch (err) {
     console.error('[Profitability/daily]', err.message);
     res.status(500).json({ error: err.message });

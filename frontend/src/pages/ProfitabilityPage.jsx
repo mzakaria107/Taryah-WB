@@ -118,9 +118,12 @@ function DailyPerformanceSection({ selectedYear, selectedMonth, onMonthChange, o
   );
 
   const {
-    snapshots = [], workingDaysElapsed = 0, totalWorkingDays = 1,
+    snapshots = [], workingDaysElapsed = 0, workingDaysWithData = 0, totalWorkingDays = 1,
     availableMonths = [], year: resYear, month: resMonth,
   } = dailyData || {};
+
+  // Use days up to the latest snapshot date (not today) so average reflects actual data coverage
+  const avgDenominator = workingDaysWithData || workingDaysElapsed;
 
   const now = new Date();
   const isCurrentMonth = resYear === now.getFullYear() && resMonth === (now.getMonth() + 1);
@@ -133,9 +136,9 @@ function DailyPerformanceSection({ selectedYear, selectedMonth, onMonthChange, o
   const cumGP         = parseFloat(latest?.gross_profit    || 0);
   const cumGPPct      = parseFloat(latest?.gross_profit_pct || 0);
 
-  const dailyAvgRevenue  = workingDaysElapsed > 0 ? cumRevenue / workingDaysElapsed : 0;
+  const dailyAvgRevenue  = avgDenominator > 0 ? cumRevenue / avgDenominator : 0;
   const projectedRevenue = dailyAvgRevenue * totalWorkingDays;
-  const dailyAvgGP       = workingDaysElapsed > 0 ? cumGP / workingDaysElapsed : 0;
+  const dailyAvgGP       = avgDenominator > 0 ? cumGP / avgDenominator : 0;
   const timePct          = totalWorkingDays > 0 ? (workingDaysElapsed / totalWorkingDays) * 100 : 0;
 
   return (
@@ -172,7 +175,7 @@ function DailyPerformanceSection({ selectedYear, selectedMonth, onMonthChange, o
           )}
           <div className="prf-daily-days">
             <CalendarDays size={13}/>
-            <span>{workingDaysElapsed} من {totalWorkingDays} يوم عمل</span>
+            <span>{avgDenominator} من {totalWorkingDays} يوم عمل</span>
           </div>
         </div>
       </div>

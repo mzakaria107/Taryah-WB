@@ -27,7 +27,7 @@ export default function Login() {
         {/* Logo */}
         <div className="login-logo-wrap">
           <img
-            src="/logo.png"
+            src="/Logo.png"
             alt="طرية"
             className="login-logo"
             onError={(e) => {

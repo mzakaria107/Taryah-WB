@@ -99,8 +99,8 @@ function DataRow({ row, isGroup, isExpanded, onToggle, depth = 0 }) {
 
 /* ── Trend Sparkline (SVG line chart) ─────────────────────── */
 function TrendSparkline({ data, labels, color, hov, onHov, formatVal }) {
-  const W = 300, H = 68;
-  const pad = { t: 8, b: 20, l: 8, r: 8 };  // bottom padding reserves space for labels below dots
+  const W = 300, H = 70;
+  const pad = { t: 16, b: 20, l: 8, r: 8 };  // top padding for current-value label above line; bottom for hover labels
   const iW = W - pad.l - pad.r;
   const iH = H - pad.t - pad.b;
   const n   = data.length;
@@ -126,7 +126,7 @@ function TrendSparkline({ data, labels, color, hov, onHov, formatVal }) {
   return (
     <svg
       viewBox={`0 0 ${W} ${H}`}
-      width="100%" height="68"
+      width="100%" height="70"
       preserveAspectRatio="none"
       className="prf-spark-svg"
       onMouseLeave={() => onHov(null)}
@@ -152,14 +152,17 @@ function TrendSparkline({ data, labels, color, hov, onHov, formatVal }) {
           opacity="0.45" vectorEffect="non-scaling-stroke"/>
       )}
 
-      {/* Value label — always BELOW the dot to avoid overlapping the trend line */}
+      {/* Value labels:
+            - Current (latest) point → always ABOVE the dot
+            - Hovered point          → always BELOW the dot */}
       {pts.map((p) => {
         const isLatest = p.i === n - 1;
         const isHov    = hov === p.i;
         if (!isLatest && !isHov) return null;
         const lx  = Math.max(16, Math.min(W - 16, p.x));
-        // Place label below the dot; clamp so it stays inside the SVG
-        const ly  = Math.min(H - 3, p.y + 12);
+        const ly  = isLatest
+          ? Math.max(7, p.y - 8)          // above the dot, never clips top
+          : Math.min(H - 3, p.y + 12);    // below the dot, never clips bottom
         const txt = formatVal ? formatVal(p.v) : fmtNum(p.v);
         const fs  = isLatest ? 8 : 7.5;
         return (

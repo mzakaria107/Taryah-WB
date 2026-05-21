@@ -300,6 +300,20 @@ export default function CustomerDetailPage() {
             {fmtInt(filteredSummary.unpaid_count)}
           </span>
         </div>
+
+        {/* ── Reconciliation status card ── */}
+        <div className={`cd-kpi cd-kpi--recon ${(customer?.reconciliation_count || 0) > 0 ? 'cd-recon--ok' : 'cd-recon--missing'}`}>
+          <span className="cd-kpi-lbl">المطابقة</span>
+          <div className="cd-recon-status">
+            <span className="cd-recon-dot" />
+            <span className="cd-recon-label">
+              {(customer?.reconciliation_count || 0) > 0 ? 'مطابق' : 'غير مطابق'}
+            </span>
+          </div>
+          {(customer?.reconciliation_count || 0) > 0 && (
+            <span className="cd-recon-count">{customer.reconciliation_count} ملف</span>
+          )}
+        </div>
       </div>
 
       {/* ── Period filter chips ── */}
@@ -896,7 +910,10 @@ function ReconciliationTab({ customerId }) {
     staleTime: 30_000,
   });
 
-  const refresh = () => qc.invalidateQueries({ queryKey: ['reconciliations', customerId] });
+  const refresh = () => {
+    qc.invalidateQueries({ queryKey: ['reconciliations', customerId] });
+    qc.invalidateQueries({ queryKey: ['customer-detail', customerId] });
+  };
 
   const doUpload = async (file) => {
     if (!file) return;

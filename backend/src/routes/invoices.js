@@ -615,12 +615,18 @@ router.get('/customer/:customerId', verifyToken, applyRegionFilter, async (req, 
 
     const summary = sumRes.rows[0];
 
-    // Region name
-    let region_name_ar = null;
-    if (summary.region_id) {
-      const rRes = await pool.query('SELECT name_ar FROM regions WHERE id = $1', [summary.region_id]);
-      region_name_ar = rRes.rows[0]?.name_ar ?? null;
-    }
+    // Region name + reconciliation count (parallel)
+    const [rRes, reconRes] = await Promise.all([
+      summary.region_id
+        ? pool.query('SELECT name_ar FROM regions WHERE id = $1', [summary.region_id])
+        : Promise.resolve({ rows: [] }),
+      pool.query(
+        'SELECT COUNT(*) AS cnt FROM customer_reconciliations WHERE customer_id = $1',
+        [customerId]
+      ),
+    ]);
+    const region_name_ar       = rRes.rows[0]?.name_ar ?? null;
+    const reconciliation_count = parseInt(reconRes.rows[0]?.cnt || 0, 10);
 
     // All invoices for this customer (with filters, no pagination limit)
     // Use i. prefix for customer_id to avoid ambiguity with notes.customer_id
@@ -638,13 +644,14 @@ router.get('/customer/:customerId', verifyToken, applyRegionFilter, async (req, 
 
     res.json({
       customer: {
-        customer_id:     summary.customer_id,
-        customer_name:   summary.customer_name,
-        customer_name_en:summary.customer_name_en,
-        sales_rep_name:  summary.sales_rep_name,
-        route_id:        summary.route_id,
-        region_id:       summary.region_id,
+        customer_id:          summary.customer_id,
+        customer_name:        summary.customer_name,
+        customer_name_en:     summary.customer_name_en,
+        sales_rep_name:       summary.sales_rep_name,
+        route_id:             summary.route_id,
+        region_id:            summary.region_id,
         region_name_ar,
+        reconciliation_count,
       },
       summary: {
         invoice_count:   Number(summary.invoice_count),

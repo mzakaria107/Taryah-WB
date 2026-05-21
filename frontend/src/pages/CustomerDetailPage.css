@@ -132,15 +132,16 @@
 /* ── KPI bar ────────────────────────────────────── */
 .cd-kpi-bar {
   display: grid;
-  grid-template-columns: repeat(8, 1fr);
+  grid-template-columns: repeat(9, 1fr);
   background: #fff;
   border-radius: var(--radius-lg);
   border: 1px solid var(--color-border);
   box-shadow: var(--shadow-card);
   overflow: hidden;
 }
-@media (max-width: 900px)  { .cd-kpi-bar { grid-template-columns: repeat(4, 1fr); } }
-@media (max-width: 520px)  { .cd-kpi-bar { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 1100px) { .cd-kpi-bar { grid-template-columns: repeat(5, 1fr); } }
+@media (max-width: 700px)  { .cd-kpi-bar { grid-template-columns: repeat(3, 1fr); } }
+@media (max-width: 420px)  { .cd-kpi-bar { grid-template-columns: repeat(2, 1fr); } }
 
 .cd-kpi {
   display: flex;
@@ -678,4 +679,66 @@
 .recon-badge--missing {
   background: rgba(198,40,40,.08);
   color: var(--color-danger);
+}
+
+/* ── Reconciliation KPI status card ─────────────── */
+@keyframes cd-pulse-green {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(46,125,50,0.5); }
+  50%       { box-shadow: 0 0 0 8px rgba(46,125,50,0); }
+}
+@keyframes cd-pulse-red {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(198,40,40,0.5); }
+  50%       { box-shadow: 0 0 0 8px rgba(198,40,40,0); }
+}
+
+.cd-kpi--recon {
+  position: relative;
+}
+
+.cd-recon--ok {
+  background: rgba(46,125,50,0.06);
+}
+.cd-recon--missing {
+  background: rgba(198,40,40,0.05);
+}
+
+.cd-recon-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  justify-content: center;
+}
+
+.cd-recon-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.cd-recon--ok    .cd-recon-dot {
+  background: var(--color-brand-green);
+  animation: cd-pulse-green 1.8s ease-in-out infinite;
+}
+.cd-recon--missing .cd-recon-dot {
+  background: var(--color-danger);
+  animation: cd-pulse-red 1.8s ease-in-out infinite;
+}
+
+.cd-recon-label {
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1;
+}
+.cd-recon--ok    .cd-recon-label { color: var(--color-brand-green); }
+.cd-recon--missing .cd-recon-label { color: var(--color-danger); }
+
+.cd-recon-count {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--color-brand-green);
+  background: rgba(46,125,50,0.12);
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-family: var(--font-en);
+  direction: rtl;
 }

@@ -1,7 +1,7 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useRef } from 'react';
 import { useParams, useNavigate, useLocation, Navigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowRight, Download, FileText, BarChart2, MessageSquare, User, Trash2, CreditCard, ChevronDown, ChevronUp } from 'lucide-react';
+import { ArrowRight, Download, FileText, BarChart2, MessageSquare, User, Trash2, CreditCard, ChevronDown, ChevronUp, GitMerge, Upload, CheckCircle, AlertCircle, RefreshCw, Paperclip, Calendar } from 'lucide-react';
 import NotesCell from '../components/Dashboard/NotesCell';
 import { useNotes } from '../hooks/useNotes';
 import { useAuth } from '../context/AuthContext';
@@ -362,6 +362,12 @@ export default function CustomerDetailPage() {
         >
           <MessageSquare size={14} /> سجل الملاحظات
         </button>
+        <button
+          className={`cd-tab${tab === 'reconciliation' ? ' active' : ''}`}
+          onClick={() => setTab('reconciliation')}
+        >
+          <GitMerge size={14} /> مطابقة العميل
+        </button>
       </div>
 
       {/* ════ TAB: DETAIL ════ */}
@@ -450,6 +456,11 @@ export default function CustomerDetailPage() {
       {/* ════ TAB: NOTES HISTORY ════ */}
       {tab === 'history' && (
         <NotesHistoryTab customerId={customerId} />
+      )}
+
+      {/* ════ TAB: RECONCILIATION ════ */}
+      {tab === 'reconciliation' && (
+        <ReconciliationTab customerId={customerId} />
       )}
     </div>
   );
@@ -858,6 +869,216 @@ function PaymentsTab({ customerId }) {
               </tfoot>
             </table>
           </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ════════════════════════════════════════════════
+   RECONCILIATION TAB
+   ════════════════════════════════════════════════ */
+function ReconciliationTab({ customerId }) {
+  const { user }     = useAuth();
+  const qc           = useQueryClient();
+  const fileRef      = useRef(null);
+  const isAdmin      = user?.role === 'super_admin' || user?.role === 'it_admin';
+
+  const [phase,    setPhase]    = useState('idle');   // idle | uploading | success | error
+  const [errMsg,   setErrMsg]   = useState('');
+  const [pct,      setPct]      = useState(0);
+  const [notes,    setNotes]    = useState('');
+  const [delId,    setDelId]    = useState(null);
+
+  const { data: files = [], isLoading } = useQuery({
+    queryKey:  ['reconciliations', customerId],
+    queryFn:   () => client.get(`/reconciliations/${customerId}`).then(r => r.data),
+    staleTime: 30_000,
+  });
+
+  const refresh = () => qc.invalidateQueries({ queryKey: ['reconciliations', customerId] });
+
+  const doUpload = async (file) => {
+    if (!file) return;
+    setPhase('uploading'); setPct(0); setErrMsg('');
+    const form = new FormData();
+    form.append('file', file);
+    if (notes.trim()) form.append('notes', notes.trim());
+    try {
+      await client.post(`/reconciliations/upload/${customerId}`, form, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+        onUploadProgress: (e) => e.total && setPct(Math.round((e.loaded / e.total) * 100)),
+      });
+      setPhase('success');
+      setNotes('');
+      refresh();
+      // also refresh customer list badge
+      qc.invalidateQueries({ queryKey: ['customers-summary'] });
+    } catch (err) {
+      setErrMsg(err.response?.data?.error || err.message || 'فشل الرفع');
+      setPhase('error');
+    }
+  };
+
+  const handleChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    await doUpload(file);
+    if (fileRef.current) fileRef.current.value = '';
+  };
+
+  const handleDelete = async (id) => {
+    if (delId !== id) { setDelId(id); return; }
+    setDelId(null);
+    try {
+      await client.delete(`/reconciliations/${id}`);
+      refresh();
+      qc.invalidateQueries({ queryKey: ['customers-summary'] });
+    } catch (err) {
+      alert(err.response?.data?.error || 'فشل الحذف');
+    }
+  };
+
+  const fmtSize = (bytes) => {
+    if (!bytes) return '';
+    if (bytes < 1024)        return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
+
+  const fmtDT = (dt) => {
+    if (!dt) return '—';
+    return new Date(dt).toLocaleString('ar-SA', {
+      year: 'numeric', month: 'short', day: 'numeric',
+      hour: '2-digit', minute: '2-digit',
+    });
+  };
+
+  const getFileIcon = (mime, name) => {
+    if (mime?.includes('pdf') || name?.endsWith('.pdf')) return '📄';
+    if (mime?.includes('image') || /\.(jpg|jpeg|png|gif|webp)$/i.test(name)) return '🖼️';
+    if (/\.(xlsx|xls|csv)$/i.test(name)) return '📊';
+    if (/\.(docx|doc)$/i.test(name)) return '📝';
+    return '📎';
+  };
+
+  return (
+    <div className="cd-table-card">
+      {/* Header + upload */}
+      <div className="cd-table-toolbar">
+        <span className="cd-table-title">
+          <GitMerge size={15} />
+          مطابقة العميل
+          {files.length > 0 && <span className="cd-count-badge">{files.length}</span>}
+        </span>
+      </div>
+
+      {/* Upload area */}
+      <div className="recon-upload-area">
+        {phase === 'idle' || phase === 'success' ? (
+          <>
+            <div className="recon-upload-hint">
+              ارفع ملف مطابقة للعميل (PDF, Excel, صورة، إلخ — حتى 50 ميجابايت)
+            </div>
+            <div className="recon-upload-row">
+              <input
+                className="recon-notes-input"
+                placeholder="ملاحظة اختيارية…"
+                value={notes}
+                onChange={e => setNotes(e.target.value)}
+              />
+              <label className="recon-pick-btn">
+                <Paperclip size={14} />
+                اختر ملف
+                <input ref={fileRef} type="file" accept="*/*" onChange={handleChange} hidden />
+              </label>
+            </div>
+            {phase === 'success' && (
+              <div className="recon-success-msg">
+                <CheckCircle size={14} /> تم رفع الملف بنجاح
+                <button className="recon-again-btn" onClick={() => setPhase('idle')}>رفع آخر</button>
+              </div>
+            )}
+          </>
+        ) : phase === 'uploading' ? (
+          <div className="recon-progress">
+            <div className="spinner" style={{ width: 18, height: 18, flexShrink: 0 }} />
+            <div style={{ flex: 1 }}>
+              <div className="bar"><div className="bar-fill" style={{ width: `${pct}%` }} /></div>
+              <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 4 }}>
+                {pct}% — جاري رفع الملف…
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="recon-error-msg">
+            <AlertCircle size={14} />
+            <span>{errMsg}</span>
+            <button className="recon-again-btn" onClick={() => setPhase('idle')}>
+              <RefreshCw size={12} /> إعادة المحاولة
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Files list */}
+      {isLoading ? (
+        <div style={{ padding: 24, textAlign: 'center', color: 'var(--color-text-muted)' }}>
+          جاري التحميل…
+        </div>
+      ) : files.length === 0 ? (
+        <div className="recon-empty">
+          <GitMerge size={32} strokeWidth={1.2} />
+          <span>لم يتم رفع أي ملف مطابقة لهذا العميل بعد</span>
+        </div>
+      ) : (
+        <div className="recon-file-list">
+          {files.map(f => (
+            <div key={f.id} className="recon-file-row">
+              <span className="recon-file-icon">{getFileIcon(f.mime_type, f.file_name)}</span>
+
+              <div className="recon-file-info">
+                <span className="recon-file-name">{f.file_name}</span>
+                {f.notes && (
+                  <span className="recon-file-notes">{f.notes}</span>
+                )}
+              </div>
+
+              <div className="recon-file-meta">
+                <span className="recon-file-size">{fmtSize(f.file_size)}</span>
+                <span className="recon-file-date">
+                  <Calendar size={11} /> {fmtDT(f.uploaded_at)}
+                </span>
+                <span className="recon-file-user">
+                  <User size={11} /> {f.uploader_name || '—'}
+                </span>
+              </div>
+
+              <div className="recon-file-actions">
+                <a
+                  className="recon-dl-btn"
+                  href={`/api/reconciliations/download/${f.id}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  title="تنزيل"
+                >
+                  <Download size={14} />
+                </a>
+                {isAdmin && (
+                  delId === f.id ? (
+                    <span className="recon-del-confirm">
+                      <button className="notes-del-btn confirm" onClick={() => handleDelete(f.id)}>نعم</button>
+                      <button className="notes-del-btn cancel"  onClick={() => setDelId(null)}>لا</button>
+                    </span>
+                  ) : (
+                    <button className="notes-del-btn" onClick={() => handleDelete(f.id)} title="حذف">
+                      <Trash2 size={13} />
+                    </button>
+                  )
+                )}
+              </div>
+            </div>
+          ))}
         </div>
       )}
     </div>

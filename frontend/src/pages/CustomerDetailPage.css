@@ -496,3 +496,186 @@
   background: rgba(59,130,246,.12);
   color: #3b82f6;
 }
+
+/* ══ Reconciliation tab ══════════════════════════════ */
+.recon-upload-area {
+  padding: 14px 16px;
+  background: var(--color-bg-alt);
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-md);
+  margin: 0 0 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.recon-upload-hint {
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+.recon-upload-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.recon-notes-input {
+  flex: 1;
+  min-width: 160px;
+  padding: 8px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  background: #fff;
+  color: var(--color-text-primary);
+}
+.recon-notes-input:focus { outline: none; border-color: var(--color-brand-green); }
+.recon-pick-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  background: var(--color-brand-green);
+  color: #fff;
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: var(--transition-fast);
+}
+.recon-pick-btn:hover { background: var(--color-brand-green-dark); }
+.recon-progress {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.recon-success-msg {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--color-success);
+}
+.recon-error-msg {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--color-danger);
+}
+.recon-again-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--color-text-muted);
+  background: none;
+  border: 0;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  margin-right: auto;
+}
+
+/* File list */
+.recon-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 36px;
+  color: var(--color-text-muted);
+  font-size: 13px;
+}
+.recon-file-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+.recon-file-row {
+  display: grid;
+  grid-template-columns: 28px 1fr auto auto;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--color-border);
+  transition: background 150ms;
+}
+.recon-file-row:last-child { border-bottom: none; }
+.recon-file-row:hover { background: var(--color-bg-alt); }
+.recon-file-icon { font-size: 20px; }
+.recon-file-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.recon-file-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.recon-file-notes {
+  font-size: 11px;
+  color: var(--color-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.recon-file-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  align-items: flex-end;
+  font-size: 11px;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+.recon-file-size { font-family: var(--font-en); font-weight: 600; }
+.recon-file-date,
+.recon-file-user {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+.recon-file-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.recon-dl-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px; height: 30px;
+  border-radius: var(--radius-md);
+  color: var(--color-brand-green);
+  background: rgba(46,125,50,.08);
+  transition: var(--transition-fast);
+}
+.recon-dl-btn:hover { background: rgba(46,125,50,.18); }
+.recon-del-confirm {
+  display: flex;
+  gap: 4px;
+}
+
+/* Reconciliation badge in customer list */
+.recon-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  background: rgba(21,101,192,.1);
+  color: #1565c0;
+  white-space: nowrap;
+}
+.recon-badge--missing {
+  background: rgba(198,40,40,.08);
+  color: var(--color-danger);
+}

@@ -536,21 +536,31 @@ router.get('/customers', verifyToken, applyRegionFilter, async (req, res) => {
 
     // Attach current customer note from protected table (safe from file upload truncation)
     const customerIds = rows.map(r => r.customer_id).filter(Boolean);
-    let noteMap = {};
+    let noteMap  = {};
+    let reconMap = {};
     if (customerIds.length) {
-      const noteRes = await pool.query(
-        `SELECT customer_id, note_text
-         FROM customer_notes
-         WHERE customer_id = ANY($1::text[])`,
-        [customerIds]
-      );
-      noteRes.rows.forEach(r => { noteMap[r.customer_id] = r.note_text; });
+      const [noteRes, reconRes] = await Promise.all([
+        pool.query(
+          `SELECT customer_id, note_text FROM customer_notes
+           WHERE customer_id = ANY($1::text[])`,
+          [customerIds]
+        ),
+        pool.query(
+          `SELECT customer_id, COUNT(*) AS cnt FROM customer_reconciliations
+           WHERE customer_id = ANY($1::text[])
+           GROUP BY customer_id`,
+          [customerIds]
+        ),
+      ]);
+      noteRes.rows.forEach(r  => { noteMap[r.customer_id]  = r.note_text; });
+      reconRes.rows.forEach(r => { reconMap[r.customer_id] = parseInt(r.cnt, 10); });
     }
 
     const data = rows.map(r => ({
       ...r,
-      region_name_ar:  regionMap[r.region_id] || null,
-      customer_note:   noteMap[r.customer_id]  || '',
+      region_name_ar:       regionMap[r.region_id]  || null,
+      customer_note:        noteMap[r.customer_id]   || '',
+      reconciliation_count: reconMap[r.customer_id]  || 0,
     }));
 
     res.json({ data, total, page: parseInt(page, 10), limit: parseInt(limit, 10) });

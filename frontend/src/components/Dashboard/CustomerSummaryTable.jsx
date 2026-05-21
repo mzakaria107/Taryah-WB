@@ -1,7 +1,7 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
-import { ArrowUp, ArrowDown, Download } from 'lucide-react';
+import { ArrowUp, ArrowDown, Download, GitMerge } from 'lucide-react';
 import CustomerNoteCell from './CustomerNoteCell';
 import './CustomerSummaryTable.css';
 
@@ -77,7 +77,8 @@ const COLS = [
   { key: 'total_balance',   label: 'إجمالي الرصيد'       },
   { key: 'collection_rate', label: 'نسبة التحصيل'        },
   { key: 'unpaid_count',    label: 'تفاصيل الحالة'       },
-  { key: 'customer_note',   label: 'ملاحظات',  noSort: true },
+  { key: 'customer_note',        label: 'ملاحظات',  noSort: true },
+  { key: 'reconciliation_count', label: 'مطابقة',   noSort: true },
 ];
 
 /* ── Export helper (fetch → blob → anchor) ───────── */
@@ -241,6 +242,20 @@ export default function CustomerSummaryTable({
                     initialText={row.customer_note || ''}
                     onSaved={onNoteSaved}
                   />
+                </td>
+
+                {/* Reconciliation badge */}
+                <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
+                  {Number(row.reconciliation_count) > 0 ? (
+                    <span className="recon-badge" title={`${row.reconciliation_count} ملف مطابقة`}>
+                      <GitMerge size={10} />
+                      {row.reconciliation_count}
+                    </span>
+                  ) : (
+                    <span className="recon-badge recon-badge--missing" title="لا يوجد ملف مطابقة">
+                      —
+                    </span>
+                  )}
                 </td>
               </tr>
             ))}

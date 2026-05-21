@@ -148,3 +148,22 @@
 .chip-btn:hover { border-color: var(--color-brand-green); color: var(--color-brand-green); }
 .chip-btn.gold  { border-color: rgba(161,121,3,0.35); color: #7c6200; background: #fffde7; }
 .chip-btn.gold:hover { background: #fff9c4; border-color: #c6a800; }
+
+/* Reconciliation badge */
+.recon-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  background: rgba(21,101,192,.10);
+  color: #1565c0;
+}
+.recon-badge--missing {
+  background: transparent;
+  color: var(--color-border);
+  font-size: 13px;
+  font-weight: 400;
+}

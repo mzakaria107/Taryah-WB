@@ -10,9 +10,10 @@ import client from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import './SalesReportPage.css';
 
-const ADMIN_ROLES      = ['super_admin', 'it_admin'];
-const FULL_VIEW_ROLES  = ['super_admin', 'it_admin', 'sales_manager', 'top_management'];
-const TYPE_FILTER_KEY  = 'sales_report_item_types';
+const ADMIN_ROLES        = ['super_admin', 'it_admin'];
+const FULL_VIEW_ROLES    = ['super_admin', 'it_admin', 'sales_manager', 'top_management'];
+const TYPE_FILTER_KEY    = 'sales_report_item_types';
+const REGION_FILTER_KEY  = 'sales_report_regions';
 
 /* ── Constants ───────────────────────────────────────────────── */
 const WAREHOUSE_NAME = 'مخزن دجاج حي';
@@ -344,6 +345,61 @@ function SalesContent({ period }) {
     }
   }
 
+  /* ── Region filter (server-persisted, admin-only) ───────────── */
+  const { data: savedRegions = [] } = useQuery({
+    queryKey: ['sales-region-filter'],
+    queryFn:  () => client.get(`/settings/${REGION_FILTER_KEY}`)
+                    .then(r => Array.isArray(r.data?.value) ? r.data.value : []),
+    staleTime: Infinity,
+  });
+
+  const [regionFilterOpen, setRegionFilterOpen] = useState(false);
+  const [draftRegions,     setDraftRegions]     = useState([]);
+  const [regionSaving,     setRegionSaving]     = useState(false);
+  const regionFilterRef = useRef(null);
+
+  useEffect(() => {
+    if (!regionFilterOpen) return;
+    function handleClick(e) {
+      if (regionFilterRef.current && !regionFilterRef.current.contains(e.target)) {
+        setRegionFilterOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [regionFilterOpen]);
+
+  function openRegionPanel() {
+    setDraftRegions([...savedRegions]);
+    setRegionFilterOpen(true);
+  }
+
+  function toggleDraftRegion(r) {
+    setDraftRegions(prev => prev.includes(r) ? prev.filter(x => x !== r) : [...prev, r]);
+  }
+
+  async function saveRegionFilter() {
+    setRegionSaving(true);
+    try {
+      await client.put(`/settings/${REGION_FILTER_KEY}`, { value: draftRegions });
+      queryClient.setQueryData(['sales-region-filter'], draftRegions);
+    } finally {
+      setRegionSaving(false);
+      setRegionFilterOpen(false);
+    }
+  }
+
+  async function resetRegionFilter() {
+    setRegionSaving(true);
+    try {
+      await client.put(`/settings/${REGION_FILTER_KEY}`, { value: [] });
+      queryClient.setQueryData(['sales-region-filter'], []);
+    } finally {
+      setRegionSaving(false);
+      setRegionFilterOpen(false);
+    }
+  }
+
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: [queryKey],
     queryFn:  fetchFn,
@@ -378,6 +434,11 @@ function SalesContent({ period }) {
       ? rawRegions.filter(r => !r.regionName.includes('مخزن'))
       : rawRegions,
   [rawRegions, shouldExcludeWarehouse]);
+
+  /* ── All available regions (for admin panel) ────────────────── */
+  const allRegions = useMemo(() =>
+    warehouseFiltered.map(r => r.regionName).sort(),
+  [warehouseFiltered]);
 
   /* ── All available item types (for admin panel) ─────────────── */
   const allTypes = useMemo(() => {
@@ -419,7 +480,12 @@ function SalesContent({ period }) {
   const regions = useMemo(() => {
     let result = warehouseFiltered;
 
-    // Region filter
+    // Saved-regions filter (server-persisted, admin-only — empty = show all)
+    if (savedRegions.length > 0) {
+      result = result.filter(r => savedRegions.includes(r.regionName));
+    }
+
+    // Per-session region dropdown filter
     if (filterRegion) result = result.filter(r => r.regionName === filterRegion);
 
     // Month / Year filter — rebuild aggregates per rep/region
@@ -477,7 +543,7 @@ function SalesContent({ period }) {
     }
 
     return result;
-  }, [warehouseFiltered, filterRegion, filterMonth, filterYear, savedTypes]);
+  }, [warehouseFiltered, savedRegions, filterRegion, filterMonth, filterYear, savedTypes]);
 
   /* ── Step 4: KPIs always reflect visible filtered regions ────── */
   const kpi = useMemo(() => {
@@ -511,6 +577,76 @@ function SalesContent({ period }) {
             {excludeWarehouse ? 'مخزن دجاج حي: مستثنى' : 'مخزن دجاج حي: مُدرج'}
           </button>
         )}
+
+        {/* Region filter button — admin sees edit panel, others see passive badge */}
+        <div className="srp-type-filter-wrap" ref={regionFilterRef}>
+          {isAdmin ? (
+            <button
+              className={`srp-btn srp-btn--region${savedRegions.length ? ' srp-btn--region-active' : ''}`}
+              onClick={openRegionPanel}
+            >
+              <MapPin size={14}/>
+              فلتر المناطق
+              {savedRegions.length > 0 && (
+                <span className="srp-type-badge-count">{savedRegions.length}</span>
+              )}
+            </button>
+          ) : (
+            savedRegions.length > 0 && (
+              <span className="srp-type-passive-badge srp-type-passive-badge--region">
+                <MapPin size={12}/> {savedRegions.length} منطقة مفعّلة
+              </span>
+            )
+          )}
+
+          {/* Multi-select panel (admin only) */}
+          {regionFilterOpen && isAdmin && (
+            <div className="srp-type-panel">
+              <div className="srp-type-panel-hdr">
+                <MapPin size={14}/>
+                <span>اختر المناطق المعروضة</span>
+                <button className="srp-type-panel-close" onClick={() => setRegionFilterOpen(false)}>
+                  <X size={14}/>
+                </button>
+              </div>
+              <p className="srp-type-panel-hint">يُطبَّق على جميع المستخدمين · فارغ = الكل</p>
+
+              <div className="srp-type-list">
+                <label className="srp-type-item srp-type-item--all">
+                  <input
+                    type="checkbox"
+                    checked={draftRegions.length === 0}
+                    onChange={() => setDraftRegions([])}
+                    className="srp-type-checkbox"
+                  />
+                  <span className="srp-type-label">الكل (بدون فلتر)</span>
+                </label>
+                <div className="srp-type-divider"/>
+                {allRegions.map(reg => (
+                  <label key={reg} className="srp-type-item">
+                    <input
+                      type="checkbox"
+                      checked={draftRegions.includes(reg)}
+                      onChange={() => toggleDraftRegion(reg)}
+                      className="srp-type-checkbox"
+                    />
+                    <span className="srp-type-dot" style={{ background: '#7c3aed' }}/>
+                    <span className="srp-type-label">📍 {reg}</span>
+                  </label>
+                ))}
+              </div>
+
+              <div className="srp-type-panel-footer">
+                <button className="srp-type-save" onClick={saveRegionFilter} disabled={regionSaving}>
+                  <Check size={13}/> {regionSaving ? 'جارٍ الحفظ…' : 'حفظ للجميع'}
+                </button>
+                <button className="srp-type-reset" onClick={resetRegionFilter} disabled={regionSaving}>
+                  إظهار الكل
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
 
         {/* Type filter button — admin sees edit panel, others see passive badge */}
         <div className="srp-type-filter-wrap" ref={typeFilterRef}>

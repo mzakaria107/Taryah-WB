@@ -629,6 +629,28 @@
   text-align: left;
 }
 
+/* ── Region filter button ────────────────────────────────────── */
+.srp-btn--region {
+  background: #f8fafc;
+  color: #475569;
+  border: 1.5px solid #e2e8f0;
+  position: relative;
+}
+.srp-btn--region:hover { background: #f1f5f9; color: #1e293b; }
+
+.srp-btn--region-active {
+  background: #f5f3ff;
+  color: #6d28d9;
+  border-color: #c4b5fd;
+}
+.srp-btn--region-active:hover { background: #ede9fe; }
+
+.srp-type-passive-badge--region {
+  background: #f5f3ff;
+  color: #6d28d9;
+  border-color: #c4b5fd;
+}
+
 /* ── Type filter button ──────────────────────────────────────── */
 .srp-btn--type {
   background: #f8fafc;

@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { RefreshCw, ChevronDown, ChevronLeft, Printer, TrendingUp, Users, MapPin, Package, RotateCcw, Award, EyeOff } from 'lucide-react';
+import { RefreshCw, ChevronDown, ChevronLeft, Printer, TrendingUp, Users, MapPin, Package, RotateCcw, Award, EyeOff, BarChart2 } from 'lucide-react';
 import client from '../api/client';
 import './SalesReportPage.css';
 
@@ -128,6 +128,167 @@ function RegionBlock({ region, rank }) {
         <RepBlock key={rep.repName} rep={rep} defaultOpen={region.reps.length === 1} />
       ))}
     </>
+  );
+}
+
+/* ── Performance Section ─────────────────────────────────────── */
+function PerfSection({ regions }) {
+  const [open, setOpen] = useState(true);
+
+  /* enriched regions + per-rep breakdown */
+  const enriched = useMemo(() => regions.map(region => {
+    const allItems    = region.reps.flatMap(r => r.items);
+    const grossQty    = allItems.filter(i => i.qty   > 0).reduce((s,i) => s + i.qty,   0);
+    const grossSales  = allItems.filter(i => i.total > 0).reduce((s,i) => s + i.total, 0);
+    const returnsAmt  = Math.abs(allItems.filter(i => i.total < 0).reduce((s,i) => s + i.total, 0));
+
+    const reps = region.reps.map(rep => {
+      const posItems  = rep.items.filter(i => i.total > 0);
+      const negItems  = rep.items.filter(i => i.total < 0);
+      const repGross  = posItems.reduce((s,i) => s + i.total, 0);
+      const repGrossQ = posItems.reduce((s,i) => s + i.qty,   0);
+      const repRet    = Math.abs(negItems.reduce((s,i) => s + i.total, 0));
+      const repRetQ   = Math.abs(negItems.reduce((s,i) => s + i.qty,   0));
+      return { ...rep, grossSales: repGross, grossQty: repGrossQ, returns: repRet, returnsQty: repRetQ };
+    });
+
+    return { ...region, grossQty, grossSales, returns: returnsAmt, reps };
+  }), [regions]);
+
+  /* best region by gross qty and by avg price */
+  const bestByQty   = useMemo(() =>
+    [...enriched].sort((a,b) => b.grossQty   - a.grossQty  )[0], [enriched]);
+  const bestByPrice = useMemo(() =>
+    [...enriched].filter(r => r.avgPrice > 0).sort((a,b) => b.avgPrice - a.avgPrice)[0], [enriched]);
+
+  /* scale bar: relative to the highest-grossing rep across all regions */
+  const maxRepGross = useMemo(() =>
+    Math.max(...enriched.flatMap(r => r.reps).map(r => r.grossSales), 1), [enriched]);
+
+  if (!regions.length) return null;
+
+  return (
+    <div className="srp-perf-wrap">
+      {/* Section header */}
+      <div className="srp-perf-hdr" onClick={() => setOpen(v => !v)}>
+        <span className="srp-perf-hdr-title">
+          <BarChart2 size={16}/> مؤشر أداء المناديب بالمناطق
+        </span>
+        <span className="srp-perf-hdr-toggle">
+          {open ? <ChevronDown size={15}/> : <ChevronLeft size={15}/>}
+        </span>
+      </div>
+
+      {open && (
+        <>
+          {/* Best-region highlights */}
+          <div className="srp-perf-highlights">
+            {bestByQty && (
+              <div className="srp-perf-hl srp-perf-hl--qty">
+                <span className="srp-perf-hl-icon">🏆</span>
+                <div>
+                  <div className="srp-perf-hl-lbl">أفضل منطقة — الكمية</div>
+                  <div className="srp-perf-hl-name">{bestByQty.regionName}</div>
+                  <div className="srp-perf-hl-sub">{fmt(bestByQty.grossQty)} قطعة مُباعة</div>
+                </div>
+              </div>
+            )}
+            {bestByPrice && (
+              <div className="srp-perf-hl srp-perf-hl--price">
+                <span className="srp-perf-hl-icon">💰</span>
+                <div>
+                  <div className="srp-perf-hl-lbl">أفضل منطقة — متوسط السعر</div>
+                  <div className="srp-perf-hl-name">{bestByPrice.regionName}</div>
+                  <div className="srp-perf-hl-sub">{fmtC(bestByPrice.avgPrice)} ر.س / وحدة</div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Reps table grouped by region */}
+          <div className="srp-perf-table-wrap">
+            <table className="srp-perf-table">
+              <thead>
+                <tr className="srp-perf-thead">
+                  <th className="srp-pth srp-pth-name">المندوب</th>
+                  <th className="srp-pth srp-pth-num">المبيعات</th>
+                  <th className="srp-pth srp-pth-num srp-pth-ret">المرتجعات</th>
+                  <th className="srp-pth srp-pth-num srp-pth-net">الصافي</th>
+                  <th className="srp-pth srp-pth-num">الكمية</th>
+                  <th className="srp-pth srp-pth-num srp-pth-avg">متوسط السعر</th>
+                  <th className="srp-pth srp-pth-bar">الأداء النسبي</th>
+                </tr>
+              </thead>
+              <tbody>
+                {enriched.map(region => (
+                  <React.Fragment key={region.regionName}>
+                    {/* Region separator */}
+                    <tr className="srp-perf-region-sep">
+                      <td colSpan={7}>
+                        <span className="srp-perf-region-label">
+                          📍 {region.regionName}
+                        </span>
+                        <span className="srp-perf-region-stat">
+                          {fmt(region.grossQty)} قطعة · {fmtC(region.grossSales)} ر.س
+                        </span>
+                        {region.regionName === bestByQty?.regionName && (
+                          <span className="srp-perf-badge srp-perf-badge--qty">🏆 أعلى كمية</span>
+                        )}
+                        {region.regionName === bestByPrice?.regionName && (
+                          <span className="srp-perf-badge srp-perf-badge--price">💰 أعلى سعر</span>
+                        )}
+                      </td>
+                    </tr>
+                    {/* Rep rows */}
+                    {region.reps.map(rep => {
+                      const barPct = Math.min(100, maxRepGross > 0 ? (rep.grossSales / maxRepGross) * 100 : 0);
+                      const isNegRep = rep.total < 0;
+                      return (
+                        <tr key={`${region.regionName}-${rep.repName}`} className={`srp-perf-rep${isNegRep ? ' srp-perf-rep--neg' : ''}`}>
+                          <td className="srp-ptd srp-ptd-name">
+                            <span className="srp-perf-avatar">{rep.repName.charAt(0)}</span>
+                            {rep.repName}
+                          </td>
+                          <td className="srp-ptd srp-ptd-num">{fmtC(rep.grossSales)}</td>
+                          <td className="srp-ptd srp-ptd-num srp-ptd-ret">
+                            {rep.returns > 0
+                              ? <span className="srp-neg">−{fmtC(rep.returns)}</span>
+                              : <span className="srp-muted">—</span>}
+                          </td>
+                          <td className="srp-ptd srp-ptd-num srp-ptd-net">
+                            <NetVal n={rep.total} />
+                          </td>
+                          <td className="srp-ptd srp-ptd-num">
+                            <NetVal n={rep.qty} isQty />
+                          </td>
+                          <td className="srp-ptd srp-ptd-num srp-ptd-avg">
+                            {rep.qty !== 0 ? fmtC(Math.abs(rep.avgPrice ?? 0)) : '—'}
+                          </td>
+                          <td className="srp-ptd srp-ptd-bar">
+                            <div className="srp-perf-bar-row">
+                              <div className="srp-perf-bar-track">
+                                <div
+                                  className="srp-perf-bar-fill"
+                                  style={{
+                                    width: `${barPct}%`,
+                                    background: isNegRep ? '#dc2626' : barPct > 66 ? '#059669' : barPct > 33 ? '#d97706' : '#3b82f6',
+                                  }}
+                                />
+                              </div>
+                              <span className="srp-perf-bar-pct">{barPct.toFixed(0)}%</span>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </React.Fragment>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+    </div>
   );
 }
 
@@ -279,6 +440,11 @@ export default function SalesReportPage() {
           loading={isLoading}
         />
       </div>
+
+      {/* Performance Section */}
+      {!isLoading && regions.length > 0 && (
+        <PerfSection regions={regions} />
+      )}
 
       {/* Matrix Table */}
       <div className="srp-table-wrap">

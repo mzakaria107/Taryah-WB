@@ -784,7 +784,7 @@ function SupervisorsTab({ regions }) {
 /* ═══════════════════════════════════════════════════════
    TASKS TAB
    ═══════════════════════════════════════════════════════ */
-function TasksTab({ regions, supervisors }) {
+function TasksTab({ regions, supervisors, assignees = [] }) {
   const { user } = useAuth();
   const admin = isAdmin(user);
   const qc = useQueryClient();
@@ -972,7 +972,7 @@ export default function SalesTasksPage() {
         </div>
       </div>
 
-      {tab === 'tasks' && <TasksTab regions={regions} supervisors={supervisors} />}
+      {tab === 'tasks' && <TasksTab regions={regions} supervisors={supervisors} assignees={assignees} />}
       {tab === 'supervisors' && <SupervisorsTab regions={regions} />}
     </div>
   );

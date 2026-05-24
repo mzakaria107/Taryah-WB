@@ -1,0 +1,345 @@
+/* ── SettingsPage ──────────────────────────────────── */
+
+.sp-page {
+  max-width: 780px;
+  margin: 0 auto;
+  padding: 24px 20px 60px;
+  font-family: var(--font-ar);
+  direction: rtl;
+}
+
+/* ── Header ── */
+.sp-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 28px;
+}
+
+.sp-header-icon {
+  color: var(--color-brand-blue, #1d4ed8);
+  flex-shrink: 0;
+}
+
+.sp-title {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--color-text-primary, #111827);
+  margin: 0 0 4px;
+}
+
+.sp-subtitle {
+  font-size: 13px;
+  color: var(--color-text-secondary, #6b7280);
+  margin: 0;
+}
+
+/* ── Card ── */
+.sp-card {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 14px;
+  padding: 24px;
+  margin-bottom: 20px;
+  box-shadow: 0 1px 6px rgba(0,0,0,0.06);
+}
+
+.sp-card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+  font-size: 14px;
+  color: #374151;
+  margin-bottom: 20px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+/* ── Form grid ── */
+.sp-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.sp-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.sp-field--wide {
+  grid-column: 1 / -1;
+}
+
+.sp-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #4b5563;
+}
+
+.sp-input {
+  padding: 9px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 14px;
+  font-family: var(--font-en, monospace);
+  color: #111827;
+  background: #fafafa;
+  outline: none;
+  transition: border-color 0.15s;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.sp-input:focus {
+  border-color: #1d4ed8;
+  background: #fff;
+}
+
+.sp-hint {
+  font-size: 11px;
+  color: #9ca3af;
+  margin-top: 2px;
+}
+
+/* ── Password field ── */
+.sp-pass-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.sp-input--pass {
+  padding-left: 38px;
+}
+
+.sp-pass-eye {
+  position: absolute;
+  left: 10px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #9ca3af;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  transition: color 0.15s;
+}
+
+.sp-pass-eye:hover {
+  color: #374151;
+}
+
+/* ── SSL Toggle ── */
+.sp-field--toggle {
+  justify-content: flex-start;
+}
+
+.sp-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  user-select: none;
+  padding: 8px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background: #fafafa;
+  transition: border-color 0.15s, background 0.15s;
+  width: fit-content;
+}
+
+.sp-toggle:hover {
+  border-color: #9ca3af;
+}
+
+.sp-toggle--on {
+  border-color: #1d4ed8;
+  background: #eff6ff;
+}
+
+.sp-toggle-thumb {
+  width: 36px;
+  height: 20px;
+  border-radius: 10px;
+  background: #d1d5db;
+  position: relative;
+  flex-shrink: 0;
+  transition: background 0.2s;
+}
+
+.sp-toggle-thumb::after {
+  content: '';
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #fff;
+  top: 3px;
+  left: 3px;
+  transition: transform 0.2s;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
+
+.sp-toggle--on .sp-toggle-thumb {
+  background: #1d4ed8;
+}
+
+.sp-toggle--on .sp-toggle-thumb::after {
+  transform: translateX(16px);
+}
+
+.sp-toggle-label {
+  font-size: 13px;
+  color: #374151;
+  font-family: var(--font-en, monospace);
+}
+
+/* ── Test result ── */
+.sp-test-result {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  margin-top: 16px;
+}
+
+.sp-test-result--ok {
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  color: #166534;
+}
+
+.sp-test-result--err {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #991b1b;
+  word-break: break-word;
+}
+
+/* ── Actions ── */
+.sp-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 20px;
+  flex-wrap: wrap;
+}
+
+.sp-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 20px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  transition: opacity 0.15s, background 0.15s;
+  font-family: inherit;
+}
+
+.sp-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.sp-btn--test {
+  background: #f3f4f6;
+  color: #374151;
+  border: 1px solid #d1d5db;
+}
+
+.sp-btn--test:hover:not(:disabled) {
+  background: #e5e7eb;
+}
+
+.sp-btn--save {
+  background: #1d4ed8;
+  color: #fff;
+}
+
+.sp-btn--save:hover:not(:disabled) {
+  background: #1e40af;
+}
+
+.sp-save-ok {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 13px;
+  color: #166534;
+  font-weight: 600;
+}
+
+.sp-save-err {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 13px;
+  color: #991b1b;
+  font-weight: 600;
+}
+
+/* ── Info box ── */
+.sp-info {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 16px 20px;
+  font-size: 13px;
+  color: #4b5563;
+  line-height: 1.7;
+}
+
+.sp-info strong {
+  color: #1e293b;
+  font-size: 13px;
+}
+
+.sp-info ul {
+  margin: 8px 0 0;
+  padding-right: 18px;
+}
+
+.sp-info li {
+  margin-bottom: 4px;
+}
+
+/* ── Spinner ── */
+@keyframes sp-rotate {
+  to { transform: rotate(360deg); }
+}
+
+.sp-spin {
+  animation: sp-rotate 0.8s linear infinite;
+}
+
+/* ── Loading state ── */
+.sp-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  min-height: 200px;
+  color: #9ca3af;
+  font-size: 14px;
+}
+
+/* ── Responsive ── */
+@media (max-width: 600px) {
+  .sp-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .sp-field--wide {
+    grid-column: 1;
+  }
+}

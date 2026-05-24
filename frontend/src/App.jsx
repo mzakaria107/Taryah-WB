@@ -19,6 +19,7 @@ const StockPage           = lazy(() => import('./pages/StockPage'));
 const CurrentStockPage    = lazy(() => import('./pages/CurrentStockPage'));
 const PermissionsPage     = lazy(() => import('./pages/PermissionsPage'));
 const ProfitabilityPage   = lazy(() => import('./pages/ProfitabilityPage'));
+const SettingsPage        = lazy(() => import('./pages/SettingsPage'));
 
 /* ── Guards ──────────────────────────────────────── */
 function PrivateRoute({ children }) {
@@ -157,6 +158,14 @@ export default function App() {
         <RoleRoute pageKey="profitability">
           <AppLayout>
             <PageSuspense><ProfitabilityPage /></PageSuspense>
+          </AppLayout>
+        </RoleRoute>
+      } />
+
+      <Route path="/settings" element={
+        <RoleRoute pageKey="settings">
+          <AppLayout>
+            <PageSuspense><SettingsPage /></PageSuspense>
           </AppLayout>
         </RoleRoute>
       } />

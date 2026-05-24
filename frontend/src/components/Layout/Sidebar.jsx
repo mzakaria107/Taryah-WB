@@ -3,7 +3,7 @@ import { NavLink, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, FileText, MessageSquare, Upload, Users, UserSearch,
   ClipboardList, Thermometer, Package, Warehouse, ShieldCheck, TrendingUp,
-  ChevronRight, ChevronLeft,
+  ChevronRight, ChevronLeft, Mail,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { usePermissions } from '../../context/PermissionsContext';
@@ -21,6 +21,7 @@ const NAV = [
   { to: '/users',          pageKey: 'users',           label: 'المستخدمون',      icon: <Users           size={18}/> },
   { to: '/permissions',    pageKey: 'permissions',     label: 'الصلاحيات',       icon: <ShieldCheck     size={18}/> },
   { to: '/profitability',  pageKey: 'profitability',   label: 'الربحية',          icon: <TrendingUp      size={18}/> },
+  { to: '/settings',      pageKey: 'settings',        label: 'الإعدادات',        icon: <Mail            size={18}/> },
 ];
 
 export default function Sidebar({ collapsed, onToggle }) {

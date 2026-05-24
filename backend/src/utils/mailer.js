@@ -1,12 +1,60 @@
 /**
  * mailer.js — thin wrapper around nodemailer.
- * SMTP config comes from environment variables:
- *   SMTP_HOST, SMTP_PORT, SMTP_SECURE, SMTP_USER, SMTP_PASS, SMTP_FROM
- * If any required var is missing, sendMail silently logs a warning and returns.
+ *
+ * SMTP config priority:
+ *   1. app_settings table (key = 'smtp')  — editable via admin UI
+ *   2. Environment variables (SMTP_HOST, SMTP_PORT, SMTP_SECURE, SMTP_USER, SMTP_PASS, SMTP_FROM)
+ *
+ * DB config is cached for 5 minutes to avoid a query on every send.
+ * Call invalidateSmtpCache() after saving new settings.
  */
 const nodemailer = require('nodemailer');
 
-function createTransport() {
+// ── DB cache ────────────────────────────────────────────────────
+let _cache    = null;
+let _cacheAt  = 0;
+const TTL     = 5 * 60 * 1000; // 5 min
+
+async function loadSmtpConfig() {
+  const now = Date.now();
+  if (_cache && (now - _cacheAt) < TTL) return _cache;
+
+  try {
+    // Lazy-require pool so circular-dep / startup order is not an issue
+    const pool = require('../db/pool');
+    const { rows } = await pool.query(
+      "SELECT value FROM app_settings WHERE key = 'smtp'"
+    );
+    if (rows.length && rows[0].value?.host) {
+      _cache   = rows[0].value;
+      _cacheAt = now;
+      return _cache;
+    }
+  } catch (_) { /* DB not ready or no row yet */ }
+
+  return null;
+}
+
+function invalidateSmtpCache() {
+  _cache   = null;
+  _cacheAt = 0;
+}
+
+// ── Transport factory ───────────────────────────────────────────
+async function createTransport(overrideConfig) {
+  const cfg = overrideConfig || await loadSmtpConfig();
+
+  if (cfg?.host && cfg?.user && cfg?.pass) {
+    return nodemailer.createTransport({
+      host:   cfg.host,
+      port:   parseInt(cfg.port  || '587', 10),
+      secure: cfg.secure === true || cfg.secure === 'true',
+      auth:   { user: cfg.user, pass: cfg.pass },
+      tls:    { rejectUnauthorized: false },
+    });
+  }
+
+  // Fallback to env vars
   const { SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS } = process.env;
   if (!SMTP_HOST || !SMTP_USER || !SMTP_PASS) return null;
 
@@ -19,31 +67,26 @@ function createTransport() {
   });
 }
 
-/**
- * sendMail({ to, cc, subject, html })
- * `to` and `cc` can be a string or array of strings.
- * Returns true on success, false on failure (never throws).
- */
+// ── sendMail ────────────────────────────────────────────────────
 async function sendMail({ to, cc, subject, html }) {
-  const transport = createTransport();
+  const transport = await createTransport();
   if (!transport) {
-    console.warn('[Mailer] SMTP not configured — skipping email send.');
+    console.warn('[Mailer] SMTP not configured — skipping email.');
     return false;
   }
 
-  const from = process.env.SMTP_FROM || process.env.SMTP_USER;
+  const cfg  = await loadSmtpConfig();
+  const from = cfg?.from || process.env.SMTP_FROM || process.env.SMTP_USER || '';
 
-  // Normalise recipients
-  const toList  = Array.isArray(to)  ? to.join(',')  : (to  || '');
-  const ccList  = Array.isArray(cc)  ? cc.join(',')  : (cc  || '');
-
-  if (!toList) return false;
+  const toStr = Array.isArray(to) ? to.join(',') : (to || '');
+  const ccStr = Array.isArray(cc) ? cc.join(',') : (cc || '');
+  if (!toStr) return false;
 
   try {
     const info = await transport.sendMail({
       from,
-      to:      toList,
-      cc:      ccList || undefined,
+      to:      toStr,
+      cc:      ccStr || undefined,
       subject,
       html,
     });
@@ -55,15 +98,20 @@ async function sendMail({ to, cc, subject, html }) {
   }
 }
 
-/* ── Email templates ──────────────────────────────────────────── */
+// ── testConnection ──────────────────────────────────────────────
+async function testConnection(cfg) {
+  const transport = await createTransport(cfg);
+  if (!transport) throw new Error('إعدادات SMTP غير مكتملة');
+  await transport.verify();
+}
+
+/* ── Email templates ─────────────────────────────────────────── */
 
 function taskAssignedHtml({ task, supervisorName, regionName, assignerName }) {
   const due = task.due_date
     ? new Date(task.due_date).toLocaleDateString('ar-SA', { year:'numeric', month:'long', day:'numeric' })
     : 'غير محدد';
-
   const priorityLabel = { low:'منخفضة', medium:'متوسطة', high:'عالية', urgent:'عاجلة' }[task.priority] || task.priority;
-
   return `
   <div dir="rtl" style="font-family:Arial,sans-serif;max-width:600px;margin:auto;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden;">
     <div style="background:#1d4ed8;padding:20px 24px;">
@@ -72,7 +120,6 @@ function taskAssignedHtml({ task, supervisorName, regionName, assignerName }) {
     <div style="padding:24px;">
       <p style="font-size:15px;color:#111827;">مرحباً <strong>${supervisorName}</strong>،</p>
       <p style="color:#374151;">تم تعيين مهمة جديدة لك من قِبل <strong>${assignerName}</strong>.</p>
-
       <table style="width:100%;border-collapse:collapse;margin-top:16px;">
         <tr><td style="padding:8px 12px;background:#f9fafb;font-weight:600;color:#6b7280;width:35%;">المهمة</td>
             <td style="padding:8px 12px;font-weight:700;color:#111827;">${task.title}</td></tr>
@@ -85,12 +132,9 @@ function taskAssignedHtml({ task, supervisorName, regionName, assignerName }) {
         ${task.description ? `<tr><td style="padding:8px 12px;background:#f9fafb;font-weight:600;color:#6b7280;">التفاصيل</td>
             <td style="padding:8px 12px;">${task.description}</td></tr>` : ''}
       </table>
-
       <p style="margin-top:20px;color:#374151;">يرجى تسجيل الدخول للنظام لاستلام المهمة والتأكيد على استلامها.</p>
     </div>
-    <div style="background:#f9fafb;padding:12px 24px;font-size:12px;color:#9ca3af;text-align:center;">
-      نظام إدارة مهام فريق المبيعات
-    </div>
+    <div style="background:#f9fafb;padding:12px 24px;font-size:12px;color:#9ca3af;text-align:center;">نظام إدارة مهام فريق المبيعات</div>
   </div>`;
 }
 
@@ -110,9 +154,7 @@ function taskAcknowledgedHtml({ task, supervisorName, assignerName, note }) {
 }
 
 function taskCompletedHtml({ task, supervisorName, assignerName, note }) {
-  const completedAt = task.completed_at
-    ? new Date(task.completed_at).toLocaleString('ar-SA')
-    : '';
+  const completedAt = task.completed_at ? new Date(task.completed_at).toLocaleString('ar-SA') : '';
   return `
   <div dir="rtl" style="font-family:Arial,sans-serif;max-width:600px;margin:auto;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden;">
     <div style="background:#7c3aed;padding:20px 24px;">
@@ -128,4 +170,11 @@ function taskCompletedHtml({ task, supervisorName, assignerName, note }) {
   </div>`;
 }
 
-module.exports = { sendMail, taskAssignedHtml, taskAcknowledgedHtml, taskCompletedHtml };
+module.exports = {
+  sendMail,
+  testConnection,
+  invalidateSmtpCache,
+  taskAssignedHtml,
+  taskAcknowledgedHtml,
+  taskCompletedHtml,
+};

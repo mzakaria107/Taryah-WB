@@ -1,6 +1,7 @@
 const express = require('express');
 const pool    = require('../db/pool');
 const { verifyToken } = require('../middleware/auth');
+const { invalidateSmtpCache, testConnection } = require('../utils/mailer');
 
 const router = express.Router();
 
@@ -54,10 +55,25 @@ router.put('/:key', verifyToken, async (req, res) => {
              updated_at = NOW()`,
       [key, JSON.stringify(value), req.user.email]
     );
+    /* Invalidate SMTP cache whenever the smtp key is updated */
+    if (key === 'smtp') invalidateSmtpCache();
     res.json({ ok: true });
   } catch (err) {
     console.error('Settings PUT error:', err);
     res.status(500).json({ error: 'خطأ في الخادم' });
+  }
+});
+
+/* ── POST /api/settings/smtp/test  — test SMTP connection ── */
+router.post('/smtp/test', verifyToken, async (req, res) => {
+  if (!ADMIN_ROLES.includes(req.user?.role)) {
+    return res.status(403).json({ error: 'غير مصرح' });
+  }
+  try {
+    await testConnection(req.body);   // body = { host, port, secure, user, pass }
+    res.json({ ok: true, message: 'الاتصال ناجح ✓' });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message });
   }
 });
 

@@ -181,9 +181,9 @@ cd C:\apps\Taryah-WB
 git pull
 cd frontend; npm run build; cd ..
 cd backend; npm install; cd ..
-robocopy frontend\dist C:\inetpub\wwwroot\sales /E /IS /IT /NFL /NDL
 pm2 restart taryah-backend
 ```
+**Note:** IIS `sales` site serves directly from `C:\apps\Taryah-WB\frontend\dist` — no robocopy needed.
 
 **Backend `.env`** on server (at `C:\apps\Taryah-WB\backend\.env`):
 ```

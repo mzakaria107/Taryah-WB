@@ -64,6 +64,21 @@
 }
 .srp-btn--print:hover { background: #1e293b; }
 
+.srp-btn--toggle {
+  background: #f1f5f9;
+  color: #64748b;
+  border: 1.5px solid #e2e8f0;
+}
+.srp-btn--toggle:hover { background: #e2e8f0; color: #334155; }
+
+/* Active = warehouse IS excluded (the warning state) */
+.srp-btn--toggle-active {
+  background: #fef3c7;
+  color: #92400e;
+  border-color: #fcd34d;
+}
+.srp-btn--toggle-active:hover { background: #fde68a; }
+
 /* ── Error banner ────────────────────────────────────────────── */
 .srp-error {
   background: #fef2f2;

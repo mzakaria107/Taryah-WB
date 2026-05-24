@@ -1,8 +1,11 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { RefreshCw, ChevronDown, ChevronLeft, Printer, TrendingUp, Users, MapPin, Package, RotateCcw, Award } from 'lucide-react';
+import { RefreshCw, ChevronDown, ChevronLeft, Printer, TrendingUp, Users, MapPin, Package, RotateCcw, Award, EyeOff } from 'lucide-react';
 import client from '../api/client';
 import './SalesReportPage.css';
+
+/* ── Warehouse region name to exclude ───────────────────────── */
+const WAREHOUSE_NAME = 'مخزن دجاج حي';
 
 /* ── API ─────────────────────────────────────────────────────── */
 const fetchReport  = () => client.get('/sales-report').then(r => r.data);
@@ -130,7 +133,9 @@ function RegionBlock({ region, rank }) {
 
 /* ── Main Page ───────────────────────────────────────────────── */
 export default function SalesReportPage() {
-  const [refreshing, setRefreshing] = useState(false);
+  const [refreshing,       setRefreshing]       = useState(false);
+  const [excludeWarehouse, setExcludeWarehouse] = useState(true); // ON by default
+
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ['sales-report'],
     queryFn:  fetchReport,
@@ -152,8 +157,38 @@ export default function SalesReportPage() {
     window.onafterprint = () => { document.title = prev; window.onafterprint = null; };
   }, []);
 
-  const kpi     = data?.kpi     || {};
-  const regions = data?.regions || [];
+  const rawKpi     = data?.kpi     || {};
+  const rawRegions = data?.regions || [];
+
+  /* ── Apply warehouse filter client-side ─────────────────────── */
+  const regions = useMemo(() =>
+    excludeWarehouse
+      ? rawRegions.filter(r => r.regionName !== WAREHOUSE_NAME)
+      : rawRegions,
+  [rawRegions, excludeWarehouse]);
+
+  /* ── Recompute KPIs from visible regions ─────────────────────── */
+  const kpi = useMemo(() => {
+    if (!excludeWarehouse) return rawKpi;
+    // Flatten all items from visible regions
+    const allItems = regions.flatMap(r => r.reps.flatMap(p => p.items));
+    const posItems = allItems.filter(i => i.qty  > 0);
+    const negItems = allItems.filter(i => i.total < 0);
+    const totalRevenue = posItems.reduce((s,i) => s + i.total, 0);
+    const totalQty     = posItems.reduce((s,i) => s + i.qty,   0);
+    const totalReturns = Math.abs(negItems.reduce((s,i) => s + i.total, 0));
+    const allReps      = new Set(regions.flatMap(r => r.reps.map(p => p.repName)));
+    return {
+      ...rawKpi,
+      totalRevenue,
+      totalQty,
+      totalReturns,
+      regionsCount: regions.length,
+      repsCount:    allReps.size,
+      topRegion:    regions[0]?.regionName || '—',
+      topRep:       regions[0]?.reps[0]?.repName || '—',
+    };
+  }, [regions, rawKpi, excludeWarehouse]);
 
   return (
     <div className="srp-page">
@@ -172,6 +207,14 @@ export default function SalesReportPage() {
           <p className="srp-subtitle">بيانات مباشرة من NetSuite — مبيعات المناديب حسب المنطقة</p>
         </div>
         <div className="srp-header-actions">
+          <button
+            className={`srp-btn srp-btn--toggle srp-no-print${excludeWarehouse ? ' srp-btn--toggle-active' : ''}`}
+            onClick={() => setExcludeWarehouse(v => !v)}
+            title={excludeWarehouse ? 'مخزن دجاج حي مستثنى — اضغط لإظهاره' : 'اضغط لاستثناء مخزن دجاج حي'}
+          >
+            <EyeOff size={14} />
+            {excludeWarehouse ? 'مخزن دجاج حي: مستثنى' : 'مخزن دجاج حي: مُدرج'}
+          </button>
           <button className="srp-btn srp-btn--refresh srp-no-print" onClick={handleRefresh} disabled={refreshing || isLoading}>
             <RefreshCw size={14} className={refreshing ? 'srp-spin' : ''} />
             {refreshing ? 'جارٍ التحديث…' : 'تحديث'}

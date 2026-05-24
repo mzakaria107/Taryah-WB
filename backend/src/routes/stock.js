@@ -2,7 +2,7 @@ const express  = require('express');
 const xlsx     = require('xlsx');
 const pool     = require('../db/pool');
 const upload   = require('../middleware/upload');
-const { verifyToken, requireRoles } = require('../middleware/auth');
+const { verifyToken, requireRoles, applyRegionFilter } = require('../middleware/auth');
 const { fetchNetSuiteInventory, testConnection } = require('../utils/netsuite');
 
 const router = express.Router();
@@ -34,11 +34,21 @@ const AREA_COL_MAP = {
 };
 
 // ── GET /api/stock/areas ──────────────────────────────────────
-router.get('/areas', verifyToken, async (_req, res) => {
+router.get('/areas', verifyToken, applyRegionFilter, async (req, res) => {
   try {
-    const { rows } = await pool.query(
-      'SELECT * FROM stock_areas WHERE is_active = true ORDER BY sort_order, area_name'
-    );
+    let query = 'SELECT * FROM stock_areas WHERE is_active = true ORDER BY sort_order, area_name';
+    let params = [];
+    if (req.regionFilter) {
+      const regRes = await pool.query('SELECT name_en FROM regions WHERE id = $1', [req.regionFilter]);
+      const nameEn = (regRes.rows[0]?.name_en || '').trim();
+      if (nameEn) {
+        query  = `SELECT * FROM stock_areas WHERE is_active = true
+                  AND (LOWER(area_name) = LOWER($1) OR area_name ILIKE '%' || $1 || '%')
+                  ORDER BY sort_order`;
+        params = [nameEn];
+      }
+    }
+    const { rows } = await pool.query(query, params);
     res.json({ areas: rows });
   } catch (err) {
     console.error('[Stock] areas:', err.message);
@@ -48,8 +58,34 @@ router.get('/areas', verifyToken, async (_req, res) => {
 
 // ── GET /api/stock/combined ───────────────────────────────────
 // Latest snapshot + latest distribution merged by item_name
-router.get('/combined', verifyToken, async (_req, res) => {
+router.get('/combined', verifyToken, applyRegionFilter, async (req, res) => {
   try {
+    // Resolve user's area if region-restricted
+    let userAreaIds = null;  // null = show all areas
+    if (req.regionFilter) {
+      const regRes = await pool.query(
+        'SELECT name_en, name_ar FROM regions WHERE id = $1',
+        [req.regionFilter]
+      );
+      const reg = regRes.rows[0];
+      if (reg) {
+        // Match stock_areas by area_name OR area_code (case-insensitive, partial)
+        const nameEn = (reg.name_en || '').trim();
+        const areaRes = await pool.query(
+          `SELECT id FROM stock_areas WHERE is_active = true
+           AND (
+             LOWER(area_name) = LOWER($1)
+             OR LOWER(area_code) = LOWER(REPLACE($1,' ','_'))
+             OR area_name ILIKE '%' || $1 || '%'
+             OR $1 ILIKE '%' || area_name || '%'
+           )`,
+          [nameEn]
+        );
+        userAreaIds = areaRes.rows.map(r => r.id);
+        console.log(`[Stock] region filter for "${nameEn}": area IDs = [${userAreaIds.join(',')}]`);
+      }
+    }
+
     const [snapRes, distRes, areasRes] = await Promise.all([
       pool.query(
         `SELECT s.*, u.name AS synced_by_name
@@ -63,9 +99,12 @@ router.get('/combined', verifyToken, async (_req, res) => {
          LEFT JOIN users u ON u.id = d.uploaded_by
          ORDER BY d.uploaded_at DESC LIMIT 1`
       ),
-      pool.query(
-        'SELECT * FROM stock_areas WHERE is_active = true ORDER BY sort_order'
-      ),
+      userAreaIds && userAreaIds.length
+        ? pool.query(
+            `SELECT * FROM stock_areas WHERE is_active = true AND id = ANY($1) ORDER BY sort_order`,
+            [userAreaIds]
+          )
+        : pool.query('SELECT * FROM stock_areas WHERE is_active = true ORDER BY sort_order'),
     ]);
 
     const areas   = areasRes.rows;

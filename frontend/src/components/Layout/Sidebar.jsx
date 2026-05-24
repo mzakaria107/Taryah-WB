@@ -1,87 +1,50 @@
 import React, { useState, useRef } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
-import {
-  LayoutDashboard, FileText, MessageSquare, Upload, Users, UserSearch,
-  ClipboardList, Thermometer, Package, Warehouse, ShieldCheck, TrendingUp,
-  ChevronRight, ChevronLeft, Mail, BarChart2, GripVertical, Settings2, X, Check,
-} from 'lucide-react';
+import { UserSearch, ChevronRight, ChevronLeft, GripVertical, Settings2, X, Check } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { usePermissions } from '../../context/PermissionsContext';
-
-const NAV = [
-  { to: '/',               pageKey: 'dashboard',       label: 'الرئيسية',        icon: <LayoutDashboard size={18}/> },
-  { to: '/invoices',       pageKey: 'invoices',        label: 'الفواتير',         icon: <FileText        size={18}/> },
-  { to: '/reports',        pageKey: 'reports',         label: 'سجل الملاحظات',   icon: <MessageSquare   size={18}/> },
-  { to: '/sales-activity', pageKey: 'sales_activity',  label: 'تقرير العملاء',   icon: <UserSearch      size={18}/> },
-  { to: '/sales-tasks',    pageKey: 'sales_tasks',     label: 'مهام المبيعات',   icon: <ClipboardList   size={18}/> },
-  { to: '/fridges',        pageKey: 'fridges',         label: 'متابعة الثلاجات', icon: <Thermometer     size={18}/> },
-  { to: '/stock',          pageKey: 'stock',           label: 'المخزون',          icon: <Package         size={18}/> },
-  { to: '/current-stock',  pageKey: 'current_stock',   label: 'المخزون الحالي',  icon: <Warehouse       size={18}/> },
-  { to: '/upload',         pageKey: 'upload',          label: 'رفع البيانات',    icon: <Upload          size={18}/> },
-  { to: '/users',          pageKey: 'users',           label: 'المستخدمون',      icon: <Users           size={18}/> },
-  { to: '/permissions',    pageKey: 'permissions',     label: 'الصلاحيات',       icon: <ShieldCheck     size={18}/> },
-  { to: '/profitability',  pageKey: 'profitability',   label: 'الربحية',          icon: <TrendingUp      size={18}/> },
-  { to: '/sales-report',  pageKey: 'sales_report',    label: 'صفحة المبيعات',   icon: <BarChart2       size={18}/> },
-  { to: '/settings',      pageKey: 'settings',        label: 'الإعدادات',        icon: <Mail            size={18}/> },
-];
+import { useSidebarOrder } from '../../context/SidebarOrderContext';
+import { ALL_NAV, NAV_BY_KEY, applyNavOrder } from '../../data/navConfig';
 
 const ADMIN_ROLES = ['super_admin', 'it_admin'];
-const ORDER_KEY   = 'sidebar-order-v1';
-
-function loadOrder() {
-  try {
-    const s = localStorage.getItem(ORDER_KEY);
-    return s ? JSON.parse(s) : null;
-  } catch { return null; }
-}
-
-function applyOrder(items, order) {
-  if (!order || !order.length) return items;
-  return [...items].sort((a, b) => {
-    const ai = order.indexOf(a.pageKey);
-    const bi = order.indexOf(b.pageKey);
-    return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
-  });
-}
-
-/* Build a lookup map: pageKey → NAV item (stable — icons are JSX elements) */
-const NAV_BY_KEY = Object.fromEntries(NAV.map(n => [n.pageKey, n]));
 
 export default function Sidebar({ collapsed, onToggle }) {
-  const { user }        = useAuth();
-  const { canAccess }   = usePermissions();
-  const location        = useLocation();
-  const isAdmin         = user && ADMIN_ROLES.includes(user.role);
+  const { user }            = useAuth();
+  const { canAccess }       = usePermissions();
+  const { order, saveOrder, resetOrder } = useSidebarOrder();
+  const location            = useLocation();
+  const isAdmin             = user && ADMIN_ROLES.includes(user.role);
 
-  /* ── Persistent order ──────────────────────────────────── */
-  const [order, setOrder]           = useState(() => loadOrder());
+  /* ── Reorder modal state ──────────────────────────── */
   const [showReorder, setShowReorder] = useState(false);
-  const [draftOrder, setDraftOrder]  = useState([]);
+  const [draftOrder, setDraftOrder]   = useState([]);
+  const [saving, setSaving]           = useState(false);
   const dragIdx = useRef(null);
 
-  /* ── Derived nav list ─────────────────────────────────── */
-  const orderedNav = applyOrder(NAV, order);
+  /* ── Derived nav ──────────────────────────────────── */
+  const orderedNav = applyNavOrder(ALL_NAV, order);
   const visible    = orderedNav.filter(n => user && canAccess(user.role, n.pageKey));
   const onCustomerPage = location.pathname.startsWith('/customers/');
 
-  /* ── Reorder modal controls ───────────────────────────── */
+  /* ── Modal controls ───────────────────────────────── */
   function openReorder() {
-    setDraftOrder(applyOrder(NAV, order).map(n => n.pageKey));
+    setDraftOrder(applyNavOrder(ALL_NAV, order).map(n => n.pageKey));
     setShowReorder(true);
   }
-  function saveReorder() {
-    setOrder(draftOrder);
-    try { localStorage.setItem(ORDER_KEY, JSON.stringify(draftOrder)); } catch {}
+  async function handleSave() {
+    setSaving(true);
+    try { await saveOrder(draftOrder); } finally { setSaving(false); }
     setShowReorder(false);
   }
-  function cancelReorder() {
+  async function handleReset() {
+    setSaving(true);
+    try { await resetOrder(); } finally { setSaving(false); }
+    setDraftOrder(ALL_NAV.map(n => n.pageKey));
     setShowReorder(false);
   }
-  function resetReorder() {
-    setDraftOrder(NAV.map(n => n.pageKey));
-  }
+  function handleCancel() { setShowReorder(false); }
 
-  /* ── HTML5 Drag-and-drop ──────────────────────────────── */
+  /* ── HTML5 Drag-and-drop ──────────────────────────── */
   function onDragStart(e, idx) {
     dragIdx.current = idx;
     e.dataTransfer.effectAllowed = 'move';
@@ -95,13 +58,11 @@ export default function Sidebar({ collapsed, onToggle }) {
     dragIdx.current = idx;
     setDraftOrder(updated);
   }
-  function onDragEnd() {
-    dragIdx.current = null;
-  }
+  function onDragEnd() { dragIdx.current = null; }
 
   return (
     <>
-      {/* ── Sidebar ─────────────────────────────────────── */}
+      {/* ── Sidebar ─────────────────────────────────── */}
       <aside className={`sidebar${collapsed ? ' collapsed' : ''}`}>
         <button
           className="sidebar-collapse-btn"
@@ -113,6 +74,7 @@ export default function Sidebar({ collapsed, onToggle }) {
 
         <nav className="sidebar-nav" aria-label="التنقل الرئيسي">
           <div className="sidebar-section">القائمة</div>
+
           {visible.map(n => (
             <NavLink
               key={n.to}
@@ -121,7 +83,7 @@ export default function Sidebar({ collapsed, onToggle }) {
               className={({ isActive }) => `sidebar-link${isActive ? ' active' : ''}`}
               title={collapsed ? n.label : undefined}
             >
-              {n.icon}
+              {n.icon(18)}
               <span className="sidebar-link-label">{n.label}</span>
             </NavLink>
           ))}
@@ -137,7 +99,7 @@ export default function Sidebar({ collapsed, onToggle }) {
           )}
         </nav>
 
-        {/* ── Admin reorder button ───────────────────────── */}
+        {/* ── Admin reorder button ─────────────────── */}
         {isAdmin && (
           <button
             className={`sidebar-reorder-btn${collapsed ? ' sidebar-reorder-btn--icon' : ''}`}
@@ -150,20 +112,20 @@ export default function Sidebar({ collapsed, onToggle }) {
         )}
       </aside>
 
-      {/* ── Reorder modal ───────────────────────────────── */}
+      {/* ── Reorder modal ───────────────────────────── */}
       {showReorder && (
-        <div className="sro-overlay" onClick={cancelReorder}>
+        <div className="sro-overlay" onClick={handleCancel}>
           <div className="sro-modal" onClick={e => e.stopPropagation()}>
 
             <div className="sro-header">
               <Settings2 size={17}/>
               <span>ترتيب عناصر القائمة</span>
-              <button className="sro-close" onClick={cancelReorder} aria-label="إغلاق">
+              <button className="sro-close" onClick={handleCancel} aria-label="إغلاق">
                 <X size={16}/>
               </button>
             </div>
 
-            <p className="sro-hint">اسحب العناصر لتغيير الترتيب — يُحفظ في المتصفح</p>
+            <p className="sro-hint">اسحب العناصر لتغيير الترتيب — يُطبَّق على جميع المستخدمين</p>
 
             <ul className="sro-list">
               {draftOrder.map((key, idx) => {
@@ -179,7 +141,7 @@ export default function Sidebar({ collapsed, onToggle }) {
                     onDragEnd={onDragEnd}
                   >
                     <GripVertical size={16} className="sro-grip"/>
-                    <span className="sro-item-icon">{item.icon}</span>
+                    <span className="sro-item-icon">{item.icon(18)}</span>
                     <span className="sro-item-label">{item.label}</span>
                   </li>
                 );
@@ -187,13 +149,13 @@ export default function Sidebar({ collapsed, onToggle }) {
             </ul>
 
             <div className="sro-footer">
-              <button className="sro-btn sro-btn--save" onClick={saveReorder}>
-                <Check size={15}/> حفظ الترتيب
+              <button className="sro-btn sro-btn--save" onClick={handleSave} disabled={saving}>
+                <Check size={15}/> {saving ? 'جاري الحفظ...' : 'حفظ الترتيب'}
               </button>
-              <button className="sro-btn sro-btn--reset" onClick={resetReorder} title="إعادة الترتيب الافتراضي">
+              <button className="sro-btn sro-btn--reset" onClick={handleReset} disabled={saving} title="إعادة الترتيب الافتراضي">
                 إعادة تعيين
               </button>
-              <button className="sro-btn sro-btn--cancel" onClick={cancelReorder}>
+              <button className="sro-btn sro-btn--cancel" onClick={handleCancel} disabled={saving}>
                 إلغاء
               </button>
             </div>

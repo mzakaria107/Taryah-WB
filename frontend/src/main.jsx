@@ -6,6 +6,7 @@ import App from './App';
 import { AuthProvider } from './context/AuthContext';
 import { PermissionsProvider } from './context/PermissionsContext';
 import { DashboardSettingsProvider } from './context/DashboardSettingsContext';
+import { SidebarOrderProvider } from './context/SidebarOrderContext';
 import { ToastProvider } from './components/UI/Toast';
 import './index.css';
 
@@ -25,11 +26,13 @@ ReactDOM.createRoot(document.getElementById('root')).render(
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
           <PermissionsProvider>
-            <DashboardSettingsProvider>
-              <ToastProvider>
-                <App />
-              </ToastProvider>
-            </DashboardSettingsProvider>
+            <SidebarOrderProvider>
+              <DashboardSettingsProvider>
+                <ToastProvider>
+                  <App />
+                </ToastProvider>
+              </DashboardSettingsProvider>
+            </SidebarOrderProvider>
           </PermissionsProvider>
         </AuthProvider>
       </QueryClientProvider>

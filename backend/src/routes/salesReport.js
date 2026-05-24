@@ -95,28 +95,52 @@ function extractRegion(location = '') {
   return m2 ? m2[1].trim() : location;
 }
 
-/* ── Normalize column keys (Arabic headers vary) ───────────── */
+/* ── Parse number — handles comma-formatted "1,234.56" ─────── */
+function parseNum(v) {
+  if (v === null || v === undefined) return 0;
+  const s = String(v).replace(/,/g, '').trim();
+  const n = parseFloat(s);
+  return isNaN(n) ? 0 : n;
+}
+
+/* ── Normalize column keys — map by header name or by index ── */
 function normalizeRow(raw) {
-  // Try to auto-detect which key maps to what
-  const qty   = parseFloat(Object.values(raw)[0]) || 0;
-  const total = parseFloat(Object.values(raw)[1]) || 0;
-  const loc   = Object.values(raw)[2] || '';
-  const itype = Object.values(raw)[3] || '';
-  const iname = Object.values(raw)[4] || '';
-  const rep   = Object.values(raw)[5] || '';
+  const keys = Object.keys(raw);
+  const vals = Object.values(raw);
+
+  // Try to match by known English header names first
+  const findKey = (...candidates) => {
+    for (const c of candidates) {
+      const k = keys.find(k => k.toLowerCase().includes(c.toLowerCase()));
+      if (k) return raw[k];
+    }
+    return null;
+  };
+
+  const qty   = parseNum(findKey('Quantity', 'qty', 'كمية')  ?? vals[0]);
+  const total = parseNum(findKey('Transaction Total', 'total', 'إجمالي') ?? vals[1]);
+  const loc   = (findKey('Location', 'موقع') ?? vals[2] ?? '').toString();
+  const itype = (findKey('Item Type', 'نوع الصنف') ?? vals[3] ?? '').toString();
+  const iname = (findKey('Item: Name', 'Item Name', 'الصنف') ?? vals[4] ?? '').toString();
+  const rep   = (findKey('Sales Rep', 'مندوب') ?? vals[5] ?? '').toString();
+
   return { qty, total, location: loc, itemType: itype, itemName: iname, salesRep: rep };
 }
 
 /* ── Build hierarchical structure ──────────────────────────── */
 function buildHierarchy(rawRows) {
   // Filter out non-sales rows (unassigned reps, special warehouses, zero-qty & zero-total)
-  const rows = rawRows
-    .map(normalizeRow)
+  const normalized = rawRows.map(normalizeRow);
+  console.log('[SalesReport] sample row[0]:', normalized[0]);
+  console.log(`[SalesReport] total raw rows: ${rawRows.length}, normalized: ${normalized.length}`);
+
+  const rows = normalized
     .filter(r =>
       r.salesRep && r.salesRep !== '- Unassigned -' &&
       r.itemName &&
       !(r.qty === 0 && r.total === 0)
     );
+  console.log(`[SalesReport] after filter: ${rows.length} rows`);
 
   // Region map: { regionName → { repName → [ {itemName, itemType, qty, total} ] } }
   const regionMap = {};

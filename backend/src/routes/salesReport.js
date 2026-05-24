@@ -20,10 +20,9 @@ const BASE =
 const WEBQUERY_TODAY =
   BASE + '&cr=565&hash=AAEJ7tMQ30dgSVRK-91K_ubbZyAA6En2PifvkQVCqo7ouhJEoLk';
 
-// Monthly sales — update cr & hash when the monthly saved search is ready
-// TODO: replace cr=565 with the correct monthly saved-search ID
+// Monthly sales (cr=567)
 const WEBQUERY_MONTHLY =
-  BASE + '&cr=565&hash=AAEJ7tMQ30dgSVRK-91K_ubbZyAA6En2PifvkQVCqo7ouhJEoLk';
+  BASE + '&cr=567&hash=AAEJ7tMQGKQv037BDZpR5EltRFFM2LKzXUE6yFc_mwTtmJaNCxU';
 
 /* ── Caches ─────────────────────────────────────────────────── */
 let _cacheToday   = null, _cacheTodayAt   = 0;
@@ -131,8 +130,9 @@ function normalizeRow(raw) {
   const itype = (findKey('Item Type', 'نوع الصنف') ?? vals[3] ?? '').toString();
   const iname = (findKey('Item: Name', 'Item Name', 'الصنف') ?? vals[4] ?? '').toString();
   const rep   = (findKey('Sales Rep', 'مندوب') ?? vals[5] ?? '').toString();
+  const date  = (findKey('Date', 'التاريخ', 'تاريخ') ?? '').toString();
 
-  return { qty, total, location: loc, itemType: itype, itemName: iname, salesRep: rep };
+  return { qty, total, location: loc, itemType: itype, itemName: iname, salesRep: rep, date };
 }
 
 /* ── Build hierarchical structure ──────────────────────────── */
@@ -203,6 +203,12 @@ function buildHierarchy(rawRows) {
     posRows.filter(r=>extractRegion(r.location)===a.regionName).reduce((s,r)=>s+r.total,0)
   )[0];
 
+  // Date range (present when monthly query includes Date column)
+  const dates = rows.map(r => r.date).filter(Boolean);
+  const dateRange = dates.length
+    ? { from: dates[dates.length - 1], to: dates[0] }
+    : null;
+
   const kpi = {
     totalRevenue,
     totalQty,
@@ -211,6 +217,7 @@ function buildHierarchy(rawRows) {
     repsCount:     new Set(rows.map(r=>r.salesRep)).size,
     topRegion:     bestRegion?.regionName || regions[0]?.regionName || '—',
     topRep:        regions[0]?.reps[0]?.repName || '—',
+    dateRange,
   };
 
   return { kpi, regions };

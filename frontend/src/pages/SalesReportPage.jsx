@@ -339,6 +339,13 @@ function SalesContent({ period }) {
       {/* Error */}
       {error && <div className="srp-error">⚠️ تعذّر الاتصال بـ NetSuite — يتم عرض آخر بيانات محفوظة.</div>}
 
+      {/* Date range badge — monthly only */}
+      {isMonthly && rawKpi.dateRange && (
+        <div className="srp-date-range srp-no-print">
+          📅 نطاق البيانات: <strong>{rawKpi.dateRange.from}</strong> — <strong>{rawKpi.dateRange.to}</strong>
+        </div>
+      )}
+
       {/* KPIs */}
       <div className="srp-kpi-row">
         <KpiCard icon={<TrendingUp size={20}/>} label="إجمالي المبيعات (صافي)"

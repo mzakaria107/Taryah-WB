@@ -16,15 +16,20 @@ const ADMIN_ROLES = ['super_admin', 'it_admin'];
  * @param {string|null} excludeUserId - Don't notify the actor themselves
  */
 async function resolveRecipients(regionId, excludeUserId = null) {
+  // Cast to user_role[] so PostgreSQL can compare with the ENUM column correctly.
+  // Cast regionId to integer explicitly to avoid type-mismatch errors.
   const { rows } = await pool.query(
     `SELECT id FROM users
-     WHERE role = ANY($1)
-        OR ($2::integer IS NOT NULL AND region_id = $2)`,
-    [ADMIN_ROLES, regionId]
+     WHERE is_active = true
+       AND (
+         role = ANY($1::user_role[])
+         OR ($2::integer IS NOT NULL AND region_id = $2::integer)
+       )`,
+    [ADMIN_ROLES, regionId ?? null]
   );
   return rows
-    .map(r => r.id)
-    .filter(id => id !== excludeUserId);
+    .map(r => String(r.id))
+    .filter(id => id !== String(excludeUserId));
 }
 
 /**
@@ -56,7 +61,7 @@ async function createTaskNotification({ regionId, excludeUserId = null, title, b
       params
     );
   } catch (err) {
-    console.error('[notifHelper] failed to create notifications:', err.message);
+    console.error('[notifHelper] failed to create notifications:', err.message, err.stack?.split('\n')[1]);
   }
 }
 

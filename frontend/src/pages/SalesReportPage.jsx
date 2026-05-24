@@ -441,11 +441,6 @@ export default function SalesReportPage() {
         />
       </div>
 
-      {/* Performance Section */}
-      {!isLoading && regions.length > 0 && (
-        <PerfSection regions={regions} />
-      )}
-
       {/* Matrix Table */}
       <div className="srp-table-wrap">
         {isLoading ? (
@@ -491,6 +486,11 @@ export default function SalesReportPage() {
           </table>
         )}
       </div>
+
+      {/* Performance Section */}
+      {!isLoading && regions.length > 0 && (
+        <PerfSection regions={regions} />
+      )}
 
     </div>
   );

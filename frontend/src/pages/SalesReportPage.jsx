@@ -1,12 +1,17 @@
-import React, { useState, useCallback, useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   RefreshCw, ChevronDown, ChevronLeft, Printer,
   TrendingUp, Users, MapPin, Package, RotateCcw, Award,
   EyeOff, BarChart2, CalendarDays, Calendar,
+  SlidersHorizontal, Check, X,
 } from 'lucide-react';
 import client from '../api/client';
+import { useAuth } from '../context/AuthContext';
 import './SalesReportPage.css';
+
+const ADMIN_ROLES = ['super_admin', 'it_admin'];
+const TYPE_FILTER_KEY = 'sales_report_item_types';
 
 /* ── Constants ───────────────────────────────────────────────── */
 const WAREHOUSE_NAME = 'مخزن دجاج حي';
@@ -271,11 +276,71 @@ function SalesContent({ period }) {
   const refreshFn  = isMonthly ? api.monthlyRefresh : api.todayRefresh;
   const queryKey   = isMonthly ? 'sales-report-monthly' : 'sales-report-today';
 
+  const { user }   = useAuth();
+  const isAdmin    = user && ADMIN_ROLES.includes(user.role);
+  const queryClient = useQueryClient();
+
   const [refreshing,       setRefreshing]       = useState(false);
   const [excludeWarehouse, setExcludeWarehouse] = useState(true);
   const [filterRegion,     setFilterRegion]     = useState('');
   const [filterMonth,      setFilterMonth]      = useState('');
   const [filterYear,       setFilterYear]       = useState('');
+
+  /* ── Type filter (server-persisted, shared across all users) ── */
+  const { data: savedTypes = [] } = useQuery({
+    queryKey: ['sales-item-type-filter'],
+    queryFn:  () => client.get(`/settings/${TYPE_FILTER_KEY}`)
+                    .then(r => Array.isArray(r.data?.value) ? r.data.value : []),
+    staleTime: Infinity,
+  });
+
+  const [typeFilterOpen, setTypeFilterOpen] = useState(false);
+  const [draftTypes,     setDraftTypes]     = useState([]);
+  const [typeSaving,     setTypeSaving]     = useState(false);
+  const typeFilterRef = useRef(null);
+
+  // Close panel on outside click
+  useEffect(() => {
+    if (!typeFilterOpen) return;
+    function handleClick(e) {
+      if (typeFilterRef.current && !typeFilterRef.current.contains(e.target)) {
+        setTypeFilterOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [typeFilterOpen]);
+
+  function openTypePanel() {
+    setDraftTypes([...savedTypes]);
+    setTypeFilterOpen(true);
+  }
+
+  function toggleDraftType(t) {
+    setDraftTypes(prev => prev.includes(t) ? prev.filter(x => x !== t) : [...prev, t]);
+  }
+
+  async function saveTypeFilter() {
+    setTypeSaving(true);
+    try {
+      await client.put(`/settings/${TYPE_FILTER_KEY}`, { value: draftTypes });
+      queryClient.setQueryData(['sales-item-type-filter'], draftTypes);
+    } finally {
+      setTypeSaving(false);
+      setTypeFilterOpen(false);
+    }
+  }
+
+  async function resetTypeFilter() {
+    setTypeSaving(true);
+    try {
+      await client.put(`/settings/${TYPE_FILTER_KEY}`, { value: [] });
+      queryClient.setQueryData(['sales-item-type-filter'], []);
+    } finally {
+      setTypeSaving(false);
+      setTypeFilterOpen(false);
+    }
+  }
 
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: [queryKey],
@@ -306,6 +371,15 @@ function SalesContent({ period }) {
   const warehouseFiltered = useMemo(() =>
     excludeWarehouse ? rawRegions.filter(r => r.regionName !== WAREHOUSE_NAME) : rawRegions,
   [rawRegions, excludeWarehouse]);
+
+  /* ── All available item types (for admin panel) ─────────────── */
+  const allTypes = useMemo(() => {
+    const set = new Set();
+    warehouseFiltered.forEach(r => r.reps.forEach(rep =>
+      rep.items.forEach(item => { if (item.itemType) set.add(item.itemType); })
+    ));
+    return [...set].sort();
+  }, [warehouseFiltered]);
 
   /* ── Step 2: available filter options (from warehouse-filtered) */
   const filterOptions = useMemo(() => {
@@ -373,8 +447,30 @@ function SalesContent({ period }) {
       }).filter(Boolean);
     }
 
+    // Type filter — applied globally for all users (savedTypes empty = show all)
+    if (savedTypes.length > 0) {
+      result = result.map(region => {
+        const filteredReps = region.reps.map(rep => {
+          const filteredItems = rep.items.filter(item =>
+            savedTypes.includes(item.itemType)
+          );
+          if (!filteredItems.length) return null;
+          const rQty   = filteredItems.reduce((s,i) => s + i.qty,   0);
+          const rTotal = filteredItems.reduce((s,i) => s + i.total, 0);
+          return { ...rep, items: filteredItems, qty: rQty, total: rTotal,
+            avgPrice: rQty !== 0 ? rTotal / Math.abs(rQty) : 0 };
+        }).filter(Boolean);
+        if (!filteredReps.length) return null;
+        const rgQty   = filteredReps.reduce((s,r) => s + r.qty,   0);
+        const rgTotal = filteredReps.reduce((s,r) => s + r.total, 0);
+        return { ...region, reps: filteredReps, qty: rgQty, total: rgTotal,
+          avgPrice: rgQty !== 0 ? rgTotal / Math.abs(rgQty) : 0,
+          repsCount: filteredReps.length };
+      }).filter(Boolean);
+    }
+
     return result;
-  }, [warehouseFiltered, filterRegion, filterMonth, filterYear]);
+  }, [warehouseFiltered, filterRegion, filterMonth, filterYear, savedTypes]);
 
   /* ── Step 4: KPIs always reflect visible filtered regions ────── */
   const kpi = useMemo(() => {
@@ -405,6 +501,78 @@ function SalesContent({ period }) {
           <EyeOff size={14}/>
           {excludeWarehouse ? 'مخزن دجاج حي: مستثنى' : 'مخزن دجاج حي: مُدرج'}
         </button>
+
+        {/* Type filter button — admin sees edit panel, others see passive badge */}
+        <div className="srp-type-filter-wrap" ref={typeFilterRef}>
+          {isAdmin ? (
+            <button
+              className={`srp-btn srp-btn--type${savedTypes.length ? ' srp-btn--type-active' : ''}`}
+              onClick={openTypePanel}
+            >
+              <SlidersHorizontal size={14}/>
+              فلتر النوع
+              {savedTypes.length > 0 && (
+                <span className="srp-type-badge-count">{savedTypes.length}</span>
+              )}
+            </button>
+          ) : (
+            savedTypes.length > 0 && (
+              <span className="srp-type-passive-badge">
+                <SlidersHorizontal size={12}/> {savedTypes.length} نوع مفعّل
+              </span>
+            )
+          )}
+
+          {/* Multi-select panel (admin only) */}
+          {typeFilterOpen && isAdmin && (
+            <div className="srp-type-panel">
+              <div className="srp-type-panel-hdr">
+                <SlidersHorizontal size={14}/>
+                <span>اختر الأنواع المعروضة</span>
+                <button className="srp-type-panel-close" onClick={() => setTypeFilterOpen(false)}>
+                  <X size={14}/>
+                </button>
+              </div>
+              <p className="srp-type-panel-hint">يُطبَّق على جميع المستخدمين · فارغ = الكل</p>
+
+              <div className="srp-type-list">
+                {/* Select All / Clear All */}
+                <label className="srp-type-item srp-type-item--all">
+                  <input
+                    type="checkbox"
+                    checked={draftTypes.length === 0}
+                    onChange={() => setDraftTypes([])}
+                    className="srp-type-checkbox"
+                  />
+                  <span className="srp-type-label">الكل (بدون فلتر)</span>
+                </label>
+                <div className="srp-type-divider"/>
+                {allTypes.map(t => (
+                  <label key={t} className="srp-type-item">
+                    <input
+                      type="checkbox"
+                      checked={draftTypes.includes(t)}
+                      onChange={() => toggleDraftType(t)}
+                      className="srp-type-checkbox"
+                    />
+                    <span className="srp-type-dot" style={{ background: typeColor(t) }}/>
+                    <span className="srp-type-label">{t || '—'}</span>
+                  </label>
+                ))}
+              </div>
+
+              <div className="srp-type-panel-footer">
+                <button className="srp-type-save" onClick={saveTypeFilter} disabled={typeSaving}>
+                  <Check size={13}/> {typeSaving ? 'جارٍ الحفظ…' : 'حفظ للجميع'}
+                </button>
+                <button className="srp-type-reset" onClick={resetTypeFilter} disabled={typeSaving}>
+                  إظهار الكل
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
         <button className="srp-btn srp-btn--refresh" onClick={handleRefresh} disabled={refreshing || isLoading}>
           <RefreshCw size={14} className={refreshing ? 'srp-spin' : ''}/>
           {refreshing ? 'جارٍ التحديث…' : 'تحديث'}

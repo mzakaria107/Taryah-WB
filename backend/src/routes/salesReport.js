@@ -254,7 +254,8 @@ function filterByRegion(data, regionName) {
     return false;
   });
 
-  console.log(`[SalesReport] filterByRegion "${dbName}": ${filteredRegions.length}/${data.regions.length} regions matched`);
+  const available = data.regions.map(r => r.regionName).join(' | ');
+  console.log(`[SalesReport] filterByRegion "${dbName}": ${filteredRegions.length}/${data.regions.length} matched | available: ${available}`);
   // Recompute KPI from filtered regions
   const allItems = filteredRegions.flatMap(r => r.reps.flatMap(rep => rep.items));
   const posItems = allItems.filter(i => i.qty > 0);

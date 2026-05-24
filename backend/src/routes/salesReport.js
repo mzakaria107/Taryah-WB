@@ -198,8 +198,8 @@ function buildHierarchy(rawRows) {
   // KPIs — revenue = sum of positive sales; qty = NET (all rows); returns = absolute sum of negatives
   const posRows = rows.filter(r => r.qty > 0);
   const negRows = rows.filter(r => r.total < 0);
-  const totalRevenue = posRows.reduce((s,r) => s + r.total, 0);
-  const totalQty     = rows.reduce((s,r) => s + r.qty, 0);   // net: sales − returns
+  const totalRevenue = rows.reduce((s,r) => s + r.total, 0);  // net: sales − returns
+  const totalQty     = rows.reduce((s,r) => s + r.qty,   0); // net: sales − returns
   const totalReturns = Math.abs(negRows.reduce((s,r) => s + r.total, 0));
   // Find best region/rep by positive-only sales
   const bestRegion = [...regions].sort((a,b) =>

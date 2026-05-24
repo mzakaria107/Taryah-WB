@@ -335,7 +335,7 @@ export default function SalesReportPage() {
     const allItems = regions.flatMap(r => r.reps.flatMap(p => p.items));
     const posItems = allItems.filter(i => i.qty  > 0);
     const negItems = allItems.filter(i => i.total < 0);
-    const totalRevenue = posItems.reduce((s,i) => s + i.total, 0);
+    const totalRevenue = allItems.reduce((s,i) => s + i.total, 0); // net: sales − returns
     const totalQty     = allItems.reduce((s,i) => s + i.qty,   0); // net: sales − returns
     const totalReturns = Math.abs(negItems.reduce((s,i) => s + i.total, 0));
     const allReps      = new Set(regions.flatMap(r => r.reps.map(p => p.repName)));
@@ -397,8 +397,13 @@ export default function SalesReportPage() {
       <div className="srp-kpi-row">
         <KpiCard
           icon={<TrendingUp size={20}/>}
-          label="إجمالي المبيعات"
-          value={`${fmtC(kpi.totalRevenue)} ر.س`}
+          label="إجمالي المبيعات (صافي)"
+          value={
+            isLoading ? undefined :
+            (kpi.totalRevenue ?? 0) < 0
+              ? <span className="srp-neg">{fmtC(Math.abs(kpi.totalRevenue))} ر.س −</span>
+              : `${fmtC(kpi.totalRevenue ?? 0)} ر.س`
+          }
           color="#1d4ed8"
           loading={isLoading}
         />

@@ -131,10 +131,11 @@ router.get('/tasks', verifyToken, async (req, res) => {
     const vals   = [];
     let p = 1;
 
-    // Region access control
+    // Region access control: show tasks in user's region OR assigned directly to this user
     if (!isAdmin(req.user)) {
-      conds.push(`t.region_id = $${p++}`);
-      vals.push(req.user.region_id);
+      conds.push(`(t.region_id = $${p} OR t.assignee_user_id = $${p + 1})`);
+      vals.push(req.user.region_id, req.user.id);
+      p += 2;
     } else if (region_id) {
       conds.push(`t.region_id = $${p++}`);
       vals.push(parseInt(region_id, 10));
@@ -153,12 +154,16 @@ router.get('/tasks', verifyToken, async (req, res) => {
          r.name_ar  AS region_name_ar,
          r.name_en  AS region_name_en,
          t.supervisor_id,
-         s.name     AS supervisor_name,
+         t.assignee_user_id,
+         COALESCE(s.name, u.name) AS supervisor_name,
+         COALESCE(s.email, u.email) AS supervisor_email,
+         CASE WHEN t.assignee_user_id IS NOT NULL THEN 'user' ELSE 'supervisor' END AS assignee_type,
          (SELECT COUNT(*) FROM sales_task_notes  n WHERE n.task_id = t.id) AS notes_count,
          (SELECT COUNT(*) FROM sales_task_files  f WHERE f.task_id = t.id) AS files_count
        FROM sales_tasks t
        LEFT JOIN regions           r ON r.id = t.region_id
        LEFT JOIN sales_supervisors s ON s.id = t.supervisor_id
+       LEFT JOIN users             u ON u.id = t.assignee_user_id
        WHERE ${conds.join(' AND ')}
        ORDER BY
          CASE t.status
@@ -187,13 +192,25 @@ router.get('/tasks', verifyToken, async (req, res) => {
 // POST /tasks  (with optional file upload)
 router.post('/tasks', verifyToken, taskUpload.array('files', 5), async (req, res) => {
   const {
-    title, description, region_id, supervisor_id,
+    title, description, region_id,
+    // New unified assignee field (e.g. "sup_<uuid>" or "usr_<uuid>")
+    // Fallback to legacy supervisor_id for backward compat
+    assignee_combined_id, supervisor_id: legacySupervisorId,
     assigner_email, assignee_email, cc_emails,
     due_date, priority,
   } = req.body;
 
-  if (!title?.trim())       return res.status(400).json({ error: 'عنوان المهمة مطلوب' });
-  if (!supervisor_id)       return res.status(400).json({ error: 'يجب تحديد المشرف' });
+  if (!title?.trim()) return res.status(400).json({ error: 'عنوان المهمة مطلوب' });
+
+  const combinedId = assignee_combined_id || (legacySupervisorId ? `sup_${legacySupervisorId}` : null);
+  if (!combinedId)  return res.status(400).json({ error: 'يجب تحديد المُعيَّن له' });
+
+  // Resolve type
+  const isSupervisor = combinedId.startsWith('sup_');
+  const isUser       = combinedId.startsWith('usr_');
+  if (!isSupervisor && !isUser) return res.status(400).json({ error: 'معرّف المُعيَّن له غير صحيح' });
+
+  const sourceId = combinedId.slice(4); // strip "sup_" or "usr_"
 
   // Non-admins can only create tasks for their own region
   const taskRegion = parseInt(region_id, 10) || null;
@@ -205,32 +222,51 @@ router.post('/tasks', verifyToken, taskUpload.array('files', 5), async (req, res
   try {
     await dbClient.query('BEGIN');
 
-    // Get supervisor & region info for email
-    const supRes = await dbClient.query(
-      `SELECT s.name, s.email, r.name_ar, r.name_en
-       FROM sales_supervisors s
-       LEFT JOIN regions r ON r.id = s.region_id
-       WHERE s.id = $1`,
-      [supervisor_id]
-    );
-    const sup = supRes.rows[0] || {};
+    // Resolve assignee name/email + region for notification
+    let assigneeName = '', assigneeResolvedEmail = '', regionName = 'غير محدد';
+    let resolvedSupervisorId = null, resolvedAssigneeUserId = null;
+
+    if (isSupervisor) {
+      const supRes = await dbClient.query(
+        `SELECT s.name, s.email, r.name_ar FROM sales_supervisors s
+         LEFT JOIN regions r ON r.id = s.region_id WHERE s.id = $1`,
+        [sourceId]
+      );
+      const sup = supRes.rows[0] || {};
+      assigneeName             = sup.name  || 'المشرف';
+      assigneeResolvedEmail    = sup.email || '';
+      regionName               = sup.name_ar || 'غير محدد';
+      resolvedSupervisorId     = sourceId;
+    } else {
+      const usrRes = await dbClient.query(
+        `SELECT u.name, u.email, r.name_ar FROM users u
+         LEFT JOIN regions r ON r.id = u.region_id WHERE u.id = $1`,
+        [sourceId]
+      );
+      const usr = usrRes.rows[0] || {};
+      assigneeName             = usr.name  || usr.email || 'المستخدم';
+      assigneeResolvedEmail    = usr.email || '';
+      regionName               = usr.name_ar || 'غير محدد';
+      resolvedAssigneeUserId   = sourceId;
+    }
 
     const taskRes = await dbClient.query(
       `INSERT INTO sales_tasks
-         (title, description, region_id, supervisor_id, assigned_by,
+         (title, description, region_id, supervisor_id, assignee_user_id, assigned_by,
           assigner_name, assigner_email, assignee_email, cc_emails,
           due_date, priority, status)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'pending')
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'pending')
        RETURNING *`,
       [
         title.trim(),
         description?.trim() || null,
         taskRegion,
-        supervisor_id,
+        resolvedSupervisorId,
+        resolvedAssigneeUserId,
         req.user.id,
         req.user.name || req.user.email || 'مسؤول',
         assigner_email?.trim() || null,
-        assignee_email?.trim() || sup.email || null,
+        assignee_email?.trim() || assigneeResolvedEmail || null,
         cc_emails?.trim() || null,
         due_date || null,
         priority || 'medium',
@@ -254,11 +290,10 @@ router.post('/tasks', verifyToken, taskUpload.array('files', 5), async (req, res
     await dbClient.query('COMMIT');
 
     // ── Send email notifications (non-blocking) ──
-    const regionName   = sup.name_ar || sup.name_en || 'غير محدد';
-    const supervisorName = sup.name || 'المشرف';
-    const assignerName = req.user.name || req.user.email || 'المسؤول';
+    const supervisorName = assigneeName;
+    const assignerName   = req.user.name || req.user.email || 'المسؤول';
 
-    const toList   = [assignee_email?.trim(), sup.email].filter(Boolean);
+    const toList   = [assignee_email?.trim(), assigneeResolvedEmail].filter(Boolean);
     const ccList   = [assigner_email?.trim(), ...(cc_emails ? cc_emails.split(',').map(e => e.trim()) : [])].filter(Boolean);
 
     if (toList.length) {
@@ -610,6 +645,44 @@ router.get('/files/:storedName', verifyToken, async (req, res) => {
     res.sendFile(path.resolve(fp));
   } catch (err) {
     console.error('[SalesTasks] download error:', err.message);
+    res.status(500).json({ error: 'خطأ في الخادم' });
+  }
+});
+
+// ── GET /assignees — unified list: supervisors + system users ───
+// Each entry: { combined_id, type, name, email, region_id, region_name_ar }
+router.get('/assignees', verifyToken, async (req, res) => {
+  try {
+    const rw = regionWhere(req.user);
+    const [supRes, usrRes] = await Promise.all([
+      pool.query(
+        `SELECT 'supervisor'           AS type,
+                'sup_' || s.id::text   AS combined_id,
+                s.id::text             AS source_id,
+                s.name, s.email,
+                s.region_id, r.name_ar AS region_name_ar
+         FROM   sales_supervisors s
+         LEFT JOIN regions r ON r.id = s.region_id
+         WHERE  s.is_active = true ${rw.sql}
+         ORDER  BY r.name_ar NULLS LAST, s.name`,
+        rw.vals
+      ),
+      pool.query(
+        `SELECT 'user'                 AS type,
+                'usr_' || u.id::text   AS combined_id,
+                u.id::text             AS source_id,
+                u.name, u.email,
+                u.region_id, r.name_ar AS region_name_ar
+         FROM   users u
+         LEFT JOIN regions r ON r.id = u.region_id
+         WHERE  u.is_active = true ${rw.sql}
+         ORDER  BY r.name_ar NULLS LAST, u.name`,
+        rw.vals
+      ),
+    ]);
+    res.json({ assignees: [...supRes.rows, ...usrRes.rows] });
+  } catch (err) {
+    console.error('[SalesTasks] assignees error:', err.message);
     res.status(500).json({ error: 'خطأ في الخادم' });
   }
 });

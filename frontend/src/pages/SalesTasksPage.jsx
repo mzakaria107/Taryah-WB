@@ -54,6 +54,7 @@ function fileIcon(mime) {
 const api = {
   getRegions:     () => client.get('/sales-tasks/regions').then(r => r.data.regions),
   getSupervisors: (p) => client.get('/sales-tasks/supervisors', { params: p }).then(r => r.data.supervisors),
+  getAssignees:   ()  => client.get('/sales-tasks/assignees').then(r => r.data.assignees),
   getTasks:       (p) => client.get('/sales-tasks/tasks', { params: p }).then(r => r.data.tasks),
   getTask:        (id) => client.get(`/sales-tasks/tasks/${id}`).then(r => r.data),
   createSup:      (d) => client.post('/sales-tasks/supervisors', d).then(r => r.data),
@@ -175,13 +176,13 @@ function SupervisorModal({ editing, regions, onClose, onSaved }) {
 /* ═══════════════════════════════════════════════════════
    CREATE TASK MODAL
    ═══════════════════════════════════════════════════════ */
-function CreateTaskModal({ regions, supervisors, userRegionId, onClose, onCreated }) {
+function CreateTaskModal({ regions, assignees = [], userRegionId, onClose, onCreated }) {
   const { user } = useAuth();
   const admin = isAdmin(user);
 
   const [form, setForm] = useState({
     title: '', description: '', region_id: admin ? '' : String(userRegionId || ''),
-    supervisor_id: '', due_date: '', priority: 'medium',
+    assignee_combined_id: '', due_date: '', priority: 'medium',
     assigner_email: '', assignee_email: '', cc_emails: '',
   });
   const [files, setFiles]   = useState([]);
@@ -192,16 +193,35 @@ function CreateTaskModal({ regions, supervisors, userRegionId, onClose, onCreate
 
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
 
-  // Filter supervisors by selected region (compare as numbers to avoid "1" !== 1 issues)
-  const filteredSups = form.region_id
-    ? supervisors.filter(s => Number(s.region_id) === Number(form.region_id) && s.is_active)
-    : supervisors.filter(s => s.is_active);
+  // Filter assignees by selected region
+  const filteredAssignees = form.region_id
+    ? assignees.filter(a => Number(a.region_id) === Number(form.region_id))
+    : assignees;
 
-  // Auto-fill assignee email from supervisor
-  const onSupChange = (val) => {
-    set('supervisor_id', val);
-    const sup = supervisors.find(s => s.id === val);
-    if (sup?.email) set('assignee_email', sup.email);
+  // Group by region for display
+  const groupedAssignees = filteredAssignees.reduce((acc, a) => {
+    const key = a.region_name_ar || 'غير محددة';
+    if (!acc[key]) acc[key] = [];
+    acc[key].push(a);
+    return acc;
+  }, {});
+
+  // When assignee selected: auto-fill email + auto-set region (if admin)
+  const onAssigneeChange = (combinedId) => {
+    const assignee = assignees.find(a => a.combined_id === combinedId);
+    set('assignee_combined_id', combinedId);
+    if (assignee?.email)     set('assignee_email', assignee.email);
+    if (admin && assignee?.region_id) set('region_id', String(assignee.region_id));
+  };
+
+  // When region changes, reset assignee if it doesn't belong to new region
+  const onRegionChange = (regionId) => {
+    set('region_id', regionId);
+    const current = assignees.find(a => a.combined_id === form.assignee_combined_id);
+    if (current && regionId && Number(current.region_id) !== Number(regionId)) {
+      set('assignee_combined_id', '');
+      set('assignee_email', '');
+    }
   };
 
   const addFiles = (fl) => setFiles(p => [...p, ...Array.from(fl)]);
@@ -214,8 +234,8 @@ function CreateTaskModal({ regions, supervisors, userRegionId, onClose, onCreate
   };
 
   const save = async () => {
-    if (!form.title.trim())       { setErr('عنوان المهمة مطلوب'); return; }
-    if (!form.supervisor_id)      { setErr('يجب اختيار المشرف'); return; }
+    if (!form.title.trim())             { setErr('عنوان المهمة مطلوب'); return; }
+    if (!form.assignee_combined_id)     { setErr('يجب اختيار المُعيَّن له'); return; }
     setSaving(true); setErr('');
     try {
       const fd = new FormData();
@@ -259,12 +279,12 @@ function CreateTaskModal({ regions, supervisors, userRegionId, onClose, onCreate
             </div>
           </div>
 
-          {/* Region + Supervisor */}
+          {/* Region + Assignee */}
           <div className="stp-form-row">
             <div className="stp-form-group">
               <label className="stp-label">المنطقة <span className="stp-req">*</span></label>
               {admin ? (
-                <select className="stp-select" value={form.region_id} onChange={e => { set('region_id', e.target.value); set('supervisor_id',''); }}>
+                <select className="stp-select" value={form.region_id} onChange={e => onRegionChange(e.target.value)}>
                   <option value="">— اختر المنطقة —</option>
                   {regions.map(r => <option key={r.id} value={r.id}>{r.name_ar}</option>)}
                 </select>
@@ -273,10 +293,19 @@ function CreateTaskModal({ regions, supervisors, userRegionId, onClose, onCreate
               )}
             </div>
             <div className="stp-form-group">
-              <label className="stp-label">المشرف <span className="stp-req">*</span></label>
-              <select className="stp-select" value={form.supervisor_id} onChange={e => onSupChange(e.target.value)}>
-                <option value="">— اختر المشرف —</option>
-                {filteredSups.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+              <label className="stp-label">المُعيَّن له <span className="stp-req">*</span></label>
+              <select className="stp-select" value={form.assignee_combined_id} onChange={e => onAssigneeChange(e.target.value)}>
+                <option value="">— اختر مشرف أو مستخدم —</option>
+                {Object.entries(groupedAssignees).map(([regionLabel, list]) => (
+                  <optgroup key={regionLabel} label={`📍 ${regionLabel}`}>
+                    {list.map(a => (
+                      <option key={a.combined_id} value={a.combined_id}>
+                        {a.type === 'user' ? '👤 ' : '🧑‍💼 '}{a.name}
+                        {a.email ? ` — ${a.email}` : ''}
+                      </option>
+                    ))}
+                  </optgroup>
+                ))}
               </select>
             </div>
           </div>
@@ -880,7 +909,7 @@ function TasksTab({ regions, supervisors }) {
       {showCreate && (
         <CreateTaskModal
           regions={regions}
-          supervisors={supervisors}
+          assignees={assignees}
           userRegionId={user?.region_id}
           onClose={() => setShowCreate(false)}
           onCreated={() => { qc.invalidateQueries({ queryKey:['tasks'] }); setShowCreate(false); }}
@@ -905,8 +934,9 @@ export default function SalesTasksPage() {
   const admin = isAdmin(user);
   const [tab, setTab] = useState('tasks');
 
-  const { data: regions    = [] } = useQuery({ queryKey:['task-regions'],  queryFn: api.getRegions });
-  const { data: supervisors = [] } = useQuery({ queryKey:['supervisors'],   queryFn: () => api.getSupervisors() });
+  const { data: regions   = [] } = useQuery({ queryKey:['task-regions'],  queryFn: api.getRegions });
+  const { data: supervisors = [] } = useQuery({ queryKey:['supervisors'], queryFn: () => api.getSupervisors() });
+  const { data: assignees = [] } = useQuery({ queryKey:['task-assignees'], queryFn: api.getAssignees, staleTime: 60_000 });
 
   const smtpConfigured = !!(import.meta.env.VITE_SMTP_CONFIGURED);
 

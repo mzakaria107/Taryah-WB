@@ -55,6 +55,9 @@ function ItemRow({ item }) {
         {isReturn ? <span className="srp-neg">−{fmtC(Math.abs(item.total))}</span>
                   : fmtC(item.total)}
       </td>
+      <td className="srp-td srp-td-num srp-td-avg">
+        {item.qty !== 0 ? fmtC(Math.abs(item.avgPrice ?? (item.total / item.qty))) : '—'}
+      </td>
     </tr>
   );
 }
@@ -62,6 +65,7 @@ function ItemRow({ item }) {
 /* ── Sales Rep block ─────────────────────────────────────────── */
 function RepBlock({ rep, defaultOpen = false }) {
   const [open, setOpen] = useState(defaultOpen);
+  const isNeg = rep.total < 0;
   return (
     <>
       <tr className="srp-rep-row" onClick={() => setOpen(v => !v)}>
@@ -73,8 +77,15 @@ function RepBlock({ rep, defaultOpen = false }) {
           {rep.repName}
           <span className="srp-rep-items-count">{rep.items.length} صنف</span>
         </td>
-        <td className="srp-td srp-td-num srp-rep-num">{fmt(rep.netQty)}</td>
-        <td className="srp-td srp-td-num srp-rep-num srp-td-total">{fmtC(rep.netTotal)}</td>
+        <td className="srp-td srp-td-num srp-rep-num">{fmt(Math.abs(rep.qty))}</td>
+        <td className="srp-td srp-td-num srp-rep-num srp-td-total">
+          {isNeg
+            ? <span className="srp-neg">−{fmtC(Math.abs(rep.total))}</span>
+            : fmtC(rep.total)}
+        </td>
+        <td className="srp-td srp-td-num srp-td-avg srp-rep-num">
+          {rep.qty !== 0 ? fmtC(Math.abs(rep.avgPrice ?? 0)) : '—'}
+        </td>
       </tr>
       {open && rep.items.map((item, i) => <ItemRow key={i} item={item} />)}
     </>
@@ -85,8 +96,7 @@ function RepBlock({ rep, defaultOpen = false }) {
 function RegionBlock({ region, rank }) {
   const [open, setOpen] = useState(rank === 0); // first region open by default
 
-  const posTotal = region.reps.reduce((s, r) => s + r.netTotal, 0);
-  const posQty   = region.reps.reduce((s, r) => s + r.netQty,   0);
+  const isNeg = region.total < 0;
 
   return (
     <>
@@ -102,12 +112,19 @@ function RegionBlock({ region, rank }) {
             {region.repsCount} مندوب
           </span>
         </td>
-        <td className="srp-td srp-td-num srp-region-num">{fmt(posQty)}</td>
-        <td className="srp-td srp-td-num srp-region-num srp-td-total">{fmtC(posTotal)}</td>
+        <td className="srp-td srp-td-num srp-region-num">{fmt(Math.abs(region.qty))}</td>
+        <td className="srp-td srp-td-num srp-region-num srp-td-total">
+          {isNeg
+            ? <span className="srp-neg">−{fmtC(Math.abs(region.total))}</span>
+            : fmtC(region.total)}
+        </td>
+        <td className="srp-td srp-td-num srp-td-avg srp-region-num">
+          {region.qty !== 0 ? fmtC(Math.abs(region.avgPrice ?? 0)) : '—'}
+        </td>
       </tr>
 
       {/* Reps */}
-      {open && region.reps.map((rep, i) => (
+      {open && region.reps.map((rep) => (
         <RepBlock key={rep.repName} rep={rep} defaultOpen={region.reps.length === 1} />
       ))}
     </>
@@ -240,6 +257,7 @@ export default function SalesReportPage() {
                 <th className="srp-th srp-th-type">النوع</th>
                 <th className="srp-th srp-th-num">الكمية</th>
                 <th className="srp-th srp-th-num srp-th-total">الإجمالي (ر.س)</th>
+                <th className="srp-th srp-th-num srp-th-avg">متوسط السعر</th>
               </tr>
             </thead>
             <tbody>
@@ -254,6 +272,9 @@ export default function SalesReportPage() {
                 <td className="srp-td" colSpan={2}><strong>الإجمالي الكلي</strong></td>
                 <td className="srp-td srp-td-num"><strong>{fmt(kpi.totalQty)}</strong></td>
                 <td className="srp-td srp-td-num srp-td-total"><strong>{fmtC(kpi.totalRevenue)} ر.س</strong></td>
+                <td className="srp-td srp-td-num srp-td-avg">
+                  <strong>{kpi.totalQty ? fmtC(kpi.totalRevenue / kpi.totalQty) : '—'}</strong>
+                </td>
               </tr>
             </tfoot>
           </table>

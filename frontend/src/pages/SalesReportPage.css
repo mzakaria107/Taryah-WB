@@ -342,6 +342,16 @@
   font-weight: 600;
 }
 
+/* ── Average price column ────────────────────────────────────── */
+.srp-th-avg {
+  color: #d97706;
+  white-space: nowrap;
+}
+.srp-td-avg {
+  color: #92400e;
+  font-size: 0.82rem;
+}
+
 /* ── Toggle button ───────────────────────────────────────────── */
 .srp-toggle-btn {
   display: inline-flex;

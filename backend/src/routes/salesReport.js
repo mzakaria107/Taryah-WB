@@ -154,11 +154,14 @@ function buildHierarchy(rawRows) {
     const region = extractRegion(r.location);
     if (!regionMap[region]) regionMap[region] = {};
     if (!regionMap[region][r.salesRep]) regionMap[region][r.salesRep] = [];
+    // compute avgPrice per item
+    const itemAvg = r.qty !== 0 ? r.total / Math.abs(r.qty) : 0;
     regionMap[region][r.salesRep].push({
       itemName: r.itemName,
       itemType: r.itemType,
       qty:      r.qty,
       total:    r.total,
+      avgPrice: itemAvg,
     });
   }
 
@@ -167,37 +170,49 @@ function buildHierarchy(rawRows) {
     const repArr = Object.entries(reps).map(([repName, items]) => {
       const repQty   = items.reduce((s, i) => s + i.qty,   0);
       const repTotal = items.reduce((s, i) => s + i.total, 0);
-      const repQtyPos   = items.filter(i=>i.qty>0).reduce((s,i)=>s+i.qty,0);
-      const repTotalPos = items.filter(i=>i.total>0).reduce((s,i)=>s+i.total,0);
+      // avgPrice = net total / absolute qty (price per unit regardless of direction)
+      const repAvg = repQty !== 0 ? repTotal / Math.abs(repQty) : 0;
       return {
         repName,
-        qty: repQty, total: repTotal,
-        netQty: repQtyPos, netTotal: repTotalPos,
+        qty:      repQty,
+        total:    repTotal,
+        avgPrice: repAvg,
         items: items.sort((a,b) => b.total - a.total),
       };
-    }).sort((a,b) => b.netTotal - a.netTotal);
+    }).sort((a,b) => b.total - a.total);   // sort by actual net total
 
-    const regionQty   = repArr.reduce((s,r) => s + r.qty,      0);
-    const regionTotal = repArr.reduce((s,r) => s + r.total,    0);
-    const regionPos   = repArr.reduce((s,r) => s + r.netTotal, 0);
+    const regionQty   = repArr.reduce((s,r) => s + r.qty,   0);
+    const regionTotal = repArr.reduce((s,r) => s + r.total, 0);
+    const regionAvg   = regionQty !== 0 ? regionTotal / Math.abs(regionQty) : 0;
 
     return {
       regionName,
-      qty: regionQty, total: regionTotal, netTotal: regionPos,
+      qty:      regionQty,
+      total:    regionTotal,
+      avgPrice: regionAvg,
       repsCount: repArr.length,
       reps: repArr,
     };
-  }).sort((a,b) => b.netTotal - a.netTotal);
+  }).sort((a,b) => b.total - a.total);   // sort by actual net total
 
-  // KPIs
-  const allItems = rows.filter(r => r.qty > 0);
+  // KPIs — revenue = sum of positive sales; returns = absolute sum of negatives
+  const posRows = rows.filter(r => r.qty > 0);
+  const negRows = rows.filter(r => r.total < 0);
+  const totalRevenue = posRows.reduce((s,r) => s + r.total, 0);
+  const totalQty     = posRows.reduce((s,r) => s + r.qty,   0);
+  const totalReturns = Math.abs(negRows.reduce((s,r) => s + r.total, 0));
+  // Find best region/rep by positive-only sales
+  const bestRegion = [...regions].sort((a,b) =>
+    posRows.filter(r=>extractRegion(r.location)===b.regionName).reduce((s,r)=>s+r.total,0) -
+    posRows.filter(r=>extractRegion(r.location)===a.regionName).reduce((s,r)=>s+r.total,0)
+  )[0];
   const kpi = {
-    totalRevenue:  allItems.reduce((s,r) => s + r.total, 0),
-    totalQty:      allItems.reduce((s,r) => s + r.qty,   0),
-    totalReturns:  Math.abs(rows.filter(r=>r.total<0).reduce((s,r)=>s+r.total,0)),
+    totalRevenue,
+    totalQty,
+    totalReturns,
     regionsCount:  regions.length,
     repsCount:     new Set(rows.map(r=>r.salesRep)).size,
-    topRegion:     regions[0]?.regionName || '—',
+    topRegion:     bestRegion?.regionName || regions[0]?.regionName || '—',
     topRep:        regions[0]?.reps[0]?.repName || '—',
   };
 

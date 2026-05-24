@@ -195,11 +195,11 @@ function buildHierarchy(rawRows) {
     };
   }).sort((a,b) => b.total - a.total);   // sort by actual net total
 
-  // KPIs — revenue = sum of positive sales; returns = absolute sum of negatives
+  // KPIs — revenue = sum of positive sales; qty = NET (all rows); returns = absolute sum of negatives
   const posRows = rows.filter(r => r.qty > 0);
   const negRows = rows.filter(r => r.total < 0);
   const totalRevenue = posRows.reduce((s,r) => s + r.total, 0);
-  const totalQty     = posRows.reduce((s,r) => s + r.qty,   0);
+  const totalQty     = rows.reduce((s,r) => s + r.qty, 0);   // net: sales − returns
   const totalReturns = Math.abs(negRows.reduce((s,r) => s + r.total, 0));
   // Find best region/rep by positive-only sales
   const bestRegion = [...regions].sort((a,b) =>

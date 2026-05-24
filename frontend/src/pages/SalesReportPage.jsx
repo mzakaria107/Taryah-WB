@@ -336,7 +336,7 @@ export default function SalesReportPage() {
     const posItems = allItems.filter(i => i.qty  > 0);
     const negItems = allItems.filter(i => i.total < 0);
     const totalRevenue = posItems.reduce((s,i) => s + i.total, 0);
-    const totalQty     = posItems.reduce((s,i) => s + i.qty,   0);
+    const totalQty     = allItems.reduce((s,i) => s + i.qty,   0); // net: sales − returns
     const totalReturns = Math.abs(negItems.reduce((s,i) => s + i.total, 0));
     const allReps      = new Set(regions.flatMap(r => r.reps.map(p => p.repName)));
     return {
@@ -404,8 +404,13 @@ export default function SalesReportPage() {
         />
         <KpiCard
           icon={<Package size={20}/>}
-          label="إجمالي الكميات"
-          value={`${fmt(kpi.totalQty)} قطعة`}
+          label="إجمالي الكميات (صافي)"
+          value={
+            isLoading ? undefined :
+            (kpi.totalQty ?? 0) < 0
+              ? <span className="srp-neg">{fmt(Math.abs(kpi.totalQty))} قطعة −</span>
+              : `${fmt(kpi.totalQty ?? 0)} قطعة`
+          }
           color="#059669"
           loading={isLoading}
         />
@@ -479,7 +484,7 @@ export default function SalesReportPage() {
                   <span className="srp-tfoot-unit"> ر.س</span>
                 </td>
                 <td className="srp-td srp-td-num srp-td-avg">
-                  <strong>{kpi.totalQty ? fmtC(kpi.totalRevenue / kpi.totalQty) : '—'}</strong>
+                  <strong>{kpi.totalQty ? fmtC(kpi.totalRevenue / Math.abs(kpi.totalQty)) : '—'}</strong>
                 </td>
               </tr>
             </tfoot>

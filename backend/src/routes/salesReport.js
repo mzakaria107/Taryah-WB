@@ -195,6 +195,8 @@ function buildHierarchy(rawRows) {
     };
   }).sort((a,b) => b.total - a.total);
 
+  console.log('[SalesReport] regions:', regions.map(r => r.regionName).join(' | '));
+
   // KPIs
   const posRows = rows.filter(r => r.qty > 0);
   const negRows = rows.filter(r => r.total < 0);

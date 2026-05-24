@@ -342,6 +342,30 @@
   font-weight: 600;
 }
 
+.srp-bold { font-weight: 700; }
+
+/* ── Return badge (inline before item name) ──────────────────── */
+.srp-return-badge {
+  display: inline-block;
+  font-size: 0.67rem;
+  font-weight: 600;
+  color: #dc2626;
+  background: #fee2e2;
+  border-radius: 6px;
+  padding: 1px 5px;
+  margin-left: 6px;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+/* ── Footer unit label ───────────────────────────────────────── */
+.srp-tfoot-unit {
+  font-size: 0.75rem;
+  font-weight: 400;
+  color: var(--color-text-muted, #64748b);
+  margin-right: 3px;
+}
+
 /* ── Average price column ────────────────────────────────────── */
 .srp-th-avg {
   color: #d97706;

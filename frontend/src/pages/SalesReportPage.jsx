@@ -12,6 +12,15 @@ const refreshReport = () => client.get('/sales-report/refresh').then(r => r.data
 const fmt  = (n) => (n ?? 0).toLocaleString('en-SA', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 const fmtC = (n) => (n ?? 0).toLocaleString('en-SA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+/* ── Signed cell — negative shows red with − prefix ─────────── */
+function NetVal({ n, isQty = false, bold = false }) {
+  const abs = Math.abs(n ?? 0);
+  const str = isQty ? fmt(abs) : fmtC(abs);
+  if ((n ?? 0) < 0) return <span className={`srp-neg${bold ? ' srp-bold' : ''}`}>−{str}</span>;
+  if ((n ?? 0) === 0) return <span className={bold ? 'srp-bold' : ''}>—</span>;
+  return <span className={bold ? 'srp-bold' : ''}>{str}</span>;
+}
+
 /* ── Item type badge color ──────────────────────────────────── */
 const typeColor = (t = '') => {
   if (t.includes('مقطع'))  return '#8b5cf6';
@@ -39,10 +48,14 @@ function KpiCard({ icon, label, value, sub, color = '#1d4ed8', loading }) {
 /* ── Item row inside a rep ───────────────────────────────────── */
 function ItemRow({ item }) {
   const isReturn = item.qty < 0 || item.total < 0;
+  const avg = item.qty !== 0
+    ? Math.abs((item.avgPrice != null ? item.avgPrice : item.total / item.qty))
+    : null;
   return (
     <tr className={`srp-item-row${isReturn ? ' srp-return' : ''}`}>
       <td className="srp-td srp-td-item">
         <span className="srp-item-dot" style={{ background: typeColor(item.itemType) }} />
+        {isReturn && <span className="srp-return-badge">↩ مرتجع</span>}
         {item.itemName}
       </td>
       <td className="srp-td srp-td-type">
@@ -50,13 +63,10 @@ function ItemRow({ item }) {
           {item.itemType || '—'}
         </span>
       </td>
-      <td className="srp-td srp-td-num">{isReturn ? '↩' : ''}{fmt(Math.abs(item.qty))}</td>
-      <td className="srp-td srp-td-num srp-td-total">
-        {isReturn ? <span className="srp-neg">−{fmtC(Math.abs(item.total))}</span>
-                  : fmtC(item.total)}
-      </td>
+      <td className="srp-td srp-td-num"><NetVal n={item.qty} isQty /></td>
+      <td className="srp-td srp-td-num srp-td-total"><NetVal n={item.total} /></td>
       <td className="srp-td srp-td-num srp-td-avg">
-        {item.qty !== 0 ? fmtC(Math.abs(item.avgPrice ?? (item.total / item.qty))) : '—'}
+        {avg != null ? fmtC(avg) : '—'}
       </td>
     </tr>
   );
@@ -65,7 +75,6 @@ function ItemRow({ item }) {
 /* ── Sales Rep block ─────────────────────────────────────────── */
 function RepBlock({ rep, defaultOpen = false }) {
   const [open, setOpen] = useState(defaultOpen);
-  const isNeg = rep.total < 0;
   return (
     <>
       <tr className="srp-rep-row" onClick={() => setOpen(v => !v)}>
@@ -77,12 +86,8 @@ function RepBlock({ rep, defaultOpen = false }) {
           {rep.repName}
           <span className="srp-rep-items-count">{rep.items.length} صنف</span>
         </td>
-        <td className="srp-td srp-td-num srp-rep-num">{fmt(Math.abs(rep.qty))}</td>
-        <td className="srp-td srp-td-num srp-rep-num srp-td-total">
-          {isNeg
-            ? <span className="srp-neg">−{fmtC(Math.abs(rep.total))}</span>
-            : fmtC(rep.total)}
-        </td>
+        <td className="srp-td srp-td-num srp-rep-num"><NetVal n={rep.qty} isQty /></td>
+        <td className="srp-td srp-td-num srp-rep-num srp-td-total"><NetVal n={rep.total} /></td>
         <td className="srp-td srp-td-num srp-td-avg srp-rep-num">
           {rep.qty !== 0 ? fmtC(Math.abs(rep.avgPrice ?? 0)) : '—'}
         </td>
@@ -94,9 +99,7 @@ function RepBlock({ rep, defaultOpen = false }) {
 
 /* ── Region block ────────────────────────────────────────────── */
 function RegionBlock({ region, rank }) {
-  const [open, setOpen] = useState(rank === 0); // first region open by default
-
-  const isNeg = region.total < 0;
+  const [open, setOpen] = useState(rank === 0);
 
   return (
     <>
@@ -108,18 +111,12 @@ function RegionBlock({ region, rank }) {
           </span>
           {rank === 0 && <span className="srp-crown">🏆</span>}
           📍 {region.regionName}
-          <span className="srp-region-meta">
-            {region.repsCount} مندوب
-          </span>
+          <span className="srp-region-meta">{region.repsCount} مندوب</span>
         </td>
-        <td className="srp-td srp-td-num srp-region-num">{fmt(Math.abs(region.qty))}</td>
-        <td className="srp-td srp-td-num srp-region-num srp-td-total">
-          {isNeg
-            ? <span className="srp-neg">−{fmtC(Math.abs(region.total))}</span>
-            : fmtC(region.total)}
-        </td>
+        <td className="srp-td srp-td-num srp-region-num"><NetVal n={region.qty} isQty bold /></td>
+        <td className="srp-td srp-td-num srp-region-num srp-td-total"><NetVal n={region.total} bold /></td>
         <td className="srp-td srp-td-num srp-td-avg srp-region-num">
-          {region.qty !== 0 ? fmtC(Math.abs(region.avgPrice ?? 0)) : '—'}
+          {region.qty !== 0 ? <strong>{fmtC(Math.abs(region.avgPrice ?? 0))}</strong> : '—'}
         </td>
       </tr>
 
@@ -269,9 +266,14 @@ export default function SalesReportPage() {
             {/* Grand total footer */}
             <tfoot>
               <tr className="srp-tfoot-row">
-                <td className="srp-td" colSpan={2}><strong>الإجمالي الكلي</strong></td>
-                <td className="srp-td srp-td-num"><strong>{fmt(kpi.totalQty)}</strong></td>
-                <td className="srp-td srp-td-num srp-td-total"><strong>{fmtC(kpi.totalRevenue)} ر.س</strong></td>
+                <td className="srp-td" colSpan={2}><strong>الإجمالي الكلي (صافي)</strong></td>
+                <td className="srp-td srp-td-num">
+                  <NetVal n={regions.reduce((s,r)=>s+r.qty,0)} isQty bold />
+                </td>
+                <td className="srp-td srp-td-num srp-td-total">
+                  <NetVal n={regions.reduce((s,r)=>s+r.total,0)} bold />
+                  <span className="srp-tfoot-unit"> ر.س</span>
+                </td>
                 <td className="srp-td srp-td-num srp-td-avg">
                   <strong>{kpi.totalQty ? fmtC(kpi.totalRevenue / kpi.totalQty) : '—'}</strong>
                 </td>

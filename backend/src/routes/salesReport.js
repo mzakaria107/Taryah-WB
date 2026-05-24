@@ -130,6 +130,17 @@ function normalizeRow(raw) {
 /* ── Build hierarchical structure ──────────────────────────── */
 function buildHierarchy(rawRows) {
   // Filter out non-sales rows (unassigned reps, special warehouses, zero-qty & zero-total)
+  // Log raw data to diagnose column mapping
+  if (rawRows.length > 0) {
+    console.log('[SalesReport] RAW row[0]:', JSON.stringify(rawRows[0]));
+    console.log('[SalesReport] RAW row[1]:', JSON.stringify(rawRows[1]));
+    // Find rows with non-zero qty or non-unassigned rep
+    const interesting = rawRows.find(r => {
+      const vals = Object.values(r);
+      return vals.some(v => v && v !== '- Unassigned -' && v !== '0' && v !== '' && !isNaN(parseFloat(String(v).replace(/,/g,''))));
+    });
+    if (interesting) console.log('[SalesReport] first interesting raw row:', JSON.stringify(interesting));
+  }
   const normalized = rawRows.map(normalizeRow);
   console.log('[SalesReport] sample row[0]:', normalized[0]);
   console.log(`[SalesReport] total raw rows: ${rawRows.length}, normalized: ${normalized.length}`);

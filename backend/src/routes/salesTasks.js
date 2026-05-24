@@ -305,10 +305,11 @@ router.post('/tasks', verifyToken, taskUpload.array('files', 5), async (req, res
       }).catch(() => {});
     }
 
-    // In-app notifications
+    // In-app notifications — always notify the assignee directly (if system user)
     createTaskNotification({
       regionId:      taskRegion,
       excludeUserId: req.user.id,
+      directUserIds: [resolvedAssigneeUserId].filter(Boolean), // assignee if system user
       title:         `📋 مهمة جديدة: ${task.title}`,
       body:          `تم إنشاء مهمة جديدة في منطقة ${regionName} بواسطة ${assignerName}`,
       type:          'task_created',
@@ -401,10 +402,11 @@ router.put('/tasks/:id/acknowledge', verifyToken, async (req, res) => {
       }).catch(() => {});
     }
 
-    // In-app notifications
+    // In-app notifications — always notify the assigner directly
     createTaskNotification({
       regionId:      task.region_id,
       excludeUserId: req.user.id,
+      directUserIds: [task.assigned_by].filter(Boolean),
       title:         `👀 تم استلام المهمة: ${task.title}`,
       body:          `المشرف ${supervisorName} أكّد استلام المهمة`,
       type:          'task_acknowledged',
@@ -433,10 +435,11 @@ router.put('/tasks/:id/start', verifyToken, async (req, res) => {
     if (!result.rowCount) return res.status(400).json({ error: 'لا يمكن تحديث حالة المهمة' });
     const task = result.rows[0];
 
-    // In-app notifications
+    // In-app notifications — always notify the assigner directly
     createTaskNotification({
       regionId:      task.region_id,
       excludeUserId: req.user.id,
+      directUserIds: [task.assigned_by].filter(Boolean),
       title:         `⚙️ بدأ تنفيذ المهمة: ${task.title}`,
       body:          'تم تغيير حالة المهمة إلى قيد التنفيذ',
       type:          'task_started',
@@ -502,10 +505,11 @@ router.put('/tasks/:id/complete', verifyToken, taskUpload.array('files', 5), asy
       }).catch(() => {});
     }
 
-    // In-app notifications
+    // In-app notifications — always notify the assigner directly
     createTaskNotification({
       regionId:      task.region_id,
       excludeUserId: req.user.id,
+      directUserIds: [task.assigned_by].filter(Boolean),
       title:         `✅ تم إنجاز المهمة: ${task.title}`,
       body:          note ? `ملاحظة الإنجاز: ${note}` : 'تم إنجاز المهمة بنجاح',
       type:          'task_completed',
@@ -534,10 +538,11 @@ router.put('/tasks/:id/cancel', verifyToken, requireRoles(...ADMIN_ROLES), async
     if (!result.rowCount) return res.status(400).json({ error: 'لا يمكن إلغاء هذه المهمة' });
     const cancelledTask = result.rows[0];
 
-    // In-app notifications
+    // In-app notifications — notify assignee + assigner
     createTaskNotification({
       regionId:      cancelledTask.region_id,
       excludeUserId: req.user.id,
+      directUserIds: [cancelledTask.assigned_by, cancelledTask.assignee_user_id].filter(Boolean),
       title:         `❌ تم إلغاء المهمة: ${cancelledTask.title}`,
       body:          'تم إلغاء المهمة بواسطة المسؤول',
       type:          'task_cancelled',

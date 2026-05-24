@@ -34,21 +34,43 @@ async function resolveRecipients(regionId, excludeUserId = null) {
 
 /**
  * Insert one notification row per recipient (deduped).
- * @param {object} opts
- * @param {number|null} opts.regionId
- * @param {string|null} opts.excludeUserId
- * @param {string}      opts.title
- * @param {string}      opts.body
- * @param {string}      opts.type
- * @param {string|null} opts.taskId
+ * @param {object}        opts
+ * @param {number|null}   opts.regionId       – notify all active users in this region + all admins
+ * @param {string|null}   opts.excludeUserId  – don't notify the actor themselves
+ * @param {string[]}      opts.directUserIds  – always notify these specific user UUIDs (e.g. assigner/assignee)
+ * @param {string}        opts.title
+ * @param {string}        opts.body
+ * @param {string}        opts.type
+ * @param {string|null}   opts.taskId
  */
-async function createTaskNotification({ regionId, excludeUserId = null, title, body, type = 'task', taskId = null }) {
+async function createTaskNotification({
+  regionId,
+  excludeUserId = null,
+  directUserIds = [],
+  title,
+  body,
+  type = 'task',
+  taskId = null,
+}) {
   try {
-    const recipients = await resolveRecipients(regionId, excludeUserId);
+    const regionRecipients = await resolveRecipients(regionId, excludeUserId);
+
+    // Merge region-based + direct recipients, then remove excluded user and dedupe
+    const excludeStr = excludeUserId ? String(excludeUserId) : null;
+    const merged = [
+      ...regionRecipients,
+      ...directUserIds
+        .filter(Boolean)
+        .map(String)
+        .filter(id => id !== excludeStr),
+    ];
+
+    // Deduplicate
+    const recipients = [...new Set(merged)];
     if (!recipients.length) return;
 
     // Build bulk INSERT values
-    const values = recipients.map((uid, i) => {
+    const values = recipients.map((_, i) => {
       const base = i * 5;
       return `($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}, $${base + 5})`;
     }).join(', ');
@@ -60,6 +82,7 @@ async function createTaskNotification({ regionId, excludeUserId = null, title, b
        VALUES ${values}`,
       params
     );
+    console.log(`[notifHelper] created ${recipients.length} notification(s) — type: ${type}`);
   } catch (err) {
     console.error('[notifHelper] failed to create notifications:', err.message, err.stack?.split('\n')[1]);
   }

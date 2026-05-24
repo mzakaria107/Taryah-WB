@@ -1,23 +1,36 @@
 /**
  * salesReport.js
- * Live sales transactions from NetSuite Web Query (cr=565)
- * GET /api/sales-report          → hierarchical JSON (cached 5 min)
- * GET /api/sales-report/refresh  → force-refresh cache
+ * Live sales from NetSuite Web Query
+ *
+ * GET /api/sales-report           → today's sales  (cached 5 min)
+ * GET /api/sales-report/refresh   → force-refresh today cache
+ * GET /api/sales-report/monthly   → monthly sales  (cached 5 min)
+ * GET /api/sales-report/monthly/refresh → force-refresh monthly cache
  */
 const express = require('express');
 const router  = express.Router();
 const { verifyToken } = require('../middleware/auth');
 
-const WEBQUERY_URL =
+/* ── NetSuite WebQuery URLs ─────────────────────────────────── */
+const BASE =
   'https://9275514.app.netsuite.com/app/reporting/webquery.nl' +
-  '?compid=9275514&entity=64075&email=nationalsales@taryahpoultry.com.sa' +
-  '&role=1225&cr=565&hash=AAEJ7tMQ30dgSVRK-91K_ubbZyAA6En2PifvkQVCqo7ouhJEoLk';
+  '?compid=9275514&entity=64075&email=nationalsales@taryahpoultry.com.sa&role=1225';
 
-/* ── Cache ─────────────────────────────────────────────────── */
-let _cache = null, _cacheAt = 0;
-const TTL  = 5 * 60 * 1000;
+// Today's sales (cr=565)
+const WEBQUERY_TODAY =
+  BASE + '&cr=565&hash=AAEJ7tMQ30dgSVRK-91K_ubbZyAA6En2PifvkQVCqo7ouhJEoLk';
 
-/* ── HTML parser (reused from currentStock pattern) ─────────── */
+// Monthly sales — update cr & hash when the monthly saved search is ready
+// TODO: replace cr=565 with the correct monthly saved-search ID
+const WEBQUERY_MONTHLY =
+  BASE + '&cr=565&hash=AAEJ7tMQ30dgSVRK-91K_ubbZyAA6En2PifvkQVCqo7ouhJEoLk';
+
+/* ── Caches ─────────────────────────────────────────────────── */
+let _cacheToday   = null, _cacheTodayAt   = 0;
+let _cacheMonthly = null, _cacheMonthlyAt = 0;
+const TTL = 5 * 60 * 1000;
+
+/* ── HTML parser ─────────────────────────────────────────────── */
 function parseHTMLTable(html) {
   html = html
     .replace(/<script[\s\S]*?<\/script>/gi, '')
@@ -82,34 +95,28 @@ function parseCSV(text) {
   return rows;
 }
 
-/* ── Region extractor from location string ─────────────────── */
+/* ── Region extractor ───────────────────────────────────────── */
 function extractRegion(location = '') {
   if (!location) return 'أخرى';
-  // "الرياض - منتج تام ميرنا"  → "الرياض"
-  // "شقرا منتج تام - ميرنا"    → "شقرا"
-  // "عرعر- منتج تام"            → "عرعر"
-  // "الدمام - منتج تام"         → "الدمام"
   const m = location.match(/^(.*?)[\s]*[-–]?\s*منتج\s/);
   if (m && m[1].trim()) return m[1].trim();
   const m2 = location.match(/^([^-–]+)/);
   return m2 ? m2[1].trim() : location;
 }
 
-/* ── Parse number — handles "=16800", "1,234.56", "-155400" ── */
+/* ── Parse number — handles "=16800", "1,234.56" ───────────── */
 function parseNum(v) {
   if (v === null || v === undefined) return 0;
-  // NetSuite HTML export wraps numbers in Excel formula style: "=16800"
   const s = String(v).replace(/^=/, '').replace(/,/g, '').trim();
   const n = parseFloat(s);
   return isNaN(n) ? 0 : n;
 }
 
-/* ── Normalize column keys — map by header name or by index ── */
+/* ── Normalize column keys ──────────────────────────────────── */
 function normalizeRow(raw) {
   const keys = Object.keys(raw);
   const vals = Object.values(raw);
 
-  // Try to match by known English header names first
   const findKey = (...candidates) => {
     for (const c of candidates) {
       const k = keys.find(k => k.toLowerCase().includes(c.toLowerCase()));
@@ -130,31 +137,22 @@ function normalizeRow(raw) {
 
 /* ── Build hierarchical structure ──────────────────────────── */
 function buildHierarchy(rawRows) {
-  // Filter out non-sales rows (unassigned reps, special warehouses, zero-qty & zero-total)
   const normalized = rawRows.map(normalizeRow);
   console.log(`[SalesReport] parsed ${rawRows.length} rows`);
 
-  // Replace unassigned rep placeholder with a readable label
   normalized.forEach(r => {
     if (!r.salesRep || r.salesRep === '- Unassigned -') r.salesRep = 'غير محدد';
   });
 
-  const rows = normalized
-    .filter(r =>
-      r.itemName &&
-      !(r.qty === 0 && r.total === 0)
-    );
+  const rows = normalized.filter(r => r.itemName && !(r.qty === 0 && r.total === 0));
   console.log(`[SalesReport] after filter: ${rows.length} rows`);
   if (rows[0]) console.log('[SalesReport] filtered row[0]:', rows[0]);
 
-  // Region map: { regionName → { repName → [ {itemName, itemType, qty, total} ] } }
   const regionMap = {};
-
   for (const r of rows) {
     const region = extractRegion(r.location);
     if (!regionMap[region]) regionMap[region] = {};
     if (!regionMap[region][r.salesRep]) regionMap[region][r.salesRep] = [];
-    // compute avgPrice per item
     const itemAvg = r.qty !== 0 ? r.total / Math.abs(r.qty) : 0;
     regionMap[region][r.salesRep].push({
       itemName: r.itemName,
@@ -165,13 +163,11 @@ function buildHierarchy(rawRows) {
     });
   }
 
-  // Convert to array with aggregates
   const regions = Object.entries(regionMap).map(([regionName, reps]) => {
     const repArr = Object.entries(reps).map(([repName, items]) => {
       const repQty   = items.reduce((s, i) => s + i.qty,   0);
       const repTotal = items.reduce((s, i) => s + i.total, 0);
-      // avgPrice = net total / absolute qty (price per unit regardless of direction)
-      const repAvg = repQty !== 0 ? repTotal / Math.abs(repQty) : 0;
+      const repAvg   = repQty !== 0 ? repTotal / Math.abs(repQty) : 0;
       return {
         repName,
         qty:      repQty,
@@ -179,7 +175,7 @@ function buildHierarchy(rawRows) {
         avgPrice: repAvg,
         items: items.sort((a,b) => b.total - a.total),
       };
-    }).sort((a,b) => b.total - a.total);   // sort by actual net total
+    }).sort((a,b) => b.total - a.total);
 
     const regionQty   = repArr.reduce((s,r) => s + r.qty,   0);
     const regionTotal = repArr.reduce((s,r) => s + r.total, 0);
@@ -193,19 +189,20 @@ function buildHierarchy(rawRows) {
       repsCount: repArr.length,
       reps: repArr,
     };
-  }).sort((a,b) => b.total - a.total);   // sort by actual net total
+  }).sort((a,b) => b.total - a.total);
 
-  // KPIs — revenue = sum of positive sales; qty = NET (all rows); returns = absolute sum of negatives
+  // KPIs
   const posRows = rows.filter(r => r.qty > 0);
   const negRows = rows.filter(r => r.total < 0);
-  const totalRevenue = rows.reduce((s,r) => s + r.total, 0);  // net: sales − returns
-  const totalQty     = rows.reduce((s,r) => s + r.qty,   0); // net: sales − returns
+  const totalRevenue = rows.reduce((s,r) => s + r.total, 0);  // net
+  const totalQty     = rows.reduce((s,r) => s + r.qty,   0);  // net
   const totalReturns = Math.abs(negRows.reduce((s,r) => s + r.total, 0));
-  // Find best region/rep by positive-only sales
+
   const bestRegion = [...regions].sort((a,b) =>
     posRows.filter(r=>extractRegion(r.location)===b.regionName).reduce((s,r)=>s+r.total,0) -
     posRows.filter(r=>extractRegion(r.location)===a.regionName).reduce((s,r)=>s+r.total,0)
   )[0];
+
   const kpi = {
     totalRevenue,
     totalQty,
@@ -219,9 +216,9 @@ function buildHierarchy(rawRows) {
   return { kpi, regions };
 }
 
-/* ── Fetch from NetSuite ────────────────────────────────────── */
-async function fetchData() {
-  const res = await fetch(WEBQUERY_URL, {
+/* ── Generic fetch ──────────────────────────────────────────── */
+async function fetchData(url) {
+  const res = await fetch(url, {
     headers: { 'User-Agent': 'Mozilla/5.0', Accept: 'text/html,text/csv,*/*' },
     signal: AbortSignal.timeout(30_000),
   });
@@ -234,27 +231,53 @@ async function fetchData() {
   return buildHierarchy(raw);
 }
 
-/* ── Routes ─────────────────────────────────────────────────── */
+/* ── Routes: Today ──────────────────────────────────────────── */
 router.get('/', verifyToken, async (req, res) => {
   const force = req.query.refresh === '1';
-  if (!force && _cache && Date.now() - _cacheAt < TTL) return res.json(_cache);
+  if (!force && _cacheToday && Date.now() - _cacheTodayAt < TTL) return res.json(_cacheToday);
   try {
-    _cache  = await fetchData();
-    _cacheAt = Date.now();
-    res.json(_cache);
+    _cacheToday  = await fetchData(WEBQUERY_TODAY);
+    _cacheTodayAt = Date.now();
+    res.json(_cacheToday);
   } catch (err) {
-    console.error('[SalesReport] fetch error:', err.message);
-    if (_cache) return res.json({ ..._cache, stale: true });
+    console.error('[SalesReport/today] fetch error:', err.message);
+    if (_cacheToday) return res.json({ ..._cacheToday, stale: true });
     res.status(502).json({ error: 'تعذّر جلب البيانات من NetSuite' });
   }
 });
 
 router.get('/refresh', verifyToken, async (req, res) => {
-  _cache = null; _cacheAt = 0;
+  _cacheToday = null; _cacheTodayAt = 0;
   try {
-    _cache  = await fetchData();
-    _cacheAt = Date.now();
-    res.json({ ok: true, ..._cache });
+    _cacheToday  = await fetchData(WEBQUERY_TODAY);
+    _cacheTodayAt = Date.now();
+    res.json({ ok: true, ..._cacheToday });
+  } catch (err) {
+    res.status(502).json({ error: err.message });
+  }
+});
+
+/* ── Routes: Monthly ────────────────────────────────────────── */
+router.get('/monthly', verifyToken, async (req, res) => {
+  const force = req.query.refresh === '1';
+  if (!force && _cacheMonthly && Date.now() - _cacheMonthlyAt < TTL) return res.json(_cacheMonthly);
+  try {
+    _cacheMonthly  = await fetchData(WEBQUERY_MONTHLY);
+    _cacheMonthlyAt = Date.now();
+    res.json(_cacheMonthly);
+  } catch (err) {
+    console.error('[SalesReport/monthly] fetch error:', err.message);
+    if (_cacheMonthly) return res.json({ ..._cacheMonthly, stale: true });
+    res.status(502).json({ error: 'تعذّر جلب البيانات من NetSuite' });
+  }
+});
+
+router.get('/monthly/refresh', verifyToken, async (req, res) => {
+  _cacheMonthly = null; _cacheMonthlyAt = 0;
+  try {
+    _cacheMonthly  = await fetchData(WEBQUERY_MONTHLY);
+    _cacheMonthlyAt = Date.now();
+    res.json({ ok: true, ..._cacheMonthly });
   } catch (err) {
     res.status(502).json({ error: err.message });
   }

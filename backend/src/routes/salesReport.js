@@ -98,6 +98,8 @@ function parseCSV(text) {
 /* ── Region extractor ───────────────────────────────────────── */
 function extractRegion(location = '') {
   if (!location) return 'أخرى';
+  // Any location that contains "مخزن" → warehouse bucket regardless of prefix
+  if (location.includes('مخزن')) return 'مخزن دجاج حي';
   const m = location.match(/^(.*?)[\s]*[-–]?\s*منتج\s/);
   if (m && m[1].trim()) return m[1].trim();
   const m2 = location.match(/^([^-–]+)/);
@@ -236,11 +238,23 @@ async function resolveRegionName(regionId) {
 
 function filterByRegion(data, regionName) {
   if (!regionName || !data) return data;
-  const filteredRegions = data.regions.filter(r =>
-    r.regionName === regionName ||
-    r.regionName.includes(regionName) ||
-    regionName.includes(r.regionName)
-  );
+
+  // Normalize: collapse whitespace, strip diacritics for comparison
+  const norm = s => String(s).trim().replace(/\s+/g, ' ');
+  const dbName = norm(regionName);
+
+  const filteredRegions = data.regions.filter(r => {
+    const rName = norm(r.regionName);
+    if (rName === dbName) return true;
+    if (rName.includes(dbName)) return true;
+    if (dbName.includes(rName)) return true;
+    // Word-level: any significant word (>1 char) from dbName appears in rName
+    const words = dbName.split(/\s+/).filter(w => w.length > 1);
+    if (words.some(w => rName.includes(w))) return true;
+    return false;
+  });
+
+  console.log(`[SalesReport] filterByRegion "${dbName}": ${filteredRegions.length}/${data.regions.length} regions matched`);
   // Recompute KPI from filtered regions
   const allItems = filteredRegions.flatMap(r => r.reps.flatMap(rep => rep.items));
   const posItems = allItems.filter(i => i.qty > 0);

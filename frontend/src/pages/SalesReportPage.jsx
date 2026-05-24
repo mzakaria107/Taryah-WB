@@ -10,8 +10,9 @@ import client from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import './SalesReportPage.css';
 
-const ADMIN_ROLES = ['super_admin', 'it_admin'];
-const TYPE_FILTER_KEY = 'sales_report_item_types';
+const ADMIN_ROLES      = ['super_admin', 'it_admin'];
+const FULL_VIEW_ROLES  = ['super_admin', 'it_admin', 'sales_manager', 'top_management'];
+const TYPE_FILTER_KEY  = 'sales_report_item_types';
 
 /* ── Constants ───────────────────────────────────────────────── */
 const WAREHOUSE_NAME = 'مخزن دجاج حي';
@@ -276,9 +277,10 @@ function SalesContent({ period }) {
   const refreshFn  = isMonthly ? api.monthlyRefresh : api.todayRefresh;
   const queryKey   = isMonthly ? 'sales-report-monthly' : 'sales-report-today';
 
-  const { user }   = useAuth();
-  const isAdmin    = user && ADMIN_ROLES.includes(user.role);
-  const queryClient = useQueryClient();
+  const { user }     = useAuth();
+  const isAdmin      = user && ADMIN_ROLES.includes(user.role);
+  const isFullView   = user && FULL_VIEW_ROLES.includes(user.role);
+  const queryClient  = useQueryClient();
 
   const [refreshing,       setRefreshing]       = useState(false);
   const [excludeWarehouse, setExcludeWarehouse] = useState(true);
@@ -368,9 +370,14 @@ function SalesContent({ period }) {
   const rawRegions = data?.regions || [];
 
   /* ── Step 1: warehouse filter ───────────────────────────────── */
+  // Non-full-view users (supervisor/region_manager): always exclude warehouse
+  // Full-view users (admin/manager): respect the toggle
+  const shouldExcludeWarehouse = !isFullView || excludeWarehouse;
   const warehouseFiltered = useMemo(() =>
-    excludeWarehouse ? rawRegions.filter(r => r.regionName !== WAREHOUSE_NAME) : rawRegions,
-  [rawRegions, excludeWarehouse]);
+    shouldExcludeWarehouse
+      ? rawRegions.filter(r => !r.regionName.includes('مخزن'))
+      : rawRegions,
+  [rawRegions, shouldExcludeWarehouse]);
 
   /* ── All available item types (for admin panel) ─────────────── */
   const allTypes = useMemo(() => {
@@ -493,14 +500,17 @@ function SalesContent({ period }) {
 
       {/* Toolbar */}
       <div className="srp-toolbar srp-no-print">
-        <button
-          className={`srp-btn srp-btn--toggle${excludeWarehouse ? ' srp-btn--toggle-active' : ''}`}
-          onClick={() => setExcludeWarehouse(v => !v)}
-          title={excludeWarehouse ? 'مخزن دجاج حي مستثنى' : 'اضغط لاستثناء مخزن دجاج حي'}
-        >
-          <EyeOff size={14}/>
-          {excludeWarehouse ? 'مخزن دجاج حي: مستثنى' : 'مخزن دجاج حي: مُدرج'}
-        </button>
+        {/* Warehouse toggle — only for admin/manager roles with full regional view */}
+        {isFullView && (
+          <button
+            className={`srp-btn srp-btn--toggle${excludeWarehouse ? ' srp-btn--toggle-active' : ''}`}
+            onClick={() => setExcludeWarehouse(v => !v)}
+            title={excludeWarehouse ? 'مخزن دجاج حي مستثنى' : 'اضغط لاستثناء مخزن دجاج حي'}
+          >
+            <EyeOff size={14}/>
+            {excludeWarehouse ? 'مخزن دجاج حي: مستثنى' : 'مخزن دجاج حي: مُدرج'}
+          </button>
+        )}
 
         {/* Type filter button — admin sees edit panel, others see passive badge */}
         <div className="srp-type-filter-wrap" ref={typeFilterRef}>

@@ -251,6 +251,196 @@
   .sidebar { display: none; }
 }
 
+/* ── Sidebar reorder button ─────────────────────── */
+.sidebar-reorder-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: calc(100% - 16px);
+  margin: 6px 8px 10px;
+  padding: 8px 10px;
+  border-radius: var(--radius-md);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--color-text-muted);
+  background: transparent;
+  border: 1px dashed var(--color-border);
+  transition: var(--transition-fast);
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.sidebar-reorder-btn:hover {
+  background: var(--color-bg-alt);
+  color: var(--color-brand-green);
+  border-color: var(--color-brand-green);
+}
+.sidebar-reorder-btn--icon {
+  width: 36px;
+  margin: 6px auto 10px;
+  padding: 8px 0;
+  justify-content: center;
+}
+
+/* ── Reorder overlay & modal ────────────────────── */
+.sro-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: sroFadeIn 180ms ease;
+}
+@keyframes sroFadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.sro-modal {
+  background: #fff;
+  border-radius: var(--radius-lg, 12px);
+  box-shadow: 0 20px 60px rgba(0,0,0,0.25);
+  width: 340px;
+  max-width: calc(100vw - 32px);
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  animation: sroSlideIn 200ms cubic-bezier(0.34,1.56,0.64,1);
+  overflow: hidden;
+}
+@keyframes sroSlideIn {
+  from { transform: translateY(-20px) scale(0.96); opacity: 0; }
+  to   { transform: none;                          opacity: 1; }
+}
+
+.sro-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 16px 16px 12px;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--color-text-primary, #111);
+  border-bottom: 1px solid var(--color-border);
+  flex-shrink: 0;
+}
+.sro-header > span { flex: 1; }
+.sro-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-muted);
+  transition: var(--transition-fast);
+}
+.sro-close:hover {
+  background: var(--color-bg-alt);
+  color: var(--color-text-primary);
+}
+
+.sro-hint {
+  padding: 8px 16px 4px;
+  font-size: 12px;
+  color: var(--color-text-muted);
+  flex-shrink: 0;
+}
+
+.sro-list {
+  list-style: none;
+  padding: 6px 10px;
+  margin: 0;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.sro-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 10px;
+  border-radius: var(--radius-md);
+  cursor: grab;
+  transition: background 120ms;
+  user-select: none;
+  margin-bottom: 2px;
+}
+.sro-item:active { cursor: grabbing; }
+.sro-item:hover  { background: var(--color-brand-green-pale, #f0faf3); }
+
+.sro-grip {
+  color: var(--color-text-muted);
+  flex-shrink: 0;
+  opacity: 0.5;
+}
+.sro-item:hover .sro-grip { opacity: 1; }
+
+.sro-item-icon {
+  display: flex;
+  align-items: center;
+  color: var(--color-text-secondary);
+  flex-shrink: 0;
+}
+.sro-item-label {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-text-primary, #111);
+  flex: 1;
+}
+
+.sro-footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--color-border);
+  flex-shrink: 0;
+}
+
+.sro-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 7px 14px;
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+.sro-btn--save {
+  background: var(--color-brand-green, #16a34a);
+  color: #fff;
+  flex: 1;
+  justify-content: center;
+}
+.sro-btn--save:hover { filter: brightness(1.08); }
+
+.sro-btn--reset {
+  background: transparent;
+  color: var(--color-text-muted);
+  border: 1px solid var(--color-border);
+  font-size: 12px;
+  padding: 7px 10px;
+}
+.sro-btn--reset:hover {
+  background: var(--color-bg-alt);
+  color: var(--color-text-secondary);
+}
+
+.sro-btn--cancel {
+  background: transparent;
+  color: var(--color-text-muted);
+  border: 1px solid var(--color-border);
+}
+.sro-btn--cancel:hover {
+  background: var(--color-bg-alt);
+  color: var(--color-text-secondary);
+}
+
 /* ── Bottom nav (mobile) ────────────────────────── */
 .bottom-nav {
   display:    none;

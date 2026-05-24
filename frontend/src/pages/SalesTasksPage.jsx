@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, X, Paperclip, MessageSquare, ChevronDown, Pencil, Trash2, CheckCircle, PlayCircle, Download, Printer } from 'lucide-react';
@@ -90,6 +90,185 @@ async function downloadFile(storedName, originalName) {
   } catch (e) {
     alert('تعذّر تنزيل الملف');
   }
+}
+
+/* ═══════════════════════════════════════════════════════
+   EMAIL SUGGEST — single email field with user dropdown
+   ═══════════════════════════════════════════════════════ */
+function EmailSuggest({ value, onChange, placeholder, allUsers = [] }) {
+  const [open, setOpen]     = useState(false);
+  const [query, setQuery]   = useState('');
+  const wrapRef             = useRef();
+
+  // Close on outside click
+  useEffect(() => {
+    if (!open) return;
+    const h = (e) => { if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
+  }, [open]);
+
+  const suggestions = allUsers.filter(u => {
+    if (!u.email) return false;
+    const q = (query || value || '').toLowerCase();
+    return (
+      u.email.toLowerCase().includes(q) ||
+      (u.name || '').toLowerCase().includes(q)
+    );
+  }).slice(0, 8);
+
+  const select = (email) => {
+    onChange(email);
+    setQuery('');
+    setOpen(false);
+  };
+
+  return (
+    <div ref={wrapRef} style={{ position:'relative' }}>
+      <div style={{ display:'flex', gap:0 }}>
+        <input
+          className="stp-input"
+          type="email"
+          dir="ltr"
+          value={value}
+          placeholder={placeholder}
+          onChange={e => { onChange(e.target.value); setQuery(e.target.value); setOpen(true); }}
+          onFocus={() => { setQuery(value || ''); setOpen(true); }}
+          style={{ borderRadius:'8px 0 0 8px', flex:1 }}
+        />
+        <button
+          type="button"
+          className="stp-suggest-btn"
+          onClick={() => { setQuery(''); setOpen(v => !v); }}
+          tabIndex={-1}
+          title="اختر من القائمة"
+        >
+          <ChevronDown size={13}/>
+        </button>
+      </div>
+      {open && suggestions.length > 0 && (
+        <div className="stp-suggest-dropdown">
+          {suggestions.map(u => (
+            <div
+              key={u.combined_id || u.email}
+              className="stp-suggest-item"
+              onMouseDown={e => { e.preventDefault(); select(u.email); }}
+            >
+              <span className="stp-suggest-name">{u.name || u.email}</span>
+              <span className="stp-suggest-email">{u.email}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════
+   CC EMAILS INPUT — tag-based multi-email with user dropdown
+   ═══════════════════════════════════════════════════════ */
+function CcEmailsInput({ value, onChange, allUsers = [] }) {
+  // value = comma-separated string
+  const tags    = value ? value.split(',').map(e => e.trim()).filter(Boolean) : [];
+  const [input, setInput]   = useState('');
+  const [open,  setOpen]    = useState(false);
+  const wrapRef             = useRef();
+  const inputRef            = useRef();
+
+  useEffect(() => {
+    if (!open) return;
+    const h = (e) => { if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
+  }, [open]);
+
+  const addEmail = (email) => {
+    const clean = email.trim().toLowerCase();
+    if (!clean || tags.includes(clean)) return;
+    onChange([...tags, clean].join(', '));
+    setInput('');
+    setOpen(false);
+  };
+
+  const removeTag = (tag) => {
+    onChange(tags.filter(t => t !== tag).join(', '));
+  };
+
+  const handleKey = (e) => {
+    if ((e.key === 'Enter' || e.key === ',' || e.key === ' ') && input.trim()) {
+      e.preventDefault();
+      addEmail(input);
+    }
+    if (e.key === 'Backspace' && !input && tags.length) {
+      removeTag(tags[tags.length - 1]);
+    }
+  };
+
+  const suggestions = allUsers.filter(u => {
+    if (!u.email || tags.includes(u.email.toLowerCase())) return false;
+    const q = input.toLowerCase();
+    return (
+      u.email.toLowerCase().includes(q) ||
+      (u.name || '').toLowerCase().includes(q)
+    );
+  }).slice(0, 8);
+
+  return (
+    <div ref={wrapRef} style={{ position:'relative' }}>
+      <div
+        className="stp-cc-wrap"
+        onClick={() => { inputRef.current?.focus(); setOpen(true); }}
+      >
+        {tags.map(tag => (
+          <span key={tag} className="stp-cc-tag">
+            {tag}
+            <button
+              type="button"
+              className="stp-cc-tag-rm"
+              onMouseDown={e => { e.preventDefault(); removeTag(tag); }}
+            ><X size={10}/></button>
+          </span>
+        ))}
+        <input
+          ref={inputRef}
+          className="stp-cc-input"
+          dir="ltr"
+          value={input}
+          placeholder={tags.length ? '' : 'اكتب أو اختر من القائمة…'}
+          onChange={e => { setInput(e.target.value); setOpen(true); }}
+          onFocus={() => setOpen(true)}
+          onKeyDown={handleKey}
+          onBlur={e => {
+            // add on blur if there's text
+            if (input.trim() && input.includes('@')) addEmail(input);
+          }}
+        />
+        <button
+          type="button"
+          className="stp-suggest-btn stp-suggest-btn--cc"
+          onClick={e => { e.stopPropagation(); setInput(''); setOpen(v => !v); }}
+          tabIndex={-1}
+          title="اختر من القائمة"
+        >
+          <ChevronDown size={13}/>
+        </button>
+      </div>
+      {open && suggestions.length > 0 && (
+        <div className="stp-suggest-dropdown">
+          {suggestions.map(u => (
+            <div
+              key={u.combined_id || u.email}
+              className="stp-suggest-item"
+              onMouseDown={e => { e.preventDefault(); addEmail(u.email); }}
+            >
+              <span className="stp-suggest-name">{u.name || u.email}</span>
+              <span className="stp-suggest-email">{u.email}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 /* ═══════════════════════════════════════════════════════
@@ -322,18 +501,32 @@ function CreateTaskModal({ regions, assignees = [], userRegionId, onClose, onCre
           <div className="stp-form-row">
             <div className="stp-form-group">
               <label className="stp-label">بريد المُعيِّن (أنت)</label>
-              <input className="stp-input" type="email" dir="ltr" value={form.assigner_email} onChange={e => set('assigner_email', e.target.value)} placeholder="your@email.com" />
+              <EmailSuggest
+                value={form.assigner_email}
+                onChange={v => set('assigner_email', v)}
+                placeholder="your@email.com"
+                allUsers={assignees}
+              />
             </div>
             <div className="stp-form-group">
-              <label className="stp-label">بريد المُعيَّن له (المشرف)</label>
-              <input className="stp-input" type="email" dir="ltr" value={form.assignee_email} onChange={e => set('assignee_email', e.target.value)} placeholder="supervisor@email.com" />
+              <label className="stp-label">بريد المُعيَّن له</label>
+              <EmailSuggest
+                value={form.assignee_email}
+                onChange={v => set('assignee_email', v)}
+                placeholder="supervisor@email.com"
+                allUsers={assignees}
+              />
             </div>
           </div>
           <div className="stp-form-row full">
             <div className="stp-form-group">
               <label className="stp-label">نسخة (CC)</label>
-              <input className="stp-input" dir="ltr" value={form.cc_emails} onChange={e => set('cc_emails', e.target.value)} placeholder="email1@x.com, email2@x.com" />
-              <div className="stp-cc-hint">يمكن إضافة أكثر من بريد مفصولة بفاصلة</div>
+              <CcEmailsInput
+                value={form.cc_emails}
+                onChange={v => set('cc_emails', v)}
+                allUsers={assignees}
+              />
+              <div className="stp-cc-hint">اكتب الإيميل واضغط Enter أو اختر من القائمة</div>
             </div>
           </div>
 

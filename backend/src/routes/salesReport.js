@@ -95,10 +95,11 @@ function extractRegion(location = '') {
   return m2 ? m2[1].trim() : location;
 }
 
-/* ── Parse number — handles comma-formatted "1,234.56" ─────── */
+/* ── Parse number — handles "=16800", "1,234.56", "-155400" ── */
 function parseNum(v) {
   if (v === null || v === undefined) return 0;
-  const s = String(v).replace(/,/g, '').trim();
+  // NetSuite HTML export wraps numbers in Excel formula style: "=16800"
+  const s = String(v).replace(/^=/, '').replace(/,/g, '').trim();
   const n = parseFloat(s);
   return isNaN(n) ? 0 : n;
 }
@@ -130,28 +131,21 @@ function normalizeRow(raw) {
 /* ── Build hierarchical structure ──────────────────────────── */
 function buildHierarchy(rawRows) {
   // Filter out non-sales rows (unassigned reps, special warehouses, zero-qty & zero-total)
-  // Log raw data to diagnose column mapping
-  if (rawRows.length > 0) {
-    console.log('[SalesReport] RAW row[0]:', JSON.stringify(rawRows[0]));
-    console.log('[SalesReport] RAW row[1]:', JSON.stringify(rawRows[1]));
-    // Find rows with non-zero qty or non-unassigned rep
-    const interesting = rawRows.find(r => {
-      const vals = Object.values(r);
-      return vals.some(v => v && v !== '- Unassigned -' && v !== '0' && v !== '' && !isNaN(parseFloat(String(v).replace(/,/g,''))));
-    });
-    if (interesting) console.log('[SalesReport] first interesting raw row:', JSON.stringify(interesting));
-  }
   const normalized = rawRows.map(normalizeRow);
-  console.log('[SalesReport] sample row[0]:', normalized[0]);
-  console.log(`[SalesReport] total raw rows: ${rawRows.length}, normalized: ${normalized.length}`);
+  console.log(`[SalesReport] parsed ${rawRows.length} rows`);
+
+  // Replace unassigned rep placeholder with a readable label
+  normalized.forEach(r => {
+    if (!r.salesRep || r.salesRep === '- Unassigned -') r.salesRep = 'غير محدد';
+  });
 
   const rows = normalized
     .filter(r =>
-      r.salesRep && r.salesRep !== '- Unassigned -' &&
       r.itemName &&
       !(r.qty === 0 && r.total === 0)
     );
   console.log(`[SalesReport] after filter: ${rows.length} rows`);
+  if (rows[0]) console.log('[SalesReport] filtered row[0]:', rows[0]);
 
   // Region map: { regionName → { repName → [ {itemName, itemType, qty, total} ] } }
   const regionMap = {};

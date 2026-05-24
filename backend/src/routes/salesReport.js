@@ -9,7 +9,8 @@
  */
 const express = require('express');
 const router  = express.Router();
-const { verifyToken } = require('../middleware/auth');
+const pool    = require('../db/pool');
+const { verifyToken, applyRegionFilter } = require('../middleware/auth');
 
 /* ── NetSuite WebQuery URLs ─────────────────────────────────── */
 const BASE =
@@ -224,6 +225,42 @@ function buildHierarchy(rawRows) {
   return { kpi, regions };
 }
 
+/* ── Region helpers ─────────────────────────────────────────── */
+async function resolveRegionName(regionId) {
+  if (!regionId) return null;
+  try {
+    const res = await pool.query('SELECT name_ar FROM regions WHERE id = $1', [regionId]);
+    return res.rows[0]?.name_ar || null;
+  } catch { return null; }
+}
+
+function filterByRegion(data, regionName) {
+  if (!regionName || !data) return data;
+  const filteredRegions = data.regions.filter(r =>
+    r.regionName === regionName ||
+    r.regionName.includes(regionName) ||
+    regionName.includes(r.regionName)
+  );
+  // Recompute KPI from filtered regions
+  const allItems = filteredRegions.flatMap(r => r.reps.flatMap(rep => rep.items));
+  const posItems = allItems.filter(i => i.qty > 0);
+  const negItems = allItems.filter(i => i.total < 0);
+  const totalRevenue = allItems.reduce((s, i) => s + i.total, 0);
+  const totalQty     = allItems.reduce((s, i) => s + i.qty,   0);
+  const totalReturns = Math.abs(negItems.reduce((s, i) => s + i.total, 0));
+  const kpi = {
+    ...data.kpi,
+    totalRevenue,
+    totalQty,
+    totalReturns,
+    regionsCount: filteredRegions.length,
+    repsCount:    new Set(filteredRegions.flatMap(r => r.reps.map(rep => rep.repName))).size,
+    topRegion:    filteredRegions[0]?.regionName || '—',
+    topRep:       filteredRegions[0]?.reps[0]?.repName || '—',
+  };
+  return { kpi, regions: filteredRegions };
+}
+
 /* ── Generic fetch ──────────────────────────────────────────── */
 async function fetchData(url) {
   const res = await fetch(url, {
@@ -240,52 +277,70 @@ async function fetchData(url) {
 }
 
 /* ── Routes: Today ──────────────────────────────────────────── */
-router.get('/', verifyToken, async (req, res) => {
+router.get('/', verifyToken, applyRegionFilter, async (req, res) => {
   const force = req.query.refresh === '1';
-  if (!force && _cacheToday && Date.now() - _cacheTodayAt < TTL) return res.json(_cacheToday);
+  if (!force && _cacheToday && Date.now() - _cacheTodayAt < TTL) {
+    const regionName = await resolveRegionName(req.regionFilter);
+    return res.json(filterByRegion(_cacheToday, regionName));
+  }
   try {
     _cacheToday  = await fetchData(WEBQUERY_TODAY);
     _cacheTodayAt = Date.now();
-    res.json(_cacheToday);
+    const regionName = await resolveRegionName(req.regionFilter);
+    res.json(filterByRegion(_cacheToday, regionName));
   } catch (err) {
     console.error('[SalesReport/today] fetch error:', err.message);
-    if (_cacheToday) return res.json({ ..._cacheToday, stale: true });
+    if (_cacheToday) {
+      const regionName = await resolveRegionName(req.regionFilter);
+      return res.json({ ...filterByRegion(_cacheToday, regionName), stale: true });
+    }
     res.status(502).json({ error: 'تعذّر جلب البيانات من NetSuite' });
   }
 });
 
-router.get('/refresh', verifyToken, async (req, res) => {
+router.get('/refresh', verifyToken, applyRegionFilter, async (req, res) => {
   _cacheToday = null; _cacheTodayAt = 0;
   try {
     _cacheToday  = await fetchData(WEBQUERY_TODAY);
     _cacheTodayAt = Date.now();
-    res.json({ ok: true, ..._cacheToday });
+    const regionName = await resolveRegionName(req.regionFilter);
+    const data = filterByRegion(_cacheToday, regionName);
+    res.json({ ok: true, ...data });
   } catch (err) {
     res.status(502).json({ error: err.message });
   }
 });
 
 /* ── Routes: Monthly ────────────────────────────────────────── */
-router.get('/monthly', verifyToken, async (req, res) => {
+router.get('/monthly', verifyToken, applyRegionFilter, async (req, res) => {
   const force = req.query.refresh === '1';
-  if (!force && _cacheMonthly && Date.now() - _cacheMonthlyAt < TTL) return res.json(_cacheMonthly);
+  if (!force && _cacheMonthly && Date.now() - _cacheMonthlyAt < TTL) {
+    const regionName = await resolveRegionName(req.regionFilter);
+    return res.json(filterByRegion(_cacheMonthly, regionName));
+  }
   try {
     _cacheMonthly  = await fetchData(WEBQUERY_MONTHLY);
     _cacheMonthlyAt = Date.now();
-    res.json(_cacheMonthly);
+    const regionName = await resolveRegionName(req.regionFilter);
+    res.json(filterByRegion(_cacheMonthly, regionName));
   } catch (err) {
     console.error('[SalesReport/monthly] fetch error:', err.message);
-    if (_cacheMonthly) return res.json({ ..._cacheMonthly, stale: true });
+    if (_cacheMonthly) {
+      const regionName = await resolveRegionName(req.regionFilter);
+      return res.json({ ...filterByRegion(_cacheMonthly, regionName), stale: true });
+    }
     res.status(502).json({ error: 'تعذّر جلب البيانات من NetSuite' });
   }
 });
 
-router.get('/monthly/refresh', verifyToken, async (req, res) => {
+router.get('/monthly/refresh', verifyToken, applyRegionFilter, async (req, res) => {
   _cacheMonthly = null; _cacheMonthlyAt = 0;
   try {
     _cacheMonthly  = await fetchData(WEBQUERY_MONTHLY);
     _cacheMonthlyAt = Date.now();
-    res.json({ ok: true, ..._cacheMonthly });
+    const regionName = await resolveRegionName(req.regionFilter);
+    const data = filterByRegion(_cacheMonthly, regionName);
+    res.json({ ok: true, ...data });
   } catch (err) {
     res.status(502).json({ error: err.message });
   }

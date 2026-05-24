@@ -98,8 +98,9 @@ function parseCSV(text) {
 /* ── Region extractor ───────────────────────────────────────── */
 function extractRegion(location = '') {
   if (!location) return 'أخرى';
-  // Any location that contains "مخزن" → warehouse bucket regardless of prefix
-  if (location.includes('مخزن')) return 'مخزن دجاج حي';
+  // Only the STANDALONE "مخزن دجاج حي" goes to warehouse bucket.
+  // Regional warehouses like "شقرا - المخزن المركزي" stay under their region.
+  if (/^مخزن\s*دجاج\s*حي/i.test(location.trim())) return 'مخزن دجاج حي';
   const m = location.match(/^(.*?)[\s]*[-–]?\s*منتج\s/);
   if (m && m[1].trim()) return m[1].trim();
   const m2 = location.match(/^([^-–]+)/);
@@ -195,8 +196,6 @@ function buildHierarchy(rawRows) {
     };
   }).sort((a,b) => b.total - a.total);
 
-  console.log('[SalesReport] regions:', regions.map(r => r.regionName).join(' | '));
-
   // KPIs
   const posRows = rows.filter(r => r.qty > 0);
   const negRows = rows.filter(r => r.total < 0);
@@ -256,8 +255,7 @@ function filterByRegion(data, regionName) {
     return false;
   });
 
-  const available = data.regions.map(r => r.regionName).join(' | ');
-  console.log(`[SalesReport] filterByRegion "${dbName}": ${filteredRegions.length}/${data.regions.length} matched | available: ${available}`);
+  console.log(`[SalesReport] filterByRegion "${dbName}": ${filteredRegions.length}/${data.regions.length} matched`);
   // Recompute KPI from filtered regions
   const allItems = filteredRegions.flatMap(r => r.reps.flatMap(rep => rep.items));
   const posItems = allItems.filter(i => i.qty > 0);

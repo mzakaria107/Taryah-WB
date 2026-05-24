@@ -92,21 +92,12 @@ function buildParams(filters) {
 
 export default function Dashboard() {
   const { user } = useAuth();
-  const [filters,  setFilters]  = useState(() => {
-    // Restore includeDirect from sessionStorage so it persists within the session
-    const saved = sessionStorage.getItem('includeDirect');
-    return {
-      ...EMPTY_FILTERS,
-      includeDirect: saved === null ? true : saved === 'true',
-    };
-  });
+  // includeDirect always starts as false — direct sales excluded by default for all users.
+  // Clear any stale sessionStorage value from old versions so it doesn't affect new sessions.
+  sessionStorage.removeItem('includeDirect');
+  const [filters,  setFilters]  = useState({ ...EMPTY_FILTERS });
   const [sortBy,   setSortBy]   = useState('total_balance');
   const [sortDir,  setSortDir]  = useState('DESC');
-
-  // Persist includeDirect for the whole browser session
-  useEffect(() => {
-    sessionStorage.setItem('includeDirect', String(filters.includeDirect));
-  }, [filters.includeDirect]);
 
   const handleSort = (col) => {
     if (col === sortBy) {
@@ -335,11 +326,11 @@ export default function Dashboard() {
             )}
           </span>
 
-          {filters.includeDirect === false && (
+          {filters.includeDirect === true && (
             <span style={{ fontSize:11, padding:'2px 10px', borderRadius:999,
-              background:'var(--color-danger-bg)', color:'var(--color-danger)',
-              border:'1px solid rgba(198,40,40,0.2)', fontWeight:600 }}>
-              المبيعات المباشرة مستبعدة
+              background:'var(--color-brand-green-pale)', color:'var(--color-brand-green)',
+              border:'1px solid rgba(46,125,50,0.2)', fontWeight:600 }}>
+              المبيعات المباشرة مُدرجة
             </span>
           )}
           {filters.region_id && (

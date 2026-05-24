@@ -14,7 +14,7 @@ export const EMPTY_FILTERS = {
   sales_rep_name: '',
   route_id:       '',
   status:         '',
-  includeDirect:  true,
+  includeDirect:  false,
   activeYears:    null,   // null = all years
   activeMonths:   null,   // null = all months
 };
@@ -65,7 +65,7 @@ export default function Filters({
   /* ── Other toggles ─────────────────────────────── */
   const toggleDirect = () => onChange({ ...filters, includeDirect: !filters.includeDirect });
   const toggleDue    = () => onChange({ ...filters, status: filters.status === 'due' ? '' : 'due' });
-  const clear        = () => onChange({ ...EMPTY_FILTERS, includeDirect: filters.includeDirect });
+  const clear        = () => onChange({ ...EMPTY_FILTERS }); // includeDirect resets to false (default)
 
   const badge = periodBadge(filters.activeYears, filters.activeMonths, availableYears);
 

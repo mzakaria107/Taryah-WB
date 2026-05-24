@@ -11,6 +11,11 @@ import './SalesReportPage.css';
 /* ── Constants ───────────────────────────────────────────────── */
 const WAREHOUSE_NAME = 'مخزن دجاج حي';
 
+const MONTH_NAMES = {
+  1:'يناير',2:'فبراير',3:'مارس',4:'أبريل',5:'مايو',6:'يونيو',
+  7:'يوليو',8:'أغسطس',9:'سبتمبر',10:'أكتوبر',11:'نوفمبر',12:'ديسمبر',
+};
+
 /* ── API helpers ─────────────────────────────────────────────── */
 const api = {
   today:          () => client.get('/sales-report').then(r => r.data),
@@ -268,6 +273,9 @@ function SalesContent({ period }) {
 
   const [refreshing,       setRefreshing]       = useState(false);
   const [excludeWarehouse, setExcludeWarehouse] = useState(true);
+  const [filterRegion,     setFilterRegion]     = useState('');
+  const [filterMonth,      setFilterMonth]      = useState('');
+  const [filterYear,       setFilterYear]       = useState('');
 
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: [queryKey],
@@ -294,12 +302,82 @@ function SalesContent({ period }) {
   const rawKpi     = data?.kpi     || {};
   const rawRegions = data?.regions || [];
 
-  const regions = useMemo(() =>
+  /* ── Step 1: warehouse filter ───────────────────────────────── */
+  const warehouseFiltered = useMemo(() =>
     excludeWarehouse ? rawRegions.filter(r => r.regionName !== WAREHOUSE_NAME) : rawRegions,
   [rawRegions, excludeWarehouse]);
 
+  /* ── Step 2: available filter options (from warehouse-filtered) */
+  const filterOptions = useMemo(() => {
+    const regionSet = new Set();
+    const monthSet  = new Set();
+    const yearSet   = new Set();
+    warehouseFiltered.forEach(region => {
+      regionSet.add(region.regionName);
+      region.reps.forEach(rep => rep.items.forEach(item => {
+        if (item.date) {
+          const parts = item.date.split('/');
+          if (parts.length === 3) {
+            monthSet.add(Number(parts[1]));
+            yearSet.add(Number(parts[2]));
+          }
+        }
+      }));
+    });
+    return {
+      regions: [...regionSet].sort(),
+      months:  [...monthSet].sort((a,b) => a - b),
+      years:   [...yearSet].sort((a,b) => a - b),
+    };
+  }, [warehouseFiltered]);
+
+  const hasDateData    = filterOptions.months.length > 0;
+  const hasActiveFilter = filterRegion || filterMonth || filterYear;
+
+  /* ── Step 3: apply region + date filters ────────────────────── */
+  const regions = useMemo(() => {
+    let result = warehouseFiltered;
+
+    // Region filter
+    if (filterRegion) result = result.filter(r => r.regionName === filterRegion);
+
+    // Month / Year filter — rebuild aggregates per rep/region
+    if (filterMonth || filterYear) {
+      const m = filterMonth ? Number(filterMonth) : null;
+      const y = filterYear  ? Number(filterYear)  : null;
+
+      result = result.map(region => {
+        const filteredReps = region.reps.map(rep => {
+          const filteredItems = rep.items.filter(item => {
+            if (!item.date) return true;
+            const parts = item.date.split('/');
+            if (parts.length !== 3) return true;
+            const im = Number(parts[1]), iy = Number(parts[2]);
+            if (m && im !== m) return false;
+            if (y && iy !== y) return false;
+            return true;
+          });
+          if (!filteredItems.length) return null;
+          const rQty   = filteredItems.reduce((s,i) => s + i.qty,   0);
+          const rTotal = filteredItems.reduce((s,i) => s + i.total, 0);
+          return { ...rep, items: filteredItems, qty: rQty, total: rTotal,
+            avgPrice: rQty !== 0 ? rTotal / Math.abs(rQty) : 0 };
+        }).filter(Boolean);
+
+        if (!filteredReps.length) return null;
+        const rgQty   = filteredReps.reduce((s,r) => s + r.qty,   0);
+        const rgTotal = filteredReps.reduce((s,r) => s + r.total, 0);
+        return { ...region, reps: filteredReps, qty: rgQty, total: rgTotal,
+          avgPrice: rgQty !== 0 ? rgTotal / Math.abs(rgQty) : 0,
+          repsCount: filteredReps.length };
+      }).filter(Boolean);
+    }
+
+    return result;
+  }, [warehouseFiltered, filterRegion, filterMonth, filterYear]);
+
+  /* ── Step 4: KPIs always reflect visible filtered regions ────── */
   const kpi = useMemo(() => {
-    if (!excludeWarehouse) return rawKpi;
     const allItems = regions.flatMap(r => r.reps.flatMap(p => p.items));
     const negItems = allItems.filter(i => i.total < 0);
     return {
@@ -312,7 +390,7 @@ function SalesContent({ period }) {
       topRegion:    regions[0]?.regionName || '—',
       topRep:       regions[0]?.reps[0]?.repName || '—',
     };
-  }, [regions, rawKpi, excludeWarehouse]);
+  }, [regions, rawKpi]);
 
   return (
     <div className="srp-tab-content">
@@ -343,6 +421,64 @@ function SalesContent({ period }) {
       {isMonthly && rawKpi.dateRange && (
         <div className="srp-date-range srp-no-print">
           📅 نطاق البيانات: <strong>{rawKpi.dateRange.from}</strong> — <strong>{rawKpi.dateRange.to}</strong>
+        </div>
+      )}
+
+      {/* Filters */}
+      {!isLoading && (filterOptions.regions.length > 1 || hasDateData) && (
+        <div className="srp-filters srp-no-print">
+          {/* Region */}
+          {filterOptions.regions.length > 1 && (
+            <div className="srp-filter-group">
+              <label className="srp-filter-label">📍 المنطقة</label>
+              <select className="srp-filter-select" value={filterRegion} onChange={e => setFilterRegion(e.target.value)}>
+                <option value="">الكل</option>
+                {filterOptions.regions.map(r => (
+                  <option key={r} value={r}>{r}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {/* Month — only if date data exists */}
+          {hasDateData && (
+            <div className="srp-filter-group">
+              <label className="srp-filter-label">🗓 الشهر</label>
+              <select className="srp-filter-select" value={filterMonth} onChange={e => setFilterMonth(e.target.value)}>
+                <option value="">الكل</option>
+                {filterOptions.months.map(m => (
+                  <option key={m} value={m}>{MONTH_NAMES[m] || m}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {/* Year — only if date data exists */}
+          {hasDateData && filterOptions.years.length > 1 && (
+            <div className="srp-filter-group">
+              <label className="srp-filter-label">📆 السنة</label>
+              <select className="srp-filter-select" value={filterYear} onChange={e => setFilterYear(e.target.value)}>
+                <option value="">الكل</option>
+                {filterOptions.years.map(y => (
+                  <option key={y} value={y}>{y}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {/* Reset */}
+          {hasActiveFilter && (
+            <button className="srp-filter-reset" onClick={() => { setFilterRegion(''); setFilterMonth(''); setFilterYear(''); }}>
+              ✕ إعادة تعيين
+            </button>
+          )}
+
+          {/* Active count */}
+          {hasActiveFilter && (
+            <span className="srp-filter-count">
+              {regions.length} منطقة · {regions.reduce((s,r) => s + r.repsCount, 0)} مندوب
+            </span>
+          )}
         </div>
       )}
 

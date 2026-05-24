@@ -160,6 +160,7 @@ function buildHierarchy(rawRows) {
       qty:      r.qty,
       total:    r.total,
       avgPrice: itemAvg,
+      date:     r.date || null,
     });
   }
 

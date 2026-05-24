@@ -98,9 +98,9 @@ function parseCSV(text) {
 /* ── Region extractor ───────────────────────────────────────── */
 function extractRegion(location = '') {
   if (!location) return 'أخرى';
-  // Only the STANDALONE "مخزن دجاج حي" goes to warehouse bucket.
-  // Regional warehouses like "شقرا - المخزن المركزي" stay under their region.
-  if (/^مخزن\s*دجاج\s*حي/i.test(location.trim())) return 'مخزن دجاج حي';
+  // Any location containing "مخزن" → warehouse bucket (separate from regions).
+  // This includes regional warehouses like "شقرا - المخزن المركزي".
+  if (location.includes('مخزن')) return 'مخزن دجاج حي';
   const m = location.match(/^(.*?)[\s]*[-–]?\s*منتج\s/);
   if (m && m[1].trim()) return m[1].trim();
   const m2 = location.match(/^([^-–]+)/);

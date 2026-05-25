@@ -168,9 +168,10 @@ router.post('/upload', verifyToken, applyRegionFilter, csvUpload.single('file'),
     const COL_MONTH       = findKey('Month');
     const COL_QTY         = findKey('Total Net qty with FOC');
     const COL_CATEGORY    = findKey('Category Name English');
-    // Day column is optional — present only in daily reports
+    // Day: prefer explicit 'Day' column, fallback to extracting from 'Transaction Date'
     const COL_DAY         = sampleKeys.includes('Day') ? 'Day' : null;
-    console.log('[SalesActivity] Column mapping:', { COL_CUST_NAME, COL_CUST_CODE, COL_BRANCH, COL_REP, COL_INVOICE, COL_MONTH, COL_QTY, COL_CATEGORY, COL_DAY });
+    const COL_DATE        = sampleKeys.find(k => k.replace(/^﻿/, '').trim() === 'Transaction Date') || null;
+    console.log('[SalesActivity] Column mapping:', { COL_CUST_NAME, COL_CUST_CODE, COL_BRANCH, COL_REP, COL_INVOICE, COL_MONTH, COL_QTY, COL_CATEGORY, COL_DAY, COL_DATE });
     if (rawRows.length > 0) {
       const sample = rawRows[0];
       console.log('[SalesActivity] First row sample:', {
@@ -210,8 +211,14 @@ router.post('/upload', verifyToken, applyRegionFilter, csvUpload.single('file'),
       const qtyRaw = String(r[COL_QTY] || '0').replace(/,/g, '').trim();
       const qty    = parseInt(qtyRaw, 10) || 0;
 
-      const dayRaw = COL_DAY ? String(r[COL_DAY] || '').trim() : '';
-      const day    = dayRaw ? (parseInt(dayRaw, 10) || null) : null;
+      let day = null;
+      if (COL_DAY && r[COL_DAY]) {
+        day = parseInt(String(r[COL_DAY]).trim(), 10) || null;
+      } else if (COL_DATE && r[COL_DATE]) {
+        // Extract day from "2026-05-03 00:00:00" or "2026-05-03"
+        const m = String(r[COL_DATE]).trim().match(/^\d{4}-\d{2}-(\d{2})/);
+        if (m) day = parseInt(m[1], 10) || null;
+      }
 
       validRows.push({
         customer_name:  custName  || custCode,

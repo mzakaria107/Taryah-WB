@@ -19,7 +19,7 @@ const DATA_SCOPE = {
   fridge_admin:   { icon: '📍', label: 'منطقته فقط', cls: 'pp-own' },
   accounts:       { icon: '🌐', label: 'كل المناطق', cls: 'pp-all' },
   viewer:         { icon: '🌐', label: 'كل المناطق', cls: 'pp-all' },
-};
+}; // DATA_SCOPE has same keys as ROLES
 
 const ROLE_DESCS = {
   super_admin:    'صلاحية كاملة على جميع الصفحات والبيانات والمستخدمين لجميع المناطق.',
@@ -32,7 +32,7 @@ const ROLE_DESCS = {
   fridge_admin:   'موظف إداري ثلاجات — يرى صفحة الثلاجات ومهام المبيعات لمنطقته فقط.',
   accounts:       'الحسابات — قراءة فقط للفواتير والأرصدة وملفات العملاء لجميع المناطق، بدون صلاحية التعديل.',
   viewer:         'مستعرض — قراءة فقط للرئيسية والفواتير، بدون أي صلاحية تعديل أو تصدير.',
-};
+}; // ROLE_DESCS
 
 /* Cell state machine: cycle 0→1→2→0 */
 function nextLevel(current) {

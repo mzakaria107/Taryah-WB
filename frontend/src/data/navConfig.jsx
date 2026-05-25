@@ -7,7 +7,7 @@ import React from 'react';
 import {
   LayoutDashboard, FileText, MessageSquare, Upload, Users, UserSearch,
   ClipboardList, Thermometer, Package, Warehouse, ShieldCheck, TrendingUp,
-  Mail, BarChart2,
+  Mail, BarChart2, Contact,
 } from 'lucide-react';
 
 /** Master list — order here is the fallback default */
@@ -25,6 +25,7 @@ export const ALL_NAV = [
   { to: '/permissions',    pageKey: 'permissions',     label: 'الصلاحيات',       labelShort: 'الصلاحيات',  icon: s => <ShieldCheck     size={s}/> },
   { to: '/profitability',  pageKey: 'profitability',   label: 'الربحية',          labelShort: 'الربحية',    icon: s => <TrendingUp      size={s}/> },
   { to: '/sales-report',   pageKey: 'sales_report',   label: 'صفحة المبيعات',   labelShort: 'المبيعات',   icon: s => <BarChart2       size={s}/> },
+  { to: '/coverage',       pageKey: 'coverage',        label: 'تغطية المناديب',   labelShort: 'التغطية',    icon: s => <Contact         size={s}/> },
   { to: '/settings',       pageKey: 'settings',        label: 'الإعدادات',        labelShort: 'الإعدادات',  icon: s => <Mail            size={s}/> },
 ];
 

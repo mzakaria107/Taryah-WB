@@ -6,7 +6,7 @@ const router = express.Router();
 
 const VALID_ROLES = ['super_admin','it_admin','sales_manager','top_management','supervisor','region_manager','sales_rep','fridge_admin','accounts','viewer'];
 const VALID_PAGES = ['dashboard','invoices','reports','customer_detail','sales_activity','sales_tasks',
-                     'fridges','stock','current_stock','upload','users','permissions','profitability','settings','sales_report'];
+                     'fridges','stock','current_stock','upload','users','permissions','profitability','settings','sales_report','coverage'];
 
 // GET /api/permissions — returns { pageKey: { role: level } }
 router.get('/', verifyToken, async (_req, res) => {

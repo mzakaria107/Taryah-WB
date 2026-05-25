@@ -26,6 +26,7 @@ const permissionsRoutes        = require('./routes/permissions');
 const profitabilityRoutes      = require('./routes/profitability');
 const reconciliationsRoutes    = require('./routes/reconciliations');
 const salesReportRoutes        = require('./routes/salesReport');
+const coverageRoutes           = require('./routes/coverage');
 
 /* ── Auto-run pending DB migrations on startup ── */
 async function runMigrations() {
@@ -91,6 +92,7 @@ app.use('/api/permissions',      permissionsRoutes);
 app.use('/api/profitability',    profitabilityRoutes);
 app.use('/api/reconciliations',  reconciliationsRoutes);
 app.use('/api/sales-report',     salesReportRoutes);
+app.use('/api/coverage',         coverageRoutes);
 
 /* ── Daily profitability snapshot — 11:59 PM every day ──────── */
 const cron = require('node-cron');

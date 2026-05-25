@@ -9,6 +9,7 @@ export const ROLES = [
   { key: 'region_manager', label: 'مدير منطقة',           color: 'role-region'    },
   { key: 'sales_rep',      label: 'مندوب مبيعات',         color: 'role-sales'     },
   { key: 'fridge_admin',   label: 'موظف إداري (ثلاجات)', color: 'role-fridge'    },
+  { key: 'accounts',       label: 'الحسابات',             color: 'role-accounts'  },
   { key: 'viewer',         label: 'مستعرض',               color: 'role-viewer'    },
 ];
 
@@ -32,21 +33,21 @@ export const PAGES = [
 
 /* Default access matrix — fallback before API loads */
 export const DEFAULT_PERMS = {
-  dashboard:       { super_admin:2, it_admin:2, top_management:1, sales_manager:2, supervisor:1, region_manager:1, sales_rep:1, fridge_admin:0, viewer:1 },
-  invoices:        { super_admin:2, it_admin:2, top_management:1, sales_manager:2, supervisor:1, region_manager:1, sales_rep:1, fridge_admin:0, viewer:1 },
-  reports:         { super_admin:2, it_admin:2, top_management:1, sales_manager:2, supervisor:2, region_manager:2, sales_rep:2, fridge_admin:0, viewer:0 },
-  customer_detail: { super_admin:2, it_admin:2, top_management:1, sales_manager:2, supervisor:1, region_manager:1, sales_rep:1, fridge_admin:0, viewer:1 },
-  sales_activity:  { super_admin:2, it_admin:2, top_management:1, sales_manager:2, supervisor:1, region_manager:1, sales_rep:1, fridge_admin:0, viewer:0 },
-  sales_tasks:     { super_admin:2, it_admin:2, top_management:1, sales_manager:2, supervisor:2, region_manager:2, sales_rep:2, fridge_admin:1, viewer:0 },
-  fridges:         { super_admin:2, it_admin:2, top_management:1, sales_manager:0, supervisor:0, region_manager:1, sales_rep:0, fridge_admin:1, viewer:0 },
-  stock:           { super_admin:2, it_admin:2, top_management:0, sales_manager:0, supervisor:0, region_manager:0, sales_rep:0, fridge_admin:0, viewer:0 },
-  current_stock:   { super_admin:2, it_admin:2, top_management:0, sales_manager:0, supervisor:0, region_manager:0, sales_rep:0, fridge_admin:0, viewer:0 },
-  upload:          { super_admin:2, it_admin:2, top_management:0, sales_manager:0, supervisor:0, region_manager:0, sales_rep:0, fridge_admin:0, viewer:0 },
-  users:           { super_admin:2, it_admin:0, top_management:0, sales_manager:0, supervisor:0, region_manager:0, sales_rep:0, fridge_admin:0, viewer:0 },
-  permissions:     { super_admin:2, it_admin:1, top_management:0, sales_manager:0, supervisor:0, region_manager:0, sales_rep:0, fridge_admin:0, viewer:0 },
-  profitability:   { super_admin:2, it_admin:2, top_management:1, sales_manager:2, supervisor:0, region_manager:0, sales_rep:0, fridge_admin:0, viewer:0 },
-  settings:        { super_admin:2, it_admin:2, top_management:0, sales_manager:0, supervisor:0, region_manager:0, sales_rep:0, fridge_admin:0, viewer:0 },
-  sales_report:    { super_admin:2, it_admin:2, top_management:2, sales_manager:2, supervisor:1, region_manager:1, sales_rep:0, fridge_admin:0, viewer:0 },
+  dashboard:       { super_admin:2, it_admin:2, top_management:1, sales_manager:2, supervisor:1, region_manager:1, sales_rep:1, fridge_admin:0, accounts:1, viewer:1 },
+  invoices:        { super_admin:2, it_admin:2, top_management:1, sales_manager:2, supervisor:1, region_manager:1, sales_rep:1, fridge_admin:0, accounts:1, viewer:1 },
+  reports:         { super_admin:2, it_admin:2, top_management:1, sales_manager:2, supervisor:2, region_manager:2, sales_rep:2, fridge_admin:0, accounts:1, viewer:0 },
+  customer_detail: { super_admin:2, it_admin:2, top_management:1, sales_manager:2, supervisor:1, region_manager:1, sales_rep:1, fridge_admin:0, accounts:1, viewer:1 },
+  sales_activity:  { super_admin:2, it_admin:2, top_management:1, sales_manager:2, supervisor:1, region_manager:1, sales_rep:1, fridge_admin:0, accounts:0, viewer:0 },
+  sales_tasks:     { super_admin:2, it_admin:2, top_management:1, sales_manager:2, supervisor:2, region_manager:2, sales_rep:2, fridge_admin:1, accounts:0, viewer:0 },
+  fridges:         { super_admin:2, it_admin:2, top_management:1, sales_manager:0, supervisor:0, region_manager:1, sales_rep:0, fridge_admin:1, accounts:0, viewer:0 },
+  stock:           { super_admin:2, it_admin:2, top_management:0, sales_manager:0, supervisor:0, region_manager:0, sales_rep:0, fridge_admin:0, accounts:0, viewer:0 },
+  current_stock:   { super_admin:2, it_admin:2, top_management:0, sales_manager:0, supervisor:0, region_manager:0, sales_rep:0, fridge_admin:0, accounts:0, viewer:0 },
+  upload:          { super_admin:2, it_admin:2, top_management:0, sales_manager:0, supervisor:0, region_manager:0, sales_rep:0, fridge_admin:0, accounts:0, viewer:0 },
+  users:           { super_admin:2, it_admin:0, top_management:0, sales_manager:0, supervisor:0, region_manager:0, sales_rep:0, fridge_admin:0, accounts:0, viewer:0 },
+  permissions:     { super_admin:2, it_admin:1, top_management:0, sales_manager:0, supervisor:0, region_manager:0, sales_rep:0, fridge_admin:0, accounts:0, viewer:0 },
+  profitability:   { super_admin:2, it_admin:2, top_management:1, sales_manager:2, supervisor:0, region_manager:0, sales_rep:0, fridge_admin:0, accounts:0, viewer:0 },
+  settings:        { super_admin:2, it_admin:2, top_management:0, sales_manager:0, supervisor:0, region_manager:0, sales_rep:0, fridge_admin:0, accounts:0, viewer:0 },
+  sales_report:    { super_admin:2, it_admin:2, top_management:2, sales_manager:2, supervisor:1, region_manager:1, sales_rep:0, fridge_admin:0, accounts:0, viewer:0 },
 };
 
 /* Access level display config */

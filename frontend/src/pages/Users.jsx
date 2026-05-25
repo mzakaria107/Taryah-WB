@@ -17,22 +17,23 @@ const ROLES = {
   region_manager: { label: 'مدير منطقة',            color: 'role-region'    },
   sales_rep:      { label: 'مندوب مبيعات',          color: 'role-sales'     },
   fridge_admin:   { label: 'موظف إداري (ثلاجات)',   color: 'role-fridge'    },
+  accounts:       { label: 'الحسابات',              color: 'role-accounts'  },
   viewer:         { label: 'مستعرض',                color: 'role-viewer'    },
 };
 
 /* ── Permission matrix ────────────────────────────── */
 const PERMS = [
-  { feature: 'لوحة التحكم',      desc:'إجمالي العملاء والأرصدة', super_admin:2, it_admin:2, top_management:1, sales_manager:2, supervisor:1, region_manager:1, sales_rep:1, fridge_admin:0, viewer:1 },
-  { feature: 'الفواتير',          desc:'عرض وتصفية الفواتير',      super_admin:2, it_admin:2, top_management:1, sales_manager:2, supervisor:1, region_manager:1, sales_rep:1, fridge_admin:0, viewer:1 },
-  { feature: 'ملف العميل',        desc:'تفاصيل وتاريخ العميل',     super_admin:2, it_admin:2, top_management:1, sales_manager:2, supervisor:1, region_manager:1, sales_rep:1, fridge_admin:0, viewer:1 },
-  { feature: 'الملاحظات',         desc:'إضافة وتعديل ملاحظات',     super_admin:2, it_admin:2, top_management:1, sales_manager:2, supervisor:2, region_manager:2, sales_rep:2, fridge_admin:0, viewer:0 },
-  { feature: 'تقرير العملاء',     desc:'نشاط المبيعات والأداء',    super_admin:2, it_admin:2, top_management:1, sales_manager:2, supervisor:1, region_manager:1, sales_rep:1, fridge_admin:0, viewer:0 },
-  { feature: 'متابعة الثلاجات',   desc:'إدارة الثلاجات والنقل',    super_admin:2, it_admin:2, top_management:1, sales_manager:0, supervisor:0, region_manager:1, sales_rep:0, fridge_admin:1, viewer:0 },
-  { feature: 'المخزون',            desc:'بيانات المخزون من NetSuite',super_admin:2, it_admin:2, top_management:0, sales_manager:0, supervisor:0, region_manager:0, sales_rep:0, fridge_admin:0, viewer:0 },
-  { feature: 'تصدير Excel/CSV',   desc:'تنزيل تقارير البيانات',    super_admin:2, it_admin:2, top_management:0, sales_manager:2, supervisor:2, region_manager:2, sales_rep:2, fridge_admin:0, viewer:0 },
-  { feature: 'رفع البيانات',      desc:'استيراد ملفات Excel',      super_admin:2, it_admin:2, top_management:0, sales_manager:0, supervisor:0, region_manager:0, sales_rep:0, fridge_admin:0, viewer:0 },
-  { feature: 'إدارة المستخدمين', desc:'إنشاء وتعديل الحسابات',    super_admin:2, it_admin:0, top_management:0, sales_manager:0, supervisor:0, region_manager:0, sales_rep:0, fridge_admin:0, viewer:0 },
-  { feature: 'نطاق البيانات',     desc:'حدود الوصول للبيانات',     super_admin:3, it_admin:3, top_management:3, sales_manager:3, supervisor:4, region_manager:4, sales_rep:4, fridge_admin:4, viewer:3 },
+  { feature: 'لوحة التحكم',      desc:'إجمالي العملاء والأرصدة', super_admin:2, it_admin:2, top_management:1, sales_manager:2, supervisor:1, region_manager:1, sales_rep:1, fridge_admin:0, accounts:1, viewer:1 },
+  { feature: 'الفواتير',          desc:'عرض وتصفية الفواتير',      super_admin:2, it_admin:2, top_management:1, sales_manager:2, supervisor:1, region_manager:1, sales_rep:1, fridge_admin:0, accounts:1, viewer:1 },
+  { feature: 'ملف العميل',        desc:'تفاصيل وتاريخ العميل',     super_admin:2, it_admin:2, top_management:1, sales_manager:2, supervisor:1, region_manager:1, sales_rep:1, fridge_admin:0, accounts:1, viewer:1 },
+  { feature: 'الملاحظات',         desc:'إضافة وتعديل ملاحظات',     super_admin:2, it_admin:2, top_management:1, sales_manager:2, supervisor:2, region_manager:2, sales_rep:2, fridge_admin:0, accounts:1, viewer:0 },
+  { feature: 'تقرير العملاء',     desc:'نشاط المبيعات والأداء',    super_admin:2, it_admin:2, top_management:1, sales_manager:2, supervisor:1, region_manager:1, sales_rep:1, fridge_admin:0, accounts:0, viewer:0 },
+  { feature: 'متابعة الثلاجات',   desc:'إدارة الثلاجات والنقل',    super_admin:2, it_admin:2, top_management:1, sales_manager:0, supervisor:0, region_manager:1, sales_rep:0, fridge_admin:1, accounts:0, viewer:0 },
+  { feature: 'المخزون',            desc:'بيانات المخزون من NetSuite',super_admin:2, it_admin:2, top_management:0, sales_manager:0, supervisor:0, region_manager:0, sales_rep:0, fridge_admin:0, accounts:0, viewer:0 },
+  { feature: 'تصدير Excel/CSV',   desc:'تنزيل تقارير البيانات',    super_admin:2, it_admin:2, top_management:0, sales_manager:2, supervisor:2, region_manager:2, sales_rep:2, fridge_admin:0, accounts:0, viewer:0 },
+  { feature: 'رفع البيانات',      desc:'استيراد ملفات Excel',      super_admin:2, it_admin:2, top_management:0, sales_manager:0, supervisor:0, region_manager:0, sales_rep:0, fridge_admin:0, accounts:0, viewer:0 },
+  { feature: 'إدارة المستخدمين', desc:'إنشاء وتعديل الحسابات',    super_admin:2, it_admin:0, top_management:0, sales_manager:0, supervisor:0, region_manager:0, sales_rep:0, fridge_admin:0, accounts:0, viewer:0 },
+  { feature: 'نطاق البيانات',     desc:'حدود الوصول للبيانات',     super_admin:3, it_admin:3, top_management:3, sales_manager:3, supervisor:4, region_manager:4, sales_rep:4, fridge_admin:4, accounts:3, viewer:3 },
 ];
 // 0=لا, 1=قراءة/منطقة, 2=كامل, 3=كل المناطق, 4=منطقته فقط
 
@@ -345,6 +346,7 @@ export default function Users() {
                 {form.role === 'region_manager'  && '📍 مدير منطقة — يرى بيانات منطقته بما فيها الثلاجات'}
                 {form.role === 'sales_rep'        && '👤 مندوب — يرى بياناته ويضيف ملاحظات'}
                 {form.role === 'fridge_admin'    && '🧊 إداري ثلاجات — يرى صفحة الثلاجات لمنطقته فقط'}
+                {form.role === 'accounts'        && '🧾 الحسابات — قراءة الفواتير والأرصدة وملفات العملاء لكل المناطق'}
                 {form.role === 'viewer'           && '👁️ قراءة فقط — لا يستطيع التعديل أو التصدير'}
               </div>
             </div>

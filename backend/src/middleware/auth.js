@@ -27,7 +27,7 @@ function requireRoles(...roles) {
 
 // Applies region filter: only super_admin and it_admin see all regions
 function applyRegionFilter(req, _res, next) {
-  const allRegionRoles = ['super_admin', 'it_admin', 'sales_manager', 'top_management'];
+  const allRegionRoles = ['super_admin', 'it_admin', 'sales_manager', 'top_management', 'accounts'];
   if (!allRegionRoles.includes(req.user.role) && req.user.region_id) {
     req.regionFilter = req.user.region_id;
   } else {

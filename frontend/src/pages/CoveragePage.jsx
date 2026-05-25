@@ -210,13 +210,11 @@ function CoverageMatrix({ profile }) {
     return [...map.values()].sort((a, b) => b.prev_qty - a.prev_qty);
   }, [prev_customers, curr_customers, day_data]);
 
-  /* ── Coverage stats ── */
+  /* ── Coverage stats (monthly) ── */
   const covStats = useMemo(() => {
     if (!has_day_data) return null;
     let covered0 = 0, covered1 = 0, covered2 = 0, covered3plus = 0;
-    // Count per customer for current (full) past working days so far
     customers.forEach(c => {
-      // total visits in current month
       const visits = c.sale_days.size;
       if (visits === 0) covered0++;
       else if (visits === 1) covered1++;
@@ -225,6 +223,32 @@ function CoverageMatrix({ profile }) {
     });
     return { covered0, covered1, covered2, covered3plus, total: customers.length };
   }, [customers, has_day_data]);
+
+  /* ── Weekly coverage stats ── */
+  const weeklyStats = useMemo(() => {
+    if (!has_day_data || customers.length === 0) return null;
+    return weeks.map(wk => {
+      let totalVisits = 0;
+      let customersVisited = 0;
+      customers.forEach(c => {
+        const cnt = wk.filter(d => c.sale_days.has(d)).length;
+        totalVisits += cnt;
+        if (cnt > 0) customersVisited++;
+      });
+      const coveragePct = Math.round(customersVisited / customers.length * 100);
+      return { totalVisits, customersVisited, coveragePct };
+    });
+  }, [weeks, customers, has_day_data]);
+
+  /* ── Overall coverage stats ── */
+  const overallCov = useMemo(() => {
+    if (!weeklyStats) return null;
+    const totalVisits = weeklyStats.reduce((s, w) => s + w.totalVisits, 0);
+    const customersVisited = customers.filter(c => c.sale_days.size > 0).length;
+    const coveragePct = customers.length > 0
+      ? Math.round(customersVisited / customers.length * 100) : 0;
+    return { totalVisits, customersVisited, coveragePct, total: customers.length };
+  }, [weeklyStats, customers]);
 
   /* ── Determine which week index is "current" ── */
   const currentWeekIdx = useMemo(() => {
@@ -245,6 +269,91 @@ function CoverageMatrix({ profile }) {
         <div className="cov-no-day-notice">
           <AlertCircle size={15}/>
           البيانات اليومية غير متوفرة لهذا الشهر — يُعرض ملخص الشهر فقط. لعرض التتبع اليومي يرجى رفع تقرير مبيعات يومي.
+        </div>
+      )}
+
+      {/* ── Coverage Rate Card ── */}
+      {weeklyStats && overallCov && (
+        <div className="cov-rate-card">
+          <div className="cov-rate-header">
+            <span className="cov-rate-title">📊 نسبة التغطية الأسبوعية</span>
+            <span className="cov-rate-subtitle">عدد العملاء المزارين لكل أسبوع من إجمالي {overallCov.total} عميل</span>
+          </div>
+          <div className="cov-rate-weeks">
+            {weeklyStats.map((ws, wi) => {
+              const isCurrent = wi === currentWeekIdx;
+              const isFuture  = currentWeekIdx !== null && wi > currentWeekIdx;
+              const pct = ws.coveragePct;
+              const barCls = pct >= 90 ? 'cov-rate-bar-fill--high'
+                           : pct >= 70 ? 'cov-rate-bar-fill--good'
+                           : pct >= 40 ? 'cov-rate-bar-fill--mid'
+                           :              'cov-rate-bar-fill--low';
+              const pctCls = pct >= 90 ? 'cov-rate-pct--high'
+                           : pct >= 70 ? 'cov-rate-pct--good'
+                           : pct >= 40 ? 'cov-rate-pct--mid'
+                           :              'cov-rate-pct--low';
+              return (
+                <div
+                  key={wi}
+                  className={`cov-rate-week${isCurrent ? ' cov-rate-week--current' : ''}${isFuture ? ' cov-rate-week--future' : ''}`}
+                >
+                  <div className="cov-rate-week-label">
+                    الأسبوع {wi + 1}
+                    {isCurrent && <span className="cov-rate-now-badge">الآن</span>}
+                  </div>
+                  <div className={`cov-rate-pct ${pctCls}`}>
+                    {isFuture ? '—' : `${pct}%`}
+                  </div>
+                  <div className="cov-rate-bar">
+                    <div
+                      className={`cov-rate-bar-fill ${barCls}`}
+                      style={{ width: isFuture ? '0%' : `${pct}%` }}
+                    />
+                  </div>
+                  <div className="cov-rate-visits">
+                    {isFuture ? (
+                      <span style={{ color: '#cbd5e1' }}>لم يبدأ</span>
+                    ) : (
+                      <>
+                        <strong>{ws.customersVisited}</strong>
+                        <span> / {overallCov.total}</span>
+                        <span className="cov-rate-vis-count"> · {ws.totalVisits} زيارة</span>
+                      </>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+
+            {/* Overall card */}
+            <div className="cov-rate-week cov-rate-week--total">
+              <div className="cov-rate-week-label">الإجمالي</div>
+              <div className={`cov-rate-pct ${
+                overallCov.coveragePct >= 90 ? 'cov-rate-pct--high'
+                : overallCov.coveragePct >= 70 ? 'cov-rate-pct--good'
+                : overallCov.coveragePct >= 40 ? 'cov-rate-pct--mid'
+                : 'cov-rate-pct--low'
+              }`}>
+                {overallCov.coveragePct}%
+              </div>
+              <div className="cov-rate-bar">
+                <div
+                  className={`cov-rate-bar-fill ${
+                    overallCov.coveragePct >= 90 ? 'cov-rate-bar-fill--high'
+                    : overallCov.coveragePct >= 70 ? 'cov-rate-bar-fill--good'
+                    : overallCov.coveragePct >= 40 ? 'cov-rate-bar-fill--mid'
+                    : 'cov-rate-bar-fill--low'
+                  }`}
+                  style={{ width: `${overallCov.coveragePct}%` }}
+                />
+              </div>
+              <div className="cov-rate-visits">
+                <strong>{overallCov.customersVisited}</strong>
+                <span> / {overallCov.total} عميل</span>
+                <span className="cov-rate-vis-count"> · {overallCov.totalVisits} زيارة</span>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 

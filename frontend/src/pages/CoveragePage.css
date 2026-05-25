@@ -5,7 +5,7 @@
 
 /* ── Page shell ─────────────────────────────────────────────── */
 .cov-page {
-  padding: 20px 24px;
+  padding: 14px 16px;
   direction: rtl;
   font-family: var(--font-main, 'Tajawal', sans-serif);
   max-width: 100%;
@@ -234,7 +234,7 @@
   background: var(--color-surface, #fff);
   border: 1px solid var(--color-border, #e2e8f0);
   border-radius: 14px;
-  padding: 20px;
+  padding: 14px 12px;
   overflow: hidden;
 }
 .cov-table-scroll {
@@ -246,17 +246,17 @@
 /* ── Matrix table ────────────────────────────────────────────── */
 .cov-table {
   border-collapse: collapse;
-  width: max-content;
-  min-width: 100%;
-  font-size: 0.8rem;
+  table-layout: fixed;
+  width: 100%;
+  font-size: 0.72rem;
   direction: rtl;
 }
 
 /* column widths */
-.cov-col-name  { min-width: 180px; max-width: 220px; }
-.cov-col-num   { width: 70px; }
-.cov-col-day   { width: 30px; }
-.cov-col-wsep  { width: 6px; padding: 0 !important; background: #f1f5f9; }
+.cov-col-name  { width: 105px; }
+.cov-col-num   { width: 40px; }
+.cov-col-day   { width: 20px; }
+.cov-col-wsep  { width: 3px; padding: 0 !important; background: #f1f5f9; }
 
 /* header rows */
 .cov-thead { position: sticky; top: 0; z-index: 5; }
@@ -266,10 +266,11 @@
   color: #fff;
   text-align: center;
   font-weight: 700;
-  font-size: 0.75rem;
-  padding: 7px 4px;
+  font-size: 0.68rem;
+  padding: 5px 2px;
   border: 1px solid #334155;
   white-space: nowrap;
+  overflow: hidden;
 }
 .cov-th-week--current {
   background: #1d4ed8;
@@ -283,10 +284,11 @@
   color: #475569;
   text-align: center;
   font-weight: 600;
-  font-size: 0.72rem;
-  padding: 7px 6px;
+  font-size: 0.65rem;
+  padding: 5px 2px;
   border: 1px solid #e2e8f0;
   white-space: nowrap;
+  overflow: hidden;
 }
 .cov-th-fixed--name {
   text-align: right;
@@ -301,10 +303,11 @@
   background: #f1f5f9;
   color: #64748b;
   text-align: center;
-  font-size: 0.68rem;
-  padding: 4px 2px;
+  font-size: 0.6rem;
+  padding: 3px 1px;
   border: 1px solid #e2e8f0;
   font-weight: 600;
+  overflow: hidden;
 }
 .cov-th-day--today {
   background: #dbeafe;
@@ -326,7 +329,7 @@
 .cov-tr--no-prev { background: #fffbeb; }
 
 .cov-td {
-  padding: 6px 6px;
+  padding: 4px 3px;
   border: 1px solid #f1f5f9;
   vertical-align: middle;
   background: #fff;
@@ -337,7 +340,8 @@
   z-index: 2;
   background: #fff;
   box-shadow: -2px 0 4px rgba(0,0,0,.04);
-  font-size: 0.8rem;
+  font-size: 0.72rem;
+  padding: 4px 5px;
 }
 .cov-td--name .cov-cust-name {
   font-weight: 600;
@@ -345,31 +349,38 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 200px;
+  max-width: 95px;
   display: block;
 }
 .cov-td--name .cov-cust-code {
-  font-size: 0.65rem;
+  font-size: 0.6rem;
   color: #94a3b8;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 95px;
+  display: block;
 }
 .cov-td--num {
   text-align: center;
   color: var(--color-text, #334155);
   font-variant-numeric: tabular-nums;
+  font-size: 0.68rem;
 }
 .cov-td--sep { padding: 0; background: #f1f5f9 !important; }
 
 /* Day cells */
 .cov-td--day {
   text-align: center;
-  padding: 3px 2px;
-  font-size: 0.78rem;
+  padding: 3px 0;
+  font-size: 0.65rem;
   font-weight: 700;
   transition: background 0.1s;
+  overflow: hidden;
 }
 .cov-td--sold    { background: #d1fae5; color: #065f46; }
 .cov-td--missed  { background: #fee2e2; color: #991b1b; }
-.cov-td--off     { background: #f5f3ff; color: #a78bfa; font-size: 0.65rem; }
+.cov-td--off     { background: #f5f3ff; color: #a78bfa; font-size: 0.58rem; }
 .cov-td--future  { background: #f8fafc; color: #cbd5e1; }
 .cov-td--today   { outline: 2px solid #3b82f6; outline-offset: -2px; }
 .cov-td--no-data { background: #f8fafc; color: #cbd5e1; }
@@ -377,15 +388,16 @@
 /* Week summary row (sub-header after each week's days) */
 .cov-td--week-sum {
   text-align: center;
-  padding: 3px 4px;
-  font-size: 0.72rem;
+  padding: 2px 1px;
+  font-size: 0.62rem;
   font-weight: 700;
   border-radius: 4px;
+  overflow: hidden;
 }
-.cov-week-sum-0   { background: #fee2e2; color: #991b1b; }
-.cov-week-sum-1   { background: #fef3c7; color: #92400e; }
-.cov-week-sum-2   { background: #dcfce7; color: #166534; }
-.cov-week-sum-3   { background: #16a34a; color: #fff; }
+.cov-week-sum-0   { background: #fee2e2; color: #991b1b; padding: 1px 2px !important; border-radius: 3px; display: inline-block; }
+.cov-week-sum-1   { background: #fef3c7; color: #92400e; padding: 1px 2px !important; border-radius: 3px; display: inline-block; }
+.cov-week-sum-2   { background: #dcfce7; color: #166534; padding: 1px 2px !important; border-radius: 3px; display: inline-block; }
+.cov-week-sum-3   { background: #16a34a; color: #fff;    padding: 1px 2px !important; border-radius: 3px; display: inline-block; }
 
 /* Week summary legend row */
 .cov-legend-row td {
@@ -395,7 +407,7 @@
 
 /* prev qty badge */
 .cov-qty-badge {
-  font-size: 0.72rem;
+  font-size: 0.65rem;
   font-weight: 700;
   color: #1d4ed8;
 }
@@ -403,9 +415,9 @@
   display: inline-block;
   background: #e0e7ff;
   color: #3730a3;
-  border-radius: 10px;
-  padding: 1px 6px;
-  font-size: 0.68rem;
+  border-radius: 8px;
+  padding: 1px 3px;
+  font-size: 0.62rem;
   font-weight: 700;
 }
 
@@ -455,7 +467,7 @@
   .cov-filters { display: none; }
   .cov-no-print { display: none !important; }
   .cov-table-scroll { overflow: visible; }
-  .cov-table { width: 100%; font-size: 0.65rem; }
+  .cov-table { width: 100%; font-size: 0.6rem; table-layout: fixed; }
   .cov-td--name { position: static; box-shadow: none; }
   .cov-th-fixed--name { position: static; box-shadow: none; }
 }

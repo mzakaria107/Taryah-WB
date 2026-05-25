@@ -23,20 +23,27 @@ function isWorkingDay(dow) { return dow !== 5; } // Friday = off
 
 function getDayStatus(day, saleDaySet, year, month, todayDay) {
   const dow = getDayOfWeek(year, month, day);
+  // Sale on any day (including Friday) → show as sold
+  if (saleDaySet.has(day)) return 'sold';
   if (!isWorkingDay(dow)) return 'off';
   if (todayDay !== null && day > todayDay) return 'future';
-  if (saleDaySet.has(day)) return 'sold';
   return 'missed';
 }
 
 function getWeekStats(weekDays, saleDaySet, year, month, todayDay) {
   let sold = 0, pastWorking = 0;
   weekDays.forEach(d => {
-    const dow = getDayOfWeek(year, month, d);
-    if (!isWorkingDay(dow)) return;
-    if (todayDay !== null && d > todayDay) return;
+    const dow     = getDayOfWeek(year, month, d);
+    const hasSale = saleDaySet.has(d);
+    const isFuture = todayDay !== null && d > todayDay;
+    if (isFuture) return;
+    if (!isWorkingDay(dow)) {
+      // Friday: count only if there's an actual sale
+      if (hasSale) { sold++; pastWorking++; }
+      return;
+    }
     pastWorking++;
-    if (saleDaySet.has(d)) sold++;
+    if (hasSale) sold++;
   });
   return { sold, pastWorking };
 }

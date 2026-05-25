@@ -253,7 +253,7 @@
 }
 
 /* column widths */
-.cov-col-name  { width: 105px; }
+.cov-col-name  { width: 170px; }
 .cov-col-num   { width: 40px; }
 .cov-col-day   { width: 20px; }
 .cov-col-wsep  { width: 3px; padding: 0 !important; background: #f1f5f9; }
@@ -346,19 +346,15 @@
 .cov-td--name .cov-cust-name {
   font-weight: 600;
   color: var(--color-text, #1e293b);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 95px;
+  white-space: normal;
+  word-break: break-word;
+  line-height: 1.3;
   display: block;
 }
 .cov-td--name .cov-cust-code {
   font-size: 0.6rem;
   color: #94a3b8;
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 95px;
   display: block;
 }
 .cov-td--num {

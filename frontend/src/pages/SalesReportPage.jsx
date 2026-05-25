@@ -286,6 +286,7 @@ function SalesContent({ period }) {
   const [refreshing,       setRefreshing]       = useState(false);
   const [excludeWarehouse, setExcludeWarehouse] = useState(true);
   const [filterRegion,     setFilterRegion]     = useState('');
+  const [filterDay,        setFilterDay]        = useState('');
   const [filterMonth,      setFilterMonth]      = useState('');
   const [filterYear,       setFilterYear]       = useState('');
 
@@ -454,14 +455,20 @@ function SalesContent({ period }) {
     const regionSet = new Set();
     const monthSet  = new Set();
     const yearSet   = new Set();
+    const daySet    = new Set();
+    const m = filterMonth ? Number(filterMonth) : null;
+    const y = filterYear  ? Number(filterYear)  : null;
     warehouseFiltered.forEach(region => {
       regionSet.add(region.regionName);
       region.reps.forEach(rep => rep.items.forEach(item => {
         if (item.date) {
           const parts = item.date.split('/');
           if (parts.length === 3) {
-            monthSet.add(Number(parts[1]));
-            yearSet.add(Number(parts[2]));
+            const id = Number(parts[0]), im = Number(parts[1]), iy = Number(parts[2]);
+            monthSet.add(im);
+            yearSet.add(iy);
+            // Show days only for the selected month/year context
+            if ((!m || m === im) && (!y || y === iy)) daySet.add(id);
           }
         }
       }));
@@ -470,11 +477,12 @@ function SalesContent({ period }) {
       regions: [...regionSet].sort(),
       months:  [...monthSet].sort((a,b) => a - b),
       years:   [...yearSet].sort((a,b) => a - b),
+      days:    [...daySet].sort((a,b) => a - b),
     };
-  }, [warehouseFiltered]);
+  }, [warehouseFiltered, filterMonth, filterYear]);
 
   const hasDateData    = filterOptions.months.length > 0;
-  const hasActiveFilter = filterRegion || filterMonth || filterYear;
+  const hasActiveFilter = filterRegion || filterDay || filterMonth || filterYear;
 
   /* ── Step 3: apply region + date filters ────────────────────── */
   const regions = useMemo(() => {
@@ -488,8 +496,9 @@ function SalesContent({ period }) {
     // Per-session region dropdown filter
     if (filterRegion) result = result.filter(r => r.regionName === filterRegion);
 
-    // Month / Year filter — rebuild aggregates per rep/region
-    if (filterMonth || filterYear) {
+    // Day / Month / Year filter — rebuild aggregates per rep/region
+    if (filterDay || filterMonth || filterYear) {
+      const d = filterDay   ? Number(filterDay)   : null;
       const m = filterMonth ? Number(filterMonth) : null;
       const y = filterYear  ? Number(filterYear)  : null;
 
@@ -499,7 +508,8 @@ function SalesContent({ period }) {
             if (!item.date) return true;
             const parts = item.date.split('/');
             if (parts.length !== 3) return true;
-            const im = Number(parts[1]), iy = Number(parts[2]);
+            const id = Number(parts[0]), im = Number(parts[1]), iy = Number(parts[2]);
+            if (d && id !== d) return false;
             if (m && im !== m) return false;
             if (y && iy !== y) return false;
             return true;
@@ -543,7 +553,7 @@ function SalesContent({ period }) {
     }
 
     return result;
-  }, [warehouseFiltered, savedRegions, filterRegion, filterMonth, filterYear, savedTypes]);
+  }, [warehouseFiltered, savedRegions, filterRegion, filterDay, filterMonth, filterYear, savedTypes]);
 
   /* ── Step 4: KPIs always reflect visible filtered regions ────── */
   const kpi = useMemo(() => {
@@ -758,7 +768,7 @@ function SalesContent({ period }) {
           {hasDateData && (
             <div className="srp-filter-group">
               <label className="srp-filter-label">🗓 الشهر</label>
-              <select className="srp-filter-select" value={filterMonth} onChange={e => setFilterMonth(e.target.value)}>
+              <select className="srp-filter-select" value={filterMonth} onChange={e => { setFilterMonth(e.target.value); setFilterDay(''); }}>
                 <option value="">الكل</option>
                 {filterOptions.months.map(m => (
                   <option key={m} value={m}>{MONTH_NAMES[m] || m}</option>
@@ -771,7 +781,7 @@ function SalesContent({ period }) {
           {hasDateData && filterOptions.years.length > 1 && (
             <div className="srp-filter-group">
               <label className="srp-filter-label">📆 السنة</label>
-              <select className="srp-filter-select" value={filterYear} onChange={e => setFilterYear(e.target.value)}>
+              <select className="srp-filter-select" value={filterYear} onChange={e => { setFilterYear(e.target.value); setFilterDay(''); }}>
                 <option value="">الكل</option>
                 {filterOptions.years.map(y => (
                   <option key={y} value={y}>{y}</option>
@@ -780,9 +790,22 @@ function SalesContent({ period }) {
             </div>
           )}
 
+          {/* Day — only if date data exists */}
+          {hasDateData && filterOptions.days.length > 1 && (
+            <div className="srp-filter-group">
+              <label className="srp-filter-label">📅 اليوم</label>
+              <select className="srp-filter-select" value={filterDay} onChange={e => setFilterDay(e.target.value)}>
+                <option value="">الكل</option>
+                {filterOptions.days.map(d => (
+                  <option key={d} value={d}>{d}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
           {/* Reset */}
           {hasActiveFilter && (
-            <button className="srp-filter-reset" onClick={() => { setFilterRegion(''); setFilterMonth(''); setFilterYear(''); }}>
+            <button className="srp-filter-reset" onClick={() => { setFilterRegion(''); setFilterDay(''); setFilterMonth(''); setFilterYear(''); }}>
               ✕ إعادة تعيين
             </button>
           )}

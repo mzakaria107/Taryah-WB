@@ -32,8 +32,10 @@ const api = {
 };
 
 /* ── Formatters ─────────────────────────────────────────────── */
-const fmt  = n => (n ?? 0).toLocaleString('en-SA', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
-const fmtC = n => (n ?? 0).toLocaleString('en-SA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const fmt    = n => (n ?? 0).toLocaleString('en-SA', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+const fmtC   = n => (n ?? 0).toLocaleString('en-SA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+// KPI cards: rounded integers, no decimals
+const fmtKpi = n => Math.round(n ?? 0).toLocaleString('en-SA');
 
 /* ── Signed cell ─────────────────────────────────────────────── */
 function NetVal({ n, isQty = false, bold = false }) {
@@ -823,13 +825,13 @@ function SalesContent({ period }) {
       <div className="srp-kpi-row">
         <KpiCard icon={<TrendingUp size={20}/>} label="إجمالي المبيعات (صافي)"
           value={isLoading ? undefined : (kpi.totalRevenue ?? 0) < 0
-            ? <span className="srp-neg">{fmtC(Math.abs(kpi.totalRevenue))} ر.س −</span>
-            : `${fmtC(kpi.totalRevenue ?? 0)} ر.س`}
+            ? <span className="srp-neg">{fmtKpi(Math.abs(kpi.totalRevenue))} ر.س −</span>
+            : `${fmtKpi(kpi.totalRevenue ?? 0)} ر.س`}
           color="#1d4ed8" loading={isLoading} />
         <KpiCard icon={<Package size={20}/>} label="إجمالي الكميات (صافي)"
           value={isLoading ? undefined : (kpi.totalQty ?? 0) < 0
-            ? <span className="srp-neg">{fmt(Math.abs(kpi.totalQty))} قطعة −</span>
-            : `${fmt(kpi.totalQty ?? 0)} قطعة`}
+            ? <span className="srp-neg">{fmtKpi(Math.abs(kpi.totalQty))} قطعة −</span>
+            : `${fmtKpi(kpi.totalQty ?? 0)} قطعة`}
           color="#059669" loading={isLoading} />
         <KpiCard icon={<MapPin size={20}/>} label="عدد المناطق"
           value={kpi.regionsCount || '—'} sub={kpi.topRegion ? `الأفضل: ${kpi.topRegion}` : undefined}
@@ -838,9 +840,9 @@ function SalesContent({ period }) {
           value={kpi.repsCount || '—'} sub={kpi.topRep ? `الأعلى: ${kpi.topRep}` : undefined}
           color="#0891b2" loading={isLoading} />
         <KpiCard icon={<RotateCcw size={20}/>} label="المرتجعات"
-          value={`${fmtC(kpi.totalReturns)} ر.س`} color="#dc2626" loading={isLoading} />
+          value={`${fmtKpi(kpi.totalReturns)} ر.س`} color="#dc2626" loading={isLoading} />
         <KpiCard icon={<Award size={20}/>} label="متوسط المبيعات / مندوب"
-          value={kpi.repsCount ? `${fmtC((kpi.totalRevenue||0) / kpi.repsCount)} ر.س` : '—'}
+          value={kpi.repsCount ? `${fmtKpi((kpi.totalRevenue||0) / kpi.repsCount)} ر.س` : '—'}
           color="#d97706" loading={isLoading} />
       </div>
 

@@ -93,7 +93,7 @@
 /* ── KPI Row ─────────────────────────────────────────────────── */
 .srp-kpi-row {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
   gap: 12px;
   margin-bottom: 20px;
 }
@@ -126,12 +126,13 @@
 .srp-kpi-body { flex: 1; min-width: 0; }
 
 .srp-kpi-val {
-  font-size: 1.15rem;
+  font-size: clamp(0.82rem, 1.4vw, 1.05rem);
   font-weight: 700;
   color: var(--color-text, #1e293b);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  line-height: 1.3;
 }
 
 .srp-kpi-lbl {

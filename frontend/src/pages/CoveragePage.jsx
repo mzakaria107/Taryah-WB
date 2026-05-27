@@ -667,7 +667,7 @@ function RankingMatrix({ reps, workingDays, year, month }) {
                 <td className="cov-rtd cov-rtd--avg">
                   {rep.has_day_data ? (
                     <>
-                      <div className="cov-rtd-avg-val">{avgVisits} زيارة</div>
+                      <div className="cov-rtd-avg-val">{avgVisits}</div>
                       <div className="cov-rtd-avg-sub">زيارة/يوم</div>
                     </>
                   ) : <span style={{ color: '#cbd5e1' }}>—</span>}

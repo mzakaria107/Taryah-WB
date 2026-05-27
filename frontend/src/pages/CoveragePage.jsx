@@ -7,16 +7,59 @@ import {
 import client from '../api/client';
 import './CoveragePage.css';
 
-/* ── Working-days helper ─────────────────────────────────────── */
+/* ── Working-days helpers ────────────────────────────────────── */
 function calcWorkingDays(year, month) {
   const today = new Date();
   const isCurrentMonth = today.getFullYear() === year && today.getMonth() + 1 === month;
   const endDay = isCurrentMonth ? today.getDate() : new Date(year, month, 0).getDate();
   let count = 0;
   for (let d = 1; d <= endDay; d++) {
-    if (new Date(year, month - 1, d).getDay() !== 5) count++; // skip Friday
+    if (new Date(year, month - 1, d).getDay() !== 5) count++;
   }
   return Math.max(count, 1);
+}
+
+/* Build 7-day week arrays for a month (same logic as CoverageMatrix) */
+function buildWeeks(year, month) {
+  const daysInMonth = new Date(year, month, 0).getDate();
+  const weeks = [];
+  for (let start = 1; start <= daysInMonth; start += 7) {
+    const end = Math.min(start + 6, daysInMonth);
+    const days = [];
+    for (let d = start; d <= end; d++) days.push(d);
+    weeks.push(days);
+  }
+  return weeks;
+}
+
+/* Working days inside a week's day array, up to todayDay (null = full week) */
+function workDaysInWeek(weekDays, year, month, todayDay) {
+  let count = 0;
+  for (const d of weekDays) {
+    if (todayDay !== null && d > todayDay) break;
+    if (new Date(year, month - 1, d).getDay() !== 5) count++;
+  }
+  return count;
+}
+
+/**
+ * Active working days for a rep:
+ * Sum of working days only in weeks where the rep had ≥1 visit.
+ * Weeks with 0 visits are excluded from the denominator.
+ */
+function calcActiveWorkDays(repWeeks, year, month) {
+  const today = new Date();
+  const isCurrentMonth = today.getFullYear() === year && today.getMonth() + 1 === month;
+  const todayDay = isCurrentMonth ? today.getDate() : null;
+  const weeks = buildWeeks(year, month);
+  let active = 0;
+  repWeeks.forEach((wk, wi) => {
+    if (wi >= weeks.length) return;
+    if (wk.visits > 0) {
+      active += workDaysInWeek(weeks[wi], year, month, todayDay);
+    }
+  });
+  return Math.max(active, 1);
 }
 
 /* ── Export helpers ──────────────────────────────────────────── */
@@ -40,14 +83,18 @@ function exportRankingCSV(reps, period) {
     'أسبوع 1 %', 'أسبوع 2 %', 'أسبوع 3 %', 'أسبوع 4 %', 'أسبوع 5 %',
     'إجمالي التغطية %', 'كفاءة ≥2 زيارة %', 'إجمالي الزيارات',
     'إجمالي الكميات', 'متوسط كمية/يوم', 'متوسط زيارات/يوم'];
-  const dataRows = reps.map(r => [
-    r.rank, r.rep_name, r.branch_name, r.total_customers,
-    r.weeks[0].pct, r.weeks[1].pct, r.weeks[2].pct, r.weeks[3].pct, r.weeks[4].pct,
-    r.overall.pct, r.overall.effPct, r.overall.visits,
-    r.total_qty,
-    Math.round(r.total_qty / wDays),
-    (r.overall.visits / wDays).toFixed(1),
-  ]);
+  const dataRows = reps.map(r => {
+    const activeWD  = r.has_day_data ? calcActiveWorkDays(r.weeks, period.year, period.month) : 0;
+    const avgVisits = activeWD > 0 ? (r.overall.visits / activeWD).toFixed(1) : '—';
+    return [
+      r.rank, r.rep_name, r.branch_name, r.total_customers,
+      r.weeks[0].pct, r.weeks[1].pct, r.weeks[2].pct, r.weeks[3].pct, r.weeks[4].pct,
+      r.overall.pct, r.overall.effPct, r.overall.visits,
+      r.total_qty,
+      Math.round(r.total_qty / wDays),
+      avgVisits,
+    ];
+  });
   downloadCSV(`ترتيب_المناديب_${month}`, [headers, ...dataRows]);
 }
 
@@ -545,7 +592,7 @@ function PctCell({ pct, visited, total, hasDayData }) {
 }
 
 /* ── Ranking matrix table ────────────────────────────────────── */
-function RankingMatrix({ reps, workingDays }) {
+function RankingMatrix({ reps, workingDays, year, month }) {
   const MEDALS = { 1: '🥇', 2: '🥈', 3: '🥉' };
   const fmtN = n => Math.round(n ?? 0).toLocaleString('en-SA');
   return (
@@ -566,13 +613,15 @@ function RankingMatrix({ reps, workingDays }) {
             <th className="cov-rth cov-rth--eff" title="متوسط نسبة العملاء بـ≥2 زيارة/أسبوع">كفاءة ≥2</th>
             <th className="cov-rth cov-rth--qty" title="إجمالي صافي الكميات بالشهر الحالي">الكميات</th>
             <th className="cov-rth cov-rth--avg" title={`متوسط الكميات لكل يوم عمل (${workingDays} يوم)`}>كمية/يوم</th>
-            <th className="cov-rth cov-rth--avg" title={`متوسط الزيارات لكل يوم عمل (${workingDays} يوم)`}>زيارة/يوم</th>
+            <th className="cov-rth cov-rth--avg" title="متوسط الزيارات لكل يوم عمل (يُستثنى الأسابيع الصفرية)">زيارة/يوم</th>
           </tr>
         </thead>
         <tbody>
           {reps.map((rep, i) => {
-            const avgQty     = workingDays > 0 ? Math.round(rep.total_qty / workingDays) : 0;
-            const avgVisits  = workingDays > 0 ? (rep.overall.visits / workingDays).toFixed(1) : '—';
+            const avgQty = workingDays > 0 ? Math.round(rep.total_qty / workingDays) : 0;
+            // Visits avg: only count working days in weeks where rep had actual visits
+            const activeWD  = rep.has_day_data ? calcActiveWorkDays(rep.weeks, year, month) : 0;
+            const avgVisits = activeWD > 0 ? (rep.overall.visits / activeWD).toFixed(1) : '—';
             return (
               <tr key={rep.rep_name} className={`cov-rtr${i % 2 !== 0 ? ' cov-rtr--alt' : ''}`}>
                 <td className="cov-rtd cov-rtd--rank">
@@ -756,7 +805,7 @@ function RankingView({ branch, month, year }) {
             </button>
           </div>
         </div>
-        <RankingMatrix reps={reps} workingDays={workingDays}/>
+        <RankingMatrix reps={reps} workingDays={workingDays} year={period.year} month={period.month}/>
       </div>
     </>
   );

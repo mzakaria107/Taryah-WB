@@ -249,6 +249,15 @@ router.get('/ranking', verifyToken, async (req, res) => {
           COUNT(DISTINCT customer_code) AS vis_custs,
           COUNT(*)                      AS total_vis
         FROM day_vis GROUP BY rep
+      ),
+      -- Current month net quantities per rep
+      qty_agg AS (
+        SELECT TRIM(salesrep_name) AS rep, SUM(qty) AS total_qty
+        FROM sales_activity
+        WHERE report_year = $1 AND month_num = $2
+          AND salesrep_name IS NOT NULL AND TRIM(salesrep_name) != ''
+          ${branchCond}
+        GROUP BY TRIM(salesrep_name)
       )
       SELECT
         c.rep                                                        AS rep_name,
@@ -271,11 +280,13 @@ router.get('/ranking', verifyToken, async (req, res) => {
         COALESCE(MAX(CASE WHEN w.week_num=5 THEN w.total_vis  END),0) AS w5_tot,
         COALESCE(MAX(CASE WHEN w.week_num=5 THEN w.eff_custs  END),0) AS w5_eff,
         COALESCE(o.vis_custs, 0)                                     AS ov_vis,
-        COALESCE(o.total_vis, 0)                                     AS ov_tot
+        COALESCE(o.total_vis, 0)                                     AS ov_tot,
+        COALESCE(qa.total_qty, 0)                                    AS total_qty
       FROM curr c
       LEFT JOIN rep_totals rt ON rt.rep = c.rep
       LEFT JOIN weekly      w  ON w.rep  = c.rep
       LEFT JOIN overall     o  ON o.rep  = c.rep
+      LEFT JOIN qty_agg     qa ON qa.rep = c.rep
       GROUP BY c.rep, rt.total_custs, o.vis_custs, o.total_vis
       ORDER BY
         COALESCE(o.vis_custs,0)::float
@@ -299,6 +310,7 @@ router.get('/ranking', verifyToken, async (req, res) => {
           { visited: parseInt(r.w4_vis), visits: parseInt(r.w4_tot), pct: pct(r.w4_vis), efficient: parseInt(r.w4_eff), effPct: pct(r.w4_eff) },
           { visited: parseInt(r.w5_vis), visits: parseInt(r.w5_tot), pct: pct(r.w5_vis), efficient: parseInt(r.w5_eff), effPct: pct(r.w5_eff) },
         ],
+        total_qty: parseInt(r.total_qty) || 0,
         overall: (() => {
           const weekEffs = [
             { eff: parseInt(r.w1_eff), tot: parseInt(r.w1_tot) },

@@ -308,6 +308,8 @@
 .cov-rth--week   { width: 80px; }
 .cov-rth--overall{ width: 96px; background: #1d4ed8; }
 .cov-rth--eff    { width: 72px; background: #7c3aed; }
+.cov-rth--qty    { width: 82px; background: #0f766e; }
+.cov-rth--avg    { width: 72px; background: #0e7490; }
 
 .cov-rtr { transition: background 0.1s; }
 .cov-rtr:hover .cov-rtd { background: #f0f7ff !important; }
@@ -378,6 +380,26 @@
 .cov-rtd--good.cov-rtd--overall { border-right-color: #22c55e; }
 .cov-rtd--mid.cov-rtd--overall  { border-right-color: #f59e0b; }
 .cov-rtd--low.cov-rtd--overall  { border-right-color: #ef4444; }
+
+/* Qty & avg columns */
+.cov-rtd--qty  { background: #f0fdfa !important; border-right: 2px solid #99f6e4; }
+.cov-rtd--avg  { background: #ecfeff !important; }
+.cov-rtd-qty-val {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: #0f766e;
+}
+.cov-rtd-avg-val {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: #0e7490;
+  line-height: 1.1;
+}
+.cov-rtd-avg-sub {
+  font-size: 0.6rem;
+  color: #94a3b8;
+  margin-top: 1px;
+}
 
 /* Efficiency column in ranking table */
 .cov-rtd--eff { border-right: 3px solid #7c3aed; }

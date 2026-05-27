@@ -7,6 +7,18 @@ import {
 import client from '../api/client';
 import './CoveragePage.css';
 
+/* ── Working-days helper ─────────────────────────────────────── */
+function calcWorkingDays(year, month) {
+  const today = new Date();
+  const isCurrentMonth = today.getFullYear() === year && today.getMonth() + 1 === month;
+  const endDay = isCurrentMonth ? today.getDate() : new Date(year, month, 0).getDate();
+  let count = 0;
+  for (let d = 1; d <= endDay; d++) {
+    if (new Date(year, month - 1, d).getDay() !== 5) count++; // skip Friday
+  }
+  return Math.max(count, 1);
+}
+
 /* ── Export helpers ──────────────────────────────────────────── */
 function downloadCSV(filename, rows) {
   // UTF-8 BOM so Excel renders Arabic correctly
@@ -23,13 +35,18 @@ function downloadCSV(filename, rows) {
 
 function exportRankingCSV(reps, period) {
   const month = MONTH_NAMES[period.month] + ' ' + period.year;
+  const wDays = period.workingDays || calcWorkingDays(period.year, period.month);
   const headers = ['#', 'المندوب', 'المنطقة', 'إجمالي العملاء',
     'أسبوع 1 %', 'أسبوع 2 %', 'أسبوع 3 %', 'أسبوع 4 %', 'أسبوع 5 %',
-    'إجمالي التغطية %', 'كفاءة ≥2 زيارة %', 'إجمالي الزيارات'];
+    'إجمالي التغطية %', 'كفاءة ≥2 زيارة %', 'إجمالي الزيارات',
+    'إجمالي الكميات', 'متوسط كمية/يوم', 'متوسط زيارات/يوم'];
   const dataRows = reps.map(r => [
     r.rank, r.rep_name, r.branch_name, r.total_customers,
     r.weeks[0].pct, r.weeks[1].pct, r.weeks[2].pct, r.weeks[3].pct, r.weeks[4].pct,
     r.overall.pct, r.overall.effPct, r.overall.visits,
+    r.total_qty,
+    Math.round(r.total_qty / wDays),
+    (r.overall.visits / wDays).toFixed(1),
   ]);
   downloadCSV(`ترتيب_المناديب_${month}`, [headers, ...dataRows]);
 }
@@ -528,8 +545,9 @@ function PctCell({ pct, visited, total, hasDayData }) {
 }
 
 /* ── Ranking matrix table ────────────────────────────────────── */
-function RankingMatrix({ reps }) {
+function RankingMatrix({ reps, workingDays }) {
   const MEDALS = { 1: '🥇', 2: '🥈', 3: '🥉' };
+  const fmtN = n => Math.round(n ?? 0).toLocaleString('en-SA');
   return (
     <div className="cov-rtable-wrap">
       <table className="cov-rtable">
@@ -546,45 +564,68 @@ function RankingMatrix({ reps }) {
             <th className="cov-rth cov-rth--week">أسبوع 5</th>
             <th className="cov-rth cov-rth--overall">الإجمالي</th>
             <th className="cov-rth cov-rth--eff" title="متوسط نسبة العملاء بـ≥2 زيارة/أسبوع">كفاءة ≥2</th>
+            <th className="cov-rth cov-rth--qty" title="إجمالي صافي الكميات بالشهر الحالي">الكميات</th>
+            <th className="cov-rth cov-rth--avg" title={`متوسط الكميات لكل يوم عمل (${workingDays} يوم)`}>كمية/يوم</th>
+            <th className="cov-rth cov-rth--avg" title={`متوسط الزيارات لكل يوم عمل (${workingDays} يوم)`}>زيارة/يوم</th>
           </tr>
         </thead>
         <tbody>
-          {reps.map((rep, i) => (
-            <tr key={rep.rep_name} className={`cov-rtr${i % 2 !== 0 ? ' cov-rtr--alt' : ''}`}>
-              <td className="cov-rtd cov-rtd--rank">
-                {MEDALS[rep.rank] || <span className="cov-rank-num">{rep.rank}</span>}
-              </td>
-              <td className="cov-rtd cov-rtd--name">{rep.rep_name}</td>
-              <td className="cov-rtd cov-rtd--branch">
-                <span className="cov-branch-badge">{rep.branch_name || '—'}</span>
-              </td>
-              <td className="cov-rtd cov-rtd--num">{rep.total_customers}</td>
-              {rep.weeks.map((wk, wi) => (
-                <PctCell key={wi} pct={wk.pct} visited={wk.visited} total={rep.total_customers} hasDayData={rep.has_day_data}/>
-              ))}
-              <td className={`cov-rtd cov-rtd--overall ${
-                rep.overall.pct >= 90 ? 'cov-rtd--high' : rep.overall.pct >= 70 ? 'cov-rtd--good' : rep.overall.pct >= 40 ? 'cov-rtd--mid' : 'cov-rtd--low'
-              }`}>
-                <div className="cov-rtd-overall-val">{rep.has_day_data ? `${rep.overall.pct}%` : '—'}</div>
-                {rep.has_day_data && (
-                  <div className="cov-rtd-overall-sub">{rep.overall.visited}/{rep.total_customers} · {rep.overall.visits} زيارة</div>
-                )}
-              </td>
-              {/* Efficiency column */}
-              {rep.has_day_data ? (
-                <td className={`cov-rtd cov-rtd--eff ${
-                  rep.overall.effPct >= 70 ? 'cov-rtd--eff-high' : rep.overall.effPct >= 40 ? 'cov-rtd--eff-mid' : 'cov-rtd--eff-low'
-                }`}>
-                  <div className="cov-rtd-eff-val">{rep.overall.effPct}%</div>
-                  <div className="cov-rtd-bar">
-                    <div className="cov-rtd-fill" style={{ width: `${rep.overall.effPct}%` }}/>
-                  </div>
+          {reps.map((rep, i) => {
+            const avgQty     = workingDays > 0 ? Math.round(rep.total_qty / workingDays) : 0;
+            const avgVisits  = workingDays > 0 ? (rep.overall.visits / workingDays).toFixed(1) : '—';
+            return (
+              <tr key={rep.rep_name} className={`cov-rtr${i % 2 !== 0 ? ' cov-rtr--alt' : ''}`}>
+                <td className="cov-rtd cov-rtd--rank">
+                  {MEDALS[rep.rank] || <span className="cov-rank-num">{rep.rank}</span>}
                 </td>
-              ) : (
-                <td className="cov-rtd cov-rtd--nodata">—</td>
-              )}
-            </tr>
-          ))}
+                <td className="cov-rtd cov-rtd--name">{rep.rep_name}</td>
+                <td className="cov-rtd cov-rtd--branch">
+                  <span className="cov-branch-badge">{rep.branch_name || '—'}</span>
+                </td>
+                <td className="cov-rtd cov-rtd--num">{rep.total_customers}</td>
+                {rep.weeks.map((wk, wi) => (
+                  <PctCell key={wi} pct={wk.pct} visited={wk.visited} total={rep.total_customers} hasDayData={rep.has_day_data}/>
+                ))}
+                <td className={`cov-rtd cov-rtd--overall ${
+                  rep.overall.pct >= 90 ? 'cov-rtd--high' : rep.overall.pct >= 70 ? 'cov-rtd--good' : rep.overall.pct >= 40 ? 'cov-rtd--mid' : 'cov-rtd--low'
+                }`}>
+                  <div className="cov-rtd-overall-val">{rep.has_day_data ? `${rep.overall.pct}%` : '—'}</div>
+                  {rep.has_day_data && (
+                    <div className="cov-rtd-overall-sub">{rep.overall.visited}/{rep.total_customers} · {rep.overall.visits} زيارة</div>
+                  )}
+                </td>
+                {/* Efficiency */}
+                {rep.has_day_data ? (
+                  <td className={`cov-rtd cov-rtd--eff ${
+                    rep.overall.effPct >= 70 ? 'cov-rtd--eff-high' : rep.overall.effPct >= 40 ? 'cov-rtd--eff-mid' : 'cov-rtd--eff-low'
+                  }`}>
+                    <div className="cov-rtd-eff-val">{rep.overall.effPct}%</div>
+                    <div className="cov-rtd-bar"><div className="cov-rtd-fill" style={{ width: `${rep.overall.effPct}%` }}/></div>
+                  </td>
+                ) : (
+                  <td className="cov-rtd cov-rtd--nodata">—</td>
+                )}
+                {/* Total qty */}
+                <td className="cov-rtd cov-rtd--qty">
+                  <div className="cov-rtd-qty-val">{fmtN(rep.total_qty)}</div>
+                </td>
+                {/* Avg daily qty */}
+                <td className="cov-rtd cov-rtd--avg">
+                  <div className="cov-rtd-avg-val">{fmtN(avgQty)}</div>
+                  <div className="cov-rtd-avg-sub">/ يوم</div>
+                </td>
+                {/* Avg daily visits */}
+                <td className="cov-rtd cov-rtd--avg">
+                  {rep.has_day_data ? (
+                    <>
+                      <div className="cov-rtd-avg-val">{avgVisits}</div>
+                      <div className="cov-rtd-avg-sub">زيارة/يوم</div>
+                    </>
+                  ) : <span style={{ color: '#cbd5e1' }}>—</span>}
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>
@@ -659,6 +700,7 @@ function RankingView({ branch, month, year }) {
   const { reps, period } = data;
   const monthLabel  = `${MONTH_NAMES[period.month]} ${period.year}`;
   const hasDayData  = reps.some(r => r.has_day_data);
+  const workingDays = calcWorkingDays(period.year, period.month);
 
   if (reps.length === 0) return (
     <div className="cov-empty"><span className="cov-empty-icon">📊</span>لا توجد بيانات لهذه الفترة</div>
@@ -703,7 +745,7 @@ function RankingView({ branch, month, year }) {
           <span className="cov-section-count">{reps.length} مندوب</span>
           <div className="cov-export-btns cov-no-print">
             <button className="cov-export-btn cov-export-btn--excel"
-              onClick={() => exportRankingCSV(reps, period)}
+              onClick={() => exportRankingCSV(reps, { ...period, workingDays })}
               title="تصدير Excel">
               <FileSpreadsheet size={14}/> Excel
             </button>
@@ -714,7 +756,7 @@ function RankingView({ branch, month, year }) {
             </button>
           </div>
         </div>
-        <RankingMatrix reps={reps}/>
+        <RankingMatrix reps={reps} workingDays={workingDays}/>
       </div>
     </>
   );

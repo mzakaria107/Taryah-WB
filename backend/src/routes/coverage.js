@@ -281,7 +281,7 @@ router.get('/ranking', verifyToken, async (req, res) => {
         COALESCE(MAX(CASE WHEN w.week_num=5 THEN w.eff_custs  END),0) AS w5_eff,
         COALESCE(o.vis_custs, 0)                                     AS ov_vis,
         COALESCE(o.total_vis, 0)                                     AS ov_tot,
-        COALESCE(qa.total_qty, 0)                                    AS total_qty
+        COALESCE(MAX(qa.total_qty), 0)                               AS total_qty
       FROM curr c
       LEFT JOIN rep_totals rt ON rt.rep = c.rep
       LEFT JOIN weekly      w  ON w.rep  = c.rep

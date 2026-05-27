@@ -164,4 +164,144 @@ router.get('/profile', verifyToken, async (req, res) => {
   }
 });
 
+/* ─────────────────────────────────────────────────────────────
+   GET /api/coverage/ranking?month=&year=&branch=
+   All reps ranked by overall coverage % with per-week breakdown
+───────────────────────────────────────────────────────────── */
+router.get('/ranking', verifyToken, async (req, res) => {
+  const year   = parseInt(req.query.year)  || new Date().getFullYear();
+  const month  = parseInt(req.query.month) || (new Date().getMonth() + 1);
+  const branch = (req.query.branch || '').trim();
+
+  const prevMonth = month === 1 ? 12 : month - 1;
+  const prevYear  = month === 1 ? year - 1 : year;
+
+  try {
+    const params = [year, month, prevYear, prevMonth];
+    const branchCond = branch ? `AND TRIM(branch_name) = $5` : '';
+    if (branch) params.push(branch);
+
+    const { rows } = await pool.query(`
+      WITH
+      curr AS (
+        SELECT DISTINCT
+          TRIM(salesrep_name)              AS rep,
+          TRIM(COALESCE(branch_name,''))   AS branch,
+          customer_code
+        FROM sales_activity
+        WHERE report_year = $1 AND month_num = $2
+          AND salesrep_name IS NOT NULL AND TRIM(salesrep_name) != ''
+          ${branchCond}
+      ),
+      prev AS (
+        SELECT DISTINCT
+          TRIM(salesrep_name) AS rep,
+          customer_code
+        FROM sales_activity
+        WHERE report_year = $3 AND month_num = $4
+          AND salesrep_name IS NOT NULL AND TRIM(salesrep_name) != ''
+          ${branchCond}
+      ),
+      all_custs AS (
+        SELECT rep, customer_code FROM curr
+        UNION
+        SELECT rep, customer_code FROM prev
+      ),
+      rep_totals AS (
+        SELECT rep, COUNT(DISTINCT customer_code) AS total_custs
+        FROM all_custs GROUP BY rep
+      ),
+      day_vis AS (
+        SELECT
+          TRIM(salesrep_name) AS rep,
+          customer_code,
+          day,
+          CASE
+            WHEN day BETWEEN 1  AND 7  THEN 1
+            WHEN day BETWEEN 8  AND 14 THEN 2
+            WHEN day BETWEEN 15 AND 21 THEN 3
+            WHEN day BETWEEN 22 AND 28 THEN 4
+            ELSE 5
+          END AS week_num
+        FROM sales_activity
+        WHERE report_year = $1 AND month_num = $2
+          AND day IS NOT NULL
+          AND salesrep_name IS NOT NULL AND TRIM(salesrep_name) != ''
+          ${branchCond}
+      ),
+      weekly AS (
+        SELECT rep, week_num,
+          COUNT(DISTINCT customer_code) AS vis_custs,
+          COUNT(*)                      AS total_vis
+        FROM day_vis GROUP BY rep, week_num
+      ),
+      overall AS (
+        SELECT rep,
+          COUNT(DISTINCT customer_code) AS vis_custs,
+          COUNT(*)                      AS total_vis
+        FROM day_vis GROUP BY rep
+      )
+      SELECT
+        c.rep                                                        AS rep_name,
+        MAX(c.branch)                                                AS branch_name,
+        COUNT(DISTINCT c.customer_code)                              AS curr_custs,
+        COALESCE(rt.total_custs, COUNT(DISTINCT c.customer_code))    AS total_custs,
+        COALESCE(MAX(CASE WHEN w.week_num=1 THEN w.vis_custs END),0) AS w1_vis,
+        COALESCE(MAX(CASE WHEN w.week_num=1 THEN w.total_vis END),0) AS w1_tot,
+        COALESCE(MAX(CASE WHEN w.week_num=2 THEN w.vis_custs END),0) AS w2_vis,
+        COALESCE(MAX(CASE WHEN w.week_num=2 THEN w.total_vis END),0) AS w2_tot,
+        COALESCE(MAX(CASE WHEN w.week_num=3 THEN w.vis_custs END),0) AS w3_vis,
+        COALESCE(MAX(CASE WHEN w.week_num=3 THEN w.total_vis END),0) AS w3_tot,
+        COALESCE(MAX(CASE WHEN w.week_num=4 THEN w.vis_custs END),0) AS w4_vis,
+        COALESCE(MAX(CASE WHEN w.week_num=4 THEN w.total_vis END),0) AS w4_tot,
+        COALESCE(MAX(CASE WHEN w.week_num=5 THEN w.vis_custs END),0) AS w5_vis,
+        COALESCE(MAX(CASE WHEN w.week_num=5 THEN w.total_vis END),0) AS w5_tot,
+        COALESCE(o.vis_custs, 0)                                     AS ov_vis,
+        COALESCE(o.total_vis, 0)                                     AS ov_tot
+      FROM curr c
+      LEFT JOIN rep_totals rt ON rt.rep = c.rep
+      LEFT JOIN weekly      w  ON w.rep  = c.rep
+      LEFT JOIN overall     o  ON o.rep  = c.rep
+      GROUP BY c.rep, rt.total_custs, o.vis_custs, o.total_vis
+      ORDER BY
+        COALESCE(o.vis_custs,0)::float
+          / NULLIF(COALESCE(rt.total_custs, COUNT(DISTINCT c.customer_code)), 0) DESC NULLS LAST,
+        COALESCE(o.total_vis,0) DESC
+    `, params);
+
+    const reps = rows.map((r, i) => {
+      const tot = parseInt(r.total_custs) || 1;
+      const pct = n => tot > 0 ? Math.round(parseInt(n || 0) / tot * 100) : 0;
+      return {
+        rank:            i + 1,
+        rep_name:        r.rep_name,
+        branch_name:     r.branch_name,
+        total_customers: parseInt(r.total_custs),
+        curr_customers:  parseInt(r.curr_custs),
+        weeks: [
+          { visited: parseInt(r.w1_vis), visits: parseInt(r.w1_tot), pct: pct(r.w1_vis) },
+          { visited: parseInt(r.w2_vis), visits: parseInt(r.w2_tot), pct: pct(r.w2_vis) },
+          { visited: parseInt(r.w3_vis), visits: parseInt(r.w3_tot), pct: pct(r.w3_vis) },
+          { visited: parseInt(r.w4_vis), visits: parseInt(r.w4_tot), pct: pct(r.w4_vis) },
+          { visited: parseInt(r.w5_vis), visits: parseInt(r.w5_tot), pct: pct(r.w5_vis) },
+        ],
+        overall: {
+          visited: parseInt(r.ov_vis),
+          visits:  parseInt(r.ov_tot),
+          pct:     pct(r.ov_vis),
+        },
+        has_day_data: parseInt(r.ov_tot) > 0,
+      };
+    });
+
+    res.json({
+      reps,
+      period: { month, year, prev_month: prevMonth, prev_year: prevYear },
+    });
+  } catch (err) {
+    console.error('[Coverage] ranking error:', err);
+    res.status(500).json({ error: 'خطأ في جلب بيانات الترتيب' });
+  }
+});
+
 module.exports = router;

@@ -229,6 +229,252 @@
   gap: 8px;
 }
 
+/* ── Tabs ────────────────────────────────────────────────────── */
+.cov-tabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 14px;
+  border-bottom: 2px solid var(--color-border, #e2e8f0);
+  padding-bottom: 0;
+}
+.cov-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 18px;
+  border: none;
+  background: transparent;
+  color: var(--color-text-muted, #64748b);
+  font-size: 0.88rem;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  border-bottom: 3px solid transparent;
+  margin-bottom: -2px;
+  border-radius: 8px 8px 0 0;
+  transition: all 0.15s;
+}
+.cov-tab:hover { color: var(--color-text, #1e293b); background: #f8fafc; }
+.cov-tab--active {
+  color: #1d4ed8;
+  border-bottom-color: #1d4ed8;
+  background: #eff6ff;
+}
+
+/* ── Ranking summary row ─────────────────────────────────────── */
+.cov-rank-summary {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-bottom: 14px;
+}
+
+/* ── Ranking card ────────────────────────────────────────────── */
+.cov-rank-card {
+  background: var(--color-surface, #fff);
+  border: 1px solid var(--color-border, #e2e8f0);
+  border-radius: 14px;
+  padding: 16px;
+  overflow: hidden;
+}
+
+/* ── Ranking table ───────────────────────────────────────────── */
+.cov-rtable-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.cov-rtable {
+  border-collapse: collapse;
+  width: 100%;
+  min-width: 700px;
+  font-size: 0.82rem;
+  direction: rtl;
+}
+.cov-rth {
+  background: #1e293b;
+  color: #e2e8f0;
+  padding: 9px 10px;
+  text-align: center;
+  font-weight: 600;
+  font-size: 0.75rem;
+  white-space: nowrap;
+  border: 1px solid #334155;
+}
+.cov-rth--rank   { width: 44px; }
+.cov-rth--name   { text-align: right; min-width: 130px; }
+.cov-rth--num    { width: 64px; }
+.cov-rth--week   { width: 80px; }
+.cov-rth--overall{ width: 96px; background: #1d4ed8; }
+
+.cov-rtr { transition: background 0.1s; }
+.cov-rtr:hover .cov-rtd { background: #f0f7ff !important; }
+.cov-rtr--alt .cov-rtd  { background: #fafbfc; }
+
+.cov-rtd {
+  padding: 7px 8px;
+  border: 1px solid #f1f5f9;
+  vertical-align: middle;
+  text-align: center;
+  background: #fff;
+}
+.cov-rtd--rank  { font-size: 1rem; }
+.cov-rtd--name  { text-align: right; font-weight: 600; color: #1e293b; }
+.cov-rtd--branch{ font-size: 0.75rem; }
+.cov-rtd--num   { color: #334155; font-variant-numeric: tabular-nums; }
+.cov-rtd--nodata{ color: #cbd5e1; }
+
+.cov-rtd--high { background: #f0fdf4 !important; }
+.cov-rtd--good { background: #f0fdf4 !important; }
+.cov-rtd--mid  { background: #fffbeb !important; }
+.cov-rtd--low  { background: #fff1f2 !important; }
+
+.cov-rtd-val {
+  font-weight: 700;
+  font-size: 0.82rem;
+  line-height: 1.2;
+}
+.cov-rtd--high .cov-rtd-val { color: #16a34a; }
+.cov-rtd--good .cov-rtd-val { color: #059669; }
+.cov-rtd--mid  .cov-rtd-val { color: #d97706; }
+.cov-rtd--low  .cov-rtd-val { color: #dc2626; }
+
+.cov-rtd-bar {
+  height: 4px;
+  background: #e2e8f0;
+  border-radius: 99px;
+  overflow: hidden;
+  margin-top: 3px;
+}
+.cov-rtd-fill {
+  height: 100%;
+  border-radius: 99px;
+  background: currentColor;
+}
+.cov-rtd--high .cov-rtd-fill { background: #16a34a; }
+.cov-rtd--good .cov-rtd-fill { background: #22c55e; }
+.cov-rtd--mid  .cov-rtd-fill { background: #f59e0b; }
+.cov-rtd--low  .cov-rtd-fill { background: #ef4444; }
+
+/* Overall cell */
+.cov-rtd--overall {
+  font-weight: 700;
+  border-right: 3px solid #e2e8f0;
+}
+.cov-rtd-overall-val {
+  font-size: 1rem;
+  font-weight: 800;
+  line-height: 1.1;
+}
+.cov-rtd-overall-sub {
+  font-size: 0.65rem;
+  color: #64748b;
+  margin-top: 2px;
+  font-weight: 400;
+}
+.cov-rtd--high.cov-rtd--overall { border-right-color: #16a34a; }
+.cov-rtd--good.cov-rtd--overall { border-right-color: #22c55e; }
+.cov-rtd--mid.cov-rtd--overall  { border-right-color: #f59e0b; }
+.cov-rtd--low.cov-rtd--overall  { border-right-color: #ef4444; }
+
+.cov-rank-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px; height: 24px;
+  border-radius: 50%;
+  background: #f1f5f9;
+  color: #475569;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+.cov-branch-badge {
+  background: #eff6ff;
+  color: #1d4ed8;
+  border-radius: 20px;
+  padding: 2px 8px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* ── Top / Bottom chart card ─────────────────────────────────── */
+.cov-chart-card {
+  background: var(--color-surface, #fff);
+  border: 1px solid var(--color-border, #e2e8f0);
+  border-radius: 14px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+.cov-chart-grid {
+  display: flex;
+  gap: 0;
+  align-items: stretch;
+}
+.cov-chart-half {
+  flex: 1;
+  min-width: 0;
+}
+.cov-chart-divider {
+  width: 1px;
+  background: #e2e8f0;
+  margin: 0 20px;
+  flex-shrink: 0;
+}
+.cov-chart-half-title {
+  font-size: 0.82rem;
+  font-weight: 700;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 2px solid #e2e8f0;
+}
+.cov-chart-half-title--top { color: #16a34a; border-bottom-color: #86efac; }
+.cov-chart-half-title--bot { color: #dc2626; border-bottom-color: #fca5a5; }
+
+.cov-chart-rows { display: flex; flex-direction: column; gap: 7px; }
+.cov-chart-row  { display: flex; align-items: center; gap: 8px; }
+
+.cov-chart-label {
+  width: 110px;
+  flex-shrink: 0;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #334155;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: right;
+}
+.cov-chart-bar-track {
+  flex: 1;
+  height: 20px;
+  background: #f1f5f9;
+  border-radius: 4px;
+  overflow: hidden;
+  position: relative;
+}
+.cov-chart-bar-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.5s ease;
+  position: relative;
+}
+.cov-chart-fill--top1 { background: linear-gradient(90deg, #15803d, #22c55e); }
+.cov-chart-fill--top2 { background: linear-gradient(90deg, #16a34a, #4ade80); }
+.cov-chart-fill--top3 { background: linear-gradient(90deg, #22c55e, #86efac); }
+.cov-chart-fill--bot1 { background: linear-gradient(90deg, #b91c1c, #ef4444); }
+.cov-chart-fill--bot2 { background: linear-gradient(90deg, #dc2626, #f87171); }
+.cov-chart-fill--bot3 { background: linear-gradient(90deg, #ef4444, #fca5a5); }
+
+.cov-chart-pct-lbl {
+  width: 38px;
+  flex-shrink: 0;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #475569;
+  text-align: left;
+}
+
 /* ── Coverage Rate Card ──────────────────────────────────────── */
 .cov-rate-card {
   background: var(--color-surface, #fff);

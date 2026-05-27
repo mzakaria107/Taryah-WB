@@ -1,10 +1,55 @@
 import React, { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
-  Users, RefreshCw, AlertCircle, BarChart2, UserCheck,
+  RefreshCw, AlertCircle, BarChart2, UserCheck,
+  FileSpreadsheet, Printer,
 } from 'lucide-react';
 import client from '../api/client';
 import './CoveragePage.css';
+
+/* ── Export helpers ──────────────────────────────────────────── */
+function downloadCSV(filename, rows) {
+  // UTF-8 BOM so Excel renders Arabic correctly
+  const bom  = '﻿';
+  const body = rows.map(r =>
+    r.map(c => (c === null || c === undefined ? '' : String(c).includes(',') ? `"${c}"` : c)).join(',')
+  ).join('\r\n');
+  const blob = new Blob([bom + body], { type: 'text/csv;charset=utf-8;' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url; a.download = filename + '.csv'; a.click();
+  URL.revokeObjectURL(url);
+}
+
+function exportRankingCSV(reps, period) {
+  const month = MONTH_NAMES[period.month] + ' ' + period.year;
+  const headers = ['#', 'المندوب', 'المنطقة', 'إجمالي العملاء',
+    'أسبوع 1 %', 'أسبوع 2 %', 'أسبوع 3 %', 'أسبوع 4 %', 'أسبوع 5 %',
+    'إجمالي التغطية %', 'كفاءة ≥2 زيارة %', 'إجمالي الزيارات'];
+  const dataRows = reps.map(r => [
+    r.rank, r.rep_name, r.branch_name, r.total_customers,
+    r.weeks[0].pct, r.weeks[1].pct, r.weeks[2].pct, r.weeks[3].pct, r.weeks[4].pct,
+    r.overall.pct, r.overall.effPct, r.overall.visits,
+  ]);
+  downloadCSV(`ترتيب_المناديب_${month}`, [headers, ...dataRows]);
+}
+
+function exportProfileCSV(customers, period) {
+  const month = MONTH_NAMES[period.month] + ' ' + period.year;
+  const prevM = MONTH_NAMES[period.prev_month];
+  const headers = ['كود العميل', 'اسم العميل', `طلبيات ${prevM}`, `كمية ${prevM}`, 'إجمالي الزيارات (الشهر الحالي)'];
+  const dataRows = customers.map(c => [
+    c.customer_code, c.customer_name, c.prev_orders, c.prev_qty, c.sale_days ? c.sale_days.size : 0,
+  ]);
+  downloadCSV(`تغطية_عملاء_${month}`, [headers, ...dataRows]);
+}
+
+function triggerPrint(title) {
+  const prev = document.title;
+  document.title = title;
+  window.print();
+  window.onafterprint = () => { document.title = prev; window.onafterprint = null; };
+}
 
 const MONTH_NAMES = {
   1:'يناير',2:'فبراير',3:'مارس',4:'أبريل',5:'مايو',6:'يونيو',
@@ -247,12 +292,26 @@ function CoverageMatrix({ profile }) {
     return Math.floor((todayDay - 1) / 7);
   }, [todayDay]);
 
+  const monthLabel = `${MONTH_NAMES[month]} ${year}`;
+
   return (
     <div className="cov-matrix-card">
-      <h3 className="cov-section-title">
-        📋 مصفوفة التغطية
-        <span>الشهر السابق: {MONTH_NAMES[period.prev_month]} · الشهر الحالي: {MONTH_NAMES[period.month]}</span>
-      </h3>
+      <div className="cov-section-title">
+        <span>📋 مصفوفة التغطية</span>
+        <span className="cov-section-count">الشهر السابق: {MONTH_NAMES[period.prev_month]} · الحالي: {MONTH_NAMES[month]}</span>
+        <div className="cov-export-btns cov-no-print">
+          <button className="cov-export-btn cov-export-btn--excel"
+            onClick={() => exportProfileCSV(customers, period)}
+            title="تصدير بيانات العملاء Excel">
+            <FileSpreadsheet size={14}/> Excel
+          </button>
+          <button className="cov-export-btn cov-export-btn--pdf"
+            onClick={() => triggerPrint(`بروفايل ${rep.name} — ${monthLabel}`)}
+            title="تصدير PDF">
+            <Printer size={14}/> PDF
+          </button>
+        </div>
+      </div>
 
       {!has_day_data && (
         <div className="cov-no-day-notice">
@@ -639,10 +698,22 @@ function RankingView({ branch, month, year }) {
 
       {/* Ranking matrix */}
       <div className="cov-rank-card">
-        <h3 className="cov-section-title">
-          📋 جدول ترتيب المناديب — {monthLabel}
-          <span>{reps.length} مندوب</span>
-        </h3>
+        <div className="cov-section-title">
+          <span>📋 جدول ترتيب المناديب — {monthLabel}</span>
+          <span className="cov-section-count">{reps.length} مندوب</span>
+          <div className="cov-export-btns cov-no-print">
+            <button className="cov-export-btn cov-export-btn--excel"
+              onClick={() => exportRankingCSV(reps, period)}
+              title="تصدير Excel">
+              <FileSpreadsheet size={14}/> Excel
+            </button>
+            <button className="cov-export-btn cov-export-btn--pdf"
+              onClick={() => triggerPrint(`ترتيب المناديب — ${monthLabel}`)}
+              title="تصدير PDF">
+              <Printer size={14}/> PDF
+            </button>
+          </div>
+        </div>
         <RankingMatrix reps={reps}/>
       </div>
     </>

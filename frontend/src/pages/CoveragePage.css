@@ -212,8 +212,9 @@
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-wrap: wrap;
 }
-.cov-section-title span { font-size: 0.75rem; color: #94a3b8; font-weight: 400; }
+.cov-section-title > span:not(.cov-section-count) { font-size: 0.75rem; color: #94a3b8; font-weight: 400; }
 
 /* ── No day data notice ───────────────────────────────────────── */
 .cov-no-day-notice {
@@ -872,13 +873,93 @@
   display: inline-block;
 }
 
+/* ── Export buttons ──────────────────────────────────────────── */
+.cov-export-btns {
+  display: flex;
+  gap: 6px;
+  margin-right: auto;
+}
+.cov-export-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 12px;
+  border-radius: 7px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  border: 1.5px solid transparent;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.cov-export-btn--excel {
+  background: #f0fdf4;
+  color: #16a34a;
+  border-color: #86efac;
+}
+.cov-export-btn--excel:hover { background: #dcfce7; border-color: #4ade80; }
+.cov-export-btn--pdf {
+  background: #fff1f2;
+  color: #dc2626;
+  border-color: #fca5a5;
+}
+.cov-export-btn--pdf:hover { background: #fee2e2; border-color: #f87171; }
+
+.cov-section-count {
+  font-size: 0.75rem;
+  color: #94a3b8;
+  font-weight: 400;
+}
+
+/* ── Print header (shown only in print) ──────────────────────── */
+.cov-print-header {
+  display: none;
+}
+
 /* ── Print ───────────────────────────────────────────────────── */
 @media print {
-  .cov-page    { padding: 4px; }
-  .cov-filters { display: none; }
-  .cov-no-print { display: none !important; }
+  @page { size: A4 landscape; margin: 1cm; }
+
+  .cov-page        { padding: 4px; }
+  .cov-no-print    { display: none !important; }
   .cov-table-scroll { overflow: visible; }
-  .cov-table { width: 100%; font-size: 0.6rem; table-layout: fixed; }
-  .cov-td--name { position: static; box-shadow: none; }
+
+  /* show print header */
+  .cov-print-header {
+    display: flex !important;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid #1e293b;
+    font-size: 0.82rem;
+    color: #1e293b;
+  }
+  .cov-print-header h2 { margin: 0; font-size: 1rem; }
+
+  /* matrix table */
+  .cov-table {
+    width: 100%;
+    font-size: 0.55rem;
+    table-layout: fixed;
+  }
+  .cov-td--name     { position: static; box-shadow: none; }
   .cov-th-fixed--name { position: static; box-shadow: none; }
+
+  /* ranking table */
+  .cov-rtable { font-size: 0.7rem; }
+  .cov-rtable-wrap { overflow: visible; }
+
+  /* rate card compact in print */
+  .cov-rate-weeks  { flex-wrap: nowrap; }
+  .cov-rate-week   { min-width: 80px; flex: 1; }
+
+  /* chart */
+  .cov-chart-card  { break-inside: avoid; }
+  .cov-rank-card   { break-inside: avoid; }
+  .cov-profile     { break-inside: avoid; }
+
+  /* color print */
+  * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
 }

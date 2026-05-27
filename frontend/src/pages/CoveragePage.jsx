@@ -209,22 +209,34 @@ function CoverageMatrix({ profile }) {
   const weeklyStats = useMemo(() => {
     if (!has_day_data || customers.length === 0) return null;
     return weeks.map(wk => {
-      let totalVisits = 0, customersVisited = 0;
+      let totalVisits = 0, customersVisited = 0, customersEfficient = 0;
       customers.forEach(c => {
         const cnt = wk.filter(d => c.sale_days.has(d)).length;
         totalVisits += cnt;
         if (cnt > 0) customersVisited++;
+        if (cnt >= 2) customersEfficient++;
       });
-      return { totalVisits, customersVisited, coveragePct: Math.round(customersVisited / customers.length * 100) };
+      const n = customers.length;
+      return {
+        totalVisits,
+        customersVisited,
+        customersEfficient,
+        coveragePct:    Math.round(customersVisited   / n * 100),
+        efficiencyPct:  Math.round(customersEfficient / n * 100),
+      };
     });
   }, [weeks, customers, has_day_data]);
 
   const overallCov = useMemo(() => {
     if (!weeklyStats) return null;
-    const totalVisits     = weeklyStats.reduce((s, w) => s + w.totalVisits, 0);
+    const totalVisits      = weeklyStats.reduce((s, w) => s + w.totalVisits, 0);
     const customersVisited = customers.filter(c => c.sale_days.size > 0).length;
+    const activeWeeks      = weeklyStats.filter(w => w.totalVisits > 0);
+    const avgEfficiencyPct = activeWeeks.length > 0
+      ? Math.round(activeWeeks.reduce((s, w) => s + w.efficiencyPct, 0) / activeWeeks.length)
+      : 0;
     return {
-      totalVisits, customersVisited,
+      totalVisits, customersVisited, avgEfficiencyPct,
       coveragePct: customers.length > 0 ? Math.round(customersVisited / customers.length * 100) : 0,
       total: customers.length,
     };
@@ -260,9 +272,11 @@ function CoverageMatrix({ profile }) {
             {weeklyStats.map((ws, wi) => {
               const isCurrent = wi === currentWeekIdx;
               const isFuture  = currentWeekIdx !== null && wi > currentWeekIdx;
-              const pct = ws.coveragePct;
+              const pct    = ws.coveragePct;
+              const effPct = ws.efficiencyPct;
               const barCls = pct >= 90 ? 'cov-rate-bar-fill--high' : pct >= 70 ? 'cov-rate-bar-fill--good' : pct >= 40 ? 'cov-rate-bar-fill--mid' : 'cov-rate-bar-fill--low';
               const pctCls = pct >= 90 ? 'cov-rate-pct--high' : pct >= 70 ? 'cov-rate-pct--good' : pct >= 40 ? 'cov-rate-pct--mid' : 'cov-rate-pct--low';
+              const effCls = effPct >= 70 ? 'cov-eff-high' : effPct >= 40 ? 'cov-eff-mid' : 'cov-eff-low';
               return (
                 <div key={wi} className={`cov-rate-week${isCurrent ? ' cov-rate-week--current' : ''}${isFuture ? ' cov-rate-week--future' : ''}`}>
                   <div className="cov-rate-week-label">
@@ -278,6 +292,17 @@ function CoverageMatrix({ profile }) {
                       <><strong>{ws.customersVisited}</strong><span> / {overallCov.total}</span><span className="cov-rate-vis-count"> · {ws.totalVisits} زيارة</span></>
                     )}
                   </div>
+                  {/* Efficiency indicator */}
+                  {!isFuture && (
+                    <div className="cov-eff-row">
+                      <span className="cov-eff-label">كفاءة ≥2</span>
+                      <span className={`cov-eff-pct ${effCls}`}>{effPct}%</span>
+                      <div className="cov-eff-bar">
+                        <div className={`cov-eff-fill ${effCls}`} style={{ width: `${effPct}%` }}/>
+                      </div>
+                      <span className="cov-eff-count">{ws.customersEfficient} عميل</span>
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -294,6 +319,18 @@ function CoverageMatrix({ profile }) {
                 <strong>{overallCov.customersVisited}</strong>
                 <span> / {overallCov.total} عميل</span>
                 <span className="cov-rate-vis-count"> · {overallCov.totalVisits} زيارة</span>
+              </div>
+              {/* Overall efficiency */}
+              <div className="cov-eff-row">
+                <span className="cov-eff-label">كفاءة ≥2</span>
+                <span className={`cov-eff-pct ${overallCov.avgEfficiencyPct >= 70 ? 'cov-eff-high' : overallCov.avgEfficiencyPct >= 40 ? 'cov-eff-mid' : 'cov-eff-low'}`}>
+                  {overallCov.avgEfficiencyPct}%
+                </span>
+                <div className="cov-eff-bar">
+                  <div className={`cov-eff-fill ${overallCov.avgEfficiencyPct >= 70 ? 'cov-eff-high' : overallCov.avgEfficiencyPct >= 40 ? 'cov-eff-mid' : 'cov-eff-low'}`}
+                       style={{ width: `${overallCov.avgEfficiencyPct}%` }}/>
+                </div>
+                <span className="cov-eff-count">متوسط</span>
               </div>
             </div>
           </div>
@@ -449,6 +486,7 @@ function RankingMatrix({ reps }) {
             <th className="cov-rth cov-rth--week">أسبوع 4</th>
             <th className="cov-rth cov-rth--week">أسبوع 5</th>
             <th className="cov-rth cov-rth--overall">الإجمالي</th>
+            <th className="cov-rth cov-rth--eff" title="متوسط نسبة العملاء بـ≥2 زيارة/أسبوع">كفاءة ≥2</th>
           </tr>
         </thead>
         <tbody>
@@ -473,6 +511,19 @@ function RankingMatrix({ reps }) {
                   <div className="cov-rtd-overall-sub">{rep.overall.visited}/{rep.total_customers} · {rep.overall.visits} زيارة</div>
                 )}
               </td>
+              {/* Efficiency column */}
+              {rep.has_day_data ? (
+                <td className={`cov-rtd cov-rtd--eff ${
+                  rep.overall.effPct >= 70 ? 'cov-rtd--eff-high' : rep.overall.effPct >= 40 ? 'cov-rtd--eff-mid' : 'cov-rtd--eff-low'
+                }`}>
+                  <div className="cov-rtd-eff-val">{rep.overall.effPct}%</div>
+                  <div className="cov-rtd-bar">
+                    <div className="cov-rtd-fill" style={{ width: `${rep.overall.effPct}%` }}/>
+                  </div>
+                </td>
+              ) : (
+                <td className="cov-rtd cov-rtd--nodata">—</td>
+              )}
             </tr>
           ))}
         </tbody>

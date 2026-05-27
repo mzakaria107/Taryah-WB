@@ -306,6 +306,7 @@
 .cov-rth--num    { width: 64px; }
 .cov-rth--week   { width: 80px; }
 .cov-rth--overall{ width: 96px; background: #1d4ed8; }
+.cov-rth--eff    { width: 72px; background: #7c3aed; }
 
 .cov-rtr { transition: background 0.1s; }
 .cov-rtr:hover .cov-rtd { background: #f0f7ff !important; }
@@ -376,6 +377,23 @@
 .cov-rtd--good.cov-rtd--overall { border-right-color: #22c55e; }
 .cov-rtd--mid.cov-rtd--overall  { border-right-color: #f59e0b; }
 .cov-rtd--low.cov-rtd--overall  { border-right-color: #ef4444; }
+
+/* Efficiency column in ranking table */
+.cov-rtd--eff { border-right: 3px solid #7c3aed; }
+.cov-rtd--eff-high { background: #f5f3ff !important; }
+.cov-rtd--eff-mid  { background: #fffbeb !important; }
+.cov-rtd--eff-low  { background: #fff1f2 !important; }
+.cov-rtd-eff-val {
+  font-size: 0.88rem;
+  font-weight: 800;
+  line-height: 1.2;
+}
+.cov-rtd--eff-high .cov-rtd-eff-val { color: #7c3aed; }
+.cov-rtd--eff-mid  .cov-rtd-eff-val { color: #d97706; }
+.cov-rtd--eff-low  .cov-rtd-eff-val { color: #dc2626; }
+.cov-rtd--eff-high .cov-rtd-fill { background: #7c3aed; }
+.cov-rtd--eff-mid  .cov-rtd-fill { background: #f59e0b; }
+.cov-rtd--eff-low  .cov-rtd-fill { background: #ef4444; }
 
 .cov-rank-num {
   display: inline-flex;
@@ -575,6 +593,56 @@
 }
 .cov-rate-visits strong { color: #1e293b; }
 .cov-rate-vis-count { color: #94a3b8; }
+
+/* ── Efficiency indicator (inside rate card week) ────────────── */
+.cov-eff-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 7px;
+  padding-top: 7px;
+  border-top: 1px dashed #e2e8f0;
+  flex-wrap: wrap;
+}
+.cov-eff-label {
+  font-size: 0.65rem;
+  color: #64748b;
+  font-weight: 600;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+.cov-eff-pct {
+  font-size: 0.78rem;
+  font-weight: 800;
+  flex-shrink: 0;
+}
+.cov-eff-high { color: #16a34a; }
+.cov-eff-mid  { color: #d97706; }
+.cov-eff-low  { color: #dc2626; }
+
+.cov-eff-bar {
+  flex: 1;
+  height: 4px;
+  background: #e2e8f0;
+  border-radius: 99px;
+  overflow: hidden;
+  min-width: 30px;
+}
+.cov-eff-fill {
+  height: 100%;
+  border-radius: 99px;
+  transition: width 0.4s ease;
+}
+.cov-eff-fill.cov-eff-high { background: #16a34a; }
+.cov-eff-fill.cov-eff-mid  { background: #f59e0b; }
+.cov-eff-fill.cov-eff-low  { background: #ef4444; }
+
+.cov-eff-count {
+  font-size: 0.62rem;
+  color: #94a3b8;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
 
 /* ── Matrix wrapper ──────────────────────────────────────────── */
 .cov-matrix-card {

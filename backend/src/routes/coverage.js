@@ -229,11 +229,20 @@ router.get('/ranking', verifyToken, async (req, res) => {
           AND salesrep_name IS NOT NULL AND TRIM(salesrep_name) != ''
           ${branchCond}
       ),
+      -- per-rep per-week per-customer distinct visit days
+      cust_week_days AS (
+        SELECT rep, week_num, customer_code,
+          COUNT(DISTINCT day) AS day_cnt
+        FROM day_vis
+        GROUP BY rep, week_num, customer_code
+      ),
       weekly AS (
         SELECT rep, week_num,
-          COUNT(DISTINCT customer_code) AS vis_custs,
-          COUNT(*)                      AS total_vis
-        FROM day_vis GROUP BY rep, week_num
+          COUNT(DISTINCT customer_code)                                  AS vis_custs,
+          SUM(day_cnt)                                                   AS total_vis,
+          COUNT(DISTINCT CASE WHEN day_cnt >= 2 THEN customer_code END)  AS eff_custs
+        FROM cust_week_days
+        GROUP BY rep, week_num
       ),
       overall AS (
         SELECT rep,
@@ -246,16 +255,21 @@ router.get('/ranking', verifyToken, async (req, res) => {
         MAX(c.branch)                                                AS branch_name,
         COUNT(DISTINCT c.customer_code)                              AS curr_custs,
         COALESCE(rt.total_custs, COUNT(DISTINCT c.customer_code))    AS total_custs,
-        COALESCE(MAX(CASE WHEN w.week_num=1 THEN w.vis_custs END),0) AS w1_vis,
-        COALESCE(MAX(CASE WHEN w.week_num=1 THEN w.total_vis END),0) AS w1_tot,
-        COALESCE(MAX(CASE WHEN w.week_num=2 THEN w.vis_custs END),0) AS w2_vis,
-        COALESCE(MAX(CASE WHEN w.week_num=2 THEN w.total_vis END),0) AS w2_tot,
-        COALESCE(MAX(CASE WHEN w.week_num=3 THEN w.vis_custs END),0) AS w3_vis,
-        COALESCE(MAX(CASE WHEN w.week_num=3 THEN w.total_vis END),0) AS w3_tot,
-        COALESCE(MAX(CASE WHEN w.week_num=4 THEN w.vis_custs END),0) AS w4_vis,
-        COALESCE(MAX(CASE WHEN w.week_num=4 THEN w.total_vis END),0) AS w4_tot,
-        COALESCE(MAX(CASE WHEN w.week_num=5 THEN w.vis_custs END),0) AS w5_vis,
-        COALESCE(MAX(CASE WHEN w.week_num=5 THEN w.total_vis END),0) AS w5_tot,
+        COALESCE(MAX(CASE WHEN w.week_num=1 THEN w.vis_custs  END),0) AS w1_vis,
+        COALESCE(MAX(CASE WHEN w.week_num=1 THEN w.total_vis  END),0) AS w1_tot,
+        COALESCE(MAX(CASE WHEN w.week_num=1 THEN w.eff_custs  END),0) AS w1_eff,
+        COALESCE(MAX(CASE WHEN w.week_num=2 THEN w.vis_custs  END),0) AS w2_vis,
+        COALESCE(MAX(CASE WHEN w.week_num=2 THEN w.total_vis  END),0) AS w2_tot,
+        COALESCE(MAX(CASE WHEN w.week_num=2 THEN w.eff_custs  END),0) AS w2_eff,
+        COALESCE(MAX(CASE WHEN w.week_num=3 THEN w.vis_custs  END),0) AS w3_vis,
+        COALESCE(MAX(CASE WHEN w.week_num=3 THEN w.total_vis  END),0) AS w3_tot,
+        COALESCE(MAX(CASE WHEN w.week_num=3 THEN w.eff_custs  END),0) AS w3_eff,
+        COALESCE(MAX(CASE WHEN w.week_num=4 THEN w.vis_custs  END),0) AS w4_vis,
+        COALESCE(MAX(CASE WHEN w.week_num=4 THEN w.total_vis  END),0) AS w4_tot,
+        COALESCE(MAX(CASE WHEN w.week_num=4 THEN w.eff_custs  END),0) AS w4_eff,
+        COALESCE(MAX(CASE WHEN w.week_num=5 THEN w.vis_custs  END),0) AS w5_vis,
+        COALESCE(MAX(CASE WHEN w.week_num=5 THEN w.total_vis  END),0) AS w5_tot,
+        COALESCE(MAX(CASE WHEN w.week_num=5 THEN w.eff_custs  END),0) AS w5_eff,
         COALESCE(o.vis_custs, 0)                                     AS ov_vis,
         COALESCE(o.total_vis, 0)                                     AS ov_tot
       FROM curr c
@@ -279,17 +293,31 @@ router.get('/ranking', verifyToken, async (req, res) => {
         total_customers: parseInt(r.total_custs),
         curr_customers:  parseInt(r.curr_custs),
         weeks: [
-          { visited: parseInt(r.w1_vis), visits: parseInt(r.w1_tot), pct: pct(r.w1_vis) },
-          { visited: parseInt(r.w2_vis), visits: parseInt(r.w2_tot), pct: pct(r.w2_vis) },
-          { visited: parseInt(r.w3_vis), visits: parseInt(r.w3_tot), pct: pct(r.w3_vis) },
-          { visited: parseInt(r.w4_vis), visits: parseInt(r.w4_tot), pct: pct(r.w4_vis) },
-          { visited: parseInt(r.w5_vis), visits: parseInt(r.w5_tot), pct: pct(r.w5_vis) },
+          { visited: parseInt(r.w1_vis), visits: parseInt(r.w1_tot), pct: pct(r.w1_vis), efficient: parseInt(r.w1_eff), effPct: pct(r.w1_eff) },
+          { visited: parseInt(r.w2_vis), visits: parseInt(r.w2_tot), pct: pct(r.w2_vis), efficient: parseInt(r.w2_eff), effPct: pct(r.w2_eff) },
+          { visited: parseInt(r.w3_vis), visits: parseInt(r.w3_tot), pct: pct(r.w3_vis), efficient: parseInt(r.w3_eff), effPct: pct(r.w3_eff) },
+          { visited: parseInt(r.w4_vis), visits: parseInt(r.w4_tot), pct: pct(r.w4_vis), efficient: parseInt(r.w4_eff), effPct: pct(r.w4_eff) },
+          { visited: parseInt(r.w5_vis), visits: parseInt(r.w5_tot), pct: pct(r.w5_vis), efficient: parseInt(r.w5_eff), effPct: pct(r.w5_eff) },
         ],
-        overall: {
-          visited: parseInt(r.ov_vis),
-          visits:  parseInt(r.ov_tot),
-          pct:     pct(r.ov_vis),
-        },
+        overall: (() => {
+          const weekEffs = [
+            { eff: parseInt(r.w1_eff), tot: parseInt(r.w1_tot) },
+            { eff: parseInt(r.w2_eff), tot: parseInt(r.w2_tot) },
+            { eff: parseInt(r.w3_eff), tot: parseInt(r.w3_tot) },
+            { eff: parseInt(r.w4_eff), tot: parseInt(r.w4_tot) },
+            { eff: parseInt(r.w5_eff), tot: parseInt(r.w5_tot) },
+          ];
+          const activeWeeks = weekEffs.filter(w => w.tot > 0);
+          const avgEffPct = activeWeeks.length > 0
+            ? Math.round(activeWeeks.reduce((s, w) => s + pct(w.eff), 0) / activeWeeks.length)
+            : 0;
+          return {
+            visited: parseInt(r.ov_vis),
+            visits:  parseInt(r.ov_tot),
+            pct:     pct(r.ov_vis),
+            effPct:  avgEffPct,
+          };
+        })(),
         has_day_data: parseInt(r.ov_tot) > 0,
       };
     });

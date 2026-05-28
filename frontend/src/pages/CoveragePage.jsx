@@ -7,6 +7,15 @@ import {
 import client from '../api/client';
 import './CoveragePage.css';
 
+/* ── Public holidays (Eid Al-Adha 2026, etc.) ───────────────── */
+const HOLIDAYS = [
+  { year: 2026, month: 5, days: [27, 28, 29] }, // عيد الأضحى 1447هـ
+];
+
+function isHoliday(year, month, day) {
+  return HOLIDAYS.some(h => h.year === year && h.month === month && h.days.includes(day));
+}
+
 /* ── Working-days helpers ────────────────────────────────────── */
 function calcWorkingDays(year, month) {
   const today = new Date();
@@ -14,7 +23,9 @@ function calcWorkingDays(year, month) {
   const endDay = isCurrentMonth ? today.getDate() : new Date(year, month, 0).getDate();
   let count = 0;
   for (let d = 1; d <= endDay; d++) {
-    if (new Date(year, month - 1, d).getDay() !== 5) count++;
+    if (new Date(year, month - 1, d).getDay() !== 5) {
+      if (!isHoliday(year, month, d)) count++;
+    }
   }
   return Math.max(count, 1);
 }
@@ -37,7 +48,7 @@ function workDaysInWeek(weekDays, year, month, todayDay) {
   let count = 0;
   for (const d of weekDays) {
     if (todayDay !== null && d > todayDay) break;
-    if (new Date(year, month - 1, d).getDay() !== 5) count++;
+    if (new Date(year, month - 1, d).getDay() !== 5 && !isHoliday(year, month, d)) count++;
   }
   return count;
 }
@@ -132,7 +143,7 @@ function isWorkingDay(dow) { return dow !== 5; }
 function getDayStatus(day, saleDaySet, year, month, todayDay) {
   const dow = getDayOfWeek(year, month, day);
   if (saleDaySet.has(day)) return 'sold';
-  if (!isWorkingDay(dow)) return 'off';
+  if (!isWorkingDay(dow) || isHoliday(year, month, day)) return 'off';
   if (todayDay !== null && day > todayDay) return 'future';
   return 'missed';
 }
@@ -140,11 +151,11 @@ function getDayStatus(day, saleDaySet, year, month, todayDay) {
 function getWeekStats(weekDays, saleDaySet, year, month, todayDay) {
   let sold = 0, pastWorking = 0;
   weekDays.forEach(d => {
-    const dow     = getDayOfWeek(year, month, d);
-    const hasSale = saleDaySet.has(d);
+    const dow      = getDayOfWeek(year, month, d);
+    const hasSale  = saleDaySet.has(d);
     const isFuture = todayDay !== null && d > todayDay;
     if (isFuture) return;
-    if (!isWorkingDay(dow)) {
+    if (!isWorkingDay(dow) || isHoliday(year, month, d)) {
       if (hasSale) { sold++; pastWorking++; }
       return;
     }

@@ -634,27 +634,37 @@ function RankingMatrix({ reps, workingDays, year, month }) {
     return { ...rep, _avgQty: avgQty, _avgVisits: avgVisitsNum };
   }), [reps, workingDays, year, month]);
 
-  /* ── Sort ── */
+  /* ── Extract sort value ── */
+  const getValue = React.useCallback((rep) => {
+    switch (sortCol) {
+      case 'customers':   return rep.total_customers;
+      case 'week0':       return rep.weeks[0]?.pct ?? 0;
+      case 'week1':       return rep.weeks[1]?.pct ?? 0;
+      case 'week2':       return rep.weeks[2]?.pct ?? 0;
+      case 'week3':       return rep.weeks[3]?.pct ?? 0;
+      case 'week4':       return rep.weeks[4]?.pct ?? 0;
+      case 'overall_pct': return rep.overall.pct;
+      case 'eff_pct':     return rep.overall.effPct;
+      case 'total_qty':   return rep.total_qty;
+      case 'avg_qty':     return rep._avgQty;
+      case 'avg_visits':  return rep._avgVisits;
+      default:            return rep.overall.pct;
+    }
+  }, [sortCol]);
+
+  /* ── Rank map: always assigned desc (highest value = rank 1) ── */
+  const rankMap = React.useMemo(() => {
+    const byDesc = [...enriched].sort((a, b) => getValue(b) - getValue(a));
+    const map = new Map();
+    byDesc.forEach((rep, i) => map.set(rep.rep_name, i + 1));
+    return map;
+  }, [enriched, getValue]);
+
+  /* ── Display order: respects sortDir ── */
   const sorted = React.useMemo(() => {
     const dir = sortDir === 'desc' ? -1 : 1;
-    const getValue = (rep) => {
-      switch (sortCol) {
-        case 'customers':    return rep.total_customers;
-        case 'week0':        return rep.weeks[0]?.pct ?? 0;
-        case 'week1':        return rep.weeks[1]?.pct ?? 0;
-        case 'week2':        return rep.weeks[2]?.pct ?? 0;
-        case 'week3':        return rep.weeks[3]?.pct ?? 0;
-        case 'week4':        return rep.weeks[4]?.pct ?? 0;
-        case 'overall_pct':  return rep.overall.pct;
-        case 'eff_pct':      return rep.overall.effPct;
-        case 'total_qty':    return rep.total_qty;
-        case 'avg_qty':      return rep._avgQty;
-        case 'avg_visits':   return rep._avgVisits;
-        default:             return rep.overall.pct;
-      }
-    };
     return [...enriched].sort((a, b) => (getValue(b) - getValue(a)) * dir);
-  }, [enriched, sortCol, sortDir]);
+  }, [enriched, getValue, sortDir]);
 
   /* sortable th helper */
   const Th = ({ col, cls, title, children }) => (
@@ -690,7 +700,7 @@ function RankingMatrix({ reps, workingDays, year, month }) {
         </thead>
         <tbody>
           {sorted.map((rep, i) => {
-            const rank = i + 1;  // rank = position in current sort
+            const rank = rankMap.get(rep.rep_name) ?? (i + 1); // rank by value, not display position
             const avgQty    = rep._avgQty;
             const avgVisits = rep._avgVisits > 0 ? rep._avgVisits.toFixed(1) : '—';
             return (

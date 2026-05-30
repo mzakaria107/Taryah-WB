@@ -6,7 +6,7 @@
 /* ── Page shell ── */
 .frg-page {
   padding: 20px 24px;
-  max-width: 1400px;
+  max-width: 1600px;
   margin: 0 auto;
   direction: rtl;
 }
@@ -936,9 +936,37 @@
 }
 
 /* ── Table overrides ── */
-.frg-sr-table th {
+.frg-sr-table th,
+.frg-sr-table td {
+  padding: 9px 8px;
+  font-size: 12px;
   white-space: nowrap;
 }
+
+/* Narrower numeric columns */
+.frg-sr-table .frg-sr-idx   { width: 32px;  max-width: 32px;  padding: 9px 4px; }
+.frg-sr-table .frg-td-num   { width: 72px;  max-width: 72px; }
+.frg-sr-table .frg-td-qty   { width: 80px;  max-width: 80px;  font-size: 13px; }
+.frg-sr-table .frg-td-return{ width: 80px;  max-width: 80px; }
+.frg-sr-table .frg-td-target{ width: 80px;  max-width: 80px; }
+.frg-sr-table .frg-td-last  { min-width: 96px; }
+
+/* Customer name — allow wrapping to keep table compact */
+.frg-sr-table .frg-customer-cell span {
+  white-space: normal;
+  word-break: break-word;
+  max-width: 160px;
+  display: inline-block;
+}
+
+/* Asset numbers column tighter */
+.frg-sr-table .frg-td-assets {
+  max-width: 120px;
+  font-size: 11px;
+}
+
+/* Achievement bar — fixed narrow width */
+.frg-sr-table .frg-td-achieve { min-width: 100px; max-width: 110px; }
 
 .frg-th-sort {
   cursor: pointer;

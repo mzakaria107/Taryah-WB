@@ -332,6 +332,7 @@ function ReportTab({ filters }) {
             <th>التصنيف</th>
             {months.map(m => <th key={m}>{MONTH_AR[m] || m}</th>)}
             <th>الإجمالي</th>
+            <th>صافي المرتجعات</th>
             <th>الحالة</th>
             <th>ملاحظات</th>
           </tr>
@@ -354,6 +355,12 @@ function ReportTab({ filters }) {
                 </td>
               ))}
               <td className="sap-total-cell" style={{ textAlign: 'center' }}>{c.total}</td>
+              <td className="sap-return-cell" style={{ textAlign: 'center' }}>
+                {c.total_bad_return_qty > 0
+                  ? <span className="sap-return-badge">{c.total_bad_return_qty.toLocaleString('en-SA')}</span>
+                  : <span className="sap-month-dash">—</span>
+                }
+              </td>
               <td>
                 {c.active_current
                   ? <span className="sap-status-active">✅ نشط</span>

@@ -168,10 +168,11 @@ router.post('/upload', verifyToken, applyRegionFilter, csvUpload.single('file'),
     const COL_MONTH       = findKey('Month');
     const COL_QTY         = findKey('Total Net qty with FOC');
     const COL_CATEGORY    = findKey('Category Name English');
+    const COL_BAD_RETURN  = findKey('Total Bad Return Qty');
     // Day: prefer explicit 'Day' column, fallback to extracting from 'Transaction Date'
     const COL_DAY         = sampleKeys.includes('Day') ? 'Day' : null;
     const COL_DATE        = sampleKeys.find(k => k.replace(/^﻿/, '').trim() === 'Transaction Date') || null;
-    console.log('[SalesActivity] Column mapping:', { COL_CUST_NAME, COL_CUST_CODE, COL_BRANCH, COL_REP, COL_INVOICE, COL_MONTH, COL_QTY, COL_CATEGORY, COL_DAY, COL_DATE });
+    console.log('[SalesActivity] Column mapping:', { COL_CUST_NAME, COL_CUST_CODE, COL_BRANCH, COL_REP, COL_INVOICE, COL_MONTH, COL_QTY, COL_CATEGORY, COL_BAD_RETURN, COL_DAY, COL_DATE });
     if (rawRows.length > 0) {
       const sample = rawRows[0];
       console.log('[SalesActivity] First row sample:', {
@@ -208,8 +209,10 @@ router.post('/upload', verifyToken, applyRegionFilter, csvUpload.single('file'),
         continue;
       }
 
-      const qtyRaw = String(r[COL_QTY] || '0').replace(/,/g, '').trim();
-      const qty    = parseInt(qtyRaw, 10) || 0;
+      const qtyRaw       = String(r[COL_QTY]        || '0').replace(/,/g, '').trim();
+      const qty          = parseInt(qtyRaw, 10) || 0;
+      const badReturnRaw = String(r[COL_BAD_RETURN] || '0').replace(/,/g, '').trim();
+      const badReturnQty = parseInt(badReturnRaw, 10) || 0;
 
       let day = null;
       if (COL_DAY && r[COL_DAY]) {
@@ -231,6 +234,7 @@ router.post('/upload', verifyToken, applyRegionFilter, csvUpload.single('file'),
         month_num:      monthNum,
         report_year:    2026,
         qty,
+        bad_return_qty: badReturnQty,
         day,
       });
     }
@@ -266,7 +270,7 @@ router.post('/upload', verifyToken, applyRegionFilter, csvUpload.single('file'),
       // Insert all new rows in batches
       for (let i = 0; i < validRows.length; i += BATCH_SIZE) {
         const chunk = validRows.slice(i, i + BATCH_SIZE);
-        const COLS  = 11;   // +1 for day
+        const COLS  = 12;   // +1 for bad_return_qty, +1 for day
         const vals  = [];
         const ph    = chunk.map((row, idx) => {
           const b = idx * COLS;
@@ -274,22 +278,24 @@ router.post('/upload', verifyToken, applyRegionFilter, csvUpload.single('file'),
             row.customer_name, row.customer_code, row.branch_name,
             row.salesrep_name, row.category_name, row.invoice_number,
             row.month_name, row.month_num, row.report_year, row.qty,
-            row.day ?? null,
+            row.bad_return_qty ?? 0, row.day ?? null,
           );
-          return `($${b+1},$${b+2},$${b+3},$${b+4},$${b+5},$${b+6},$${b+7},$${b+8},$${b+9},$${b+10},$${b+11})`;
+          return `($${b+1},$${b+2},$${b+3},$${b+4},$${b+5},$${b+6},$${b+7},$${b+8},$${b+9},$${b+10},$${b+11},$${b+12})`;
         });
 
         const result = await dbClient.query(
           `INSERT INTO sales_activity
              (customer_name, customer_code, branch_name, salesrep_name,
-              category_name, invoice_number, month_name, month_num, report_year, qty, day)
+              category_name, invoice_number, month_name, month_num, report_year, qty,
+              bad_return_qty, day)
            VALUES ${ph.join(',')}
            ON CONFLICT (invoice_number, report_year) DO UPDATE SET
-             qty           = EXCLUDED.qty,
-             day           = EXCLUDED.day,
-             category_name = EXCLUDED.category_name,
-             uploaded_at   = NOW(),
-             uploaded_by   = $${chunk.length * COLS + 1}
+             qty            = EXCLUDED.qty,
+             bad_return_qty = EXCLUDED.bad_return_qty,
+             day            = EXCLUDED.day,
+             category_name  = EXCLUDED.category_name,
+             uploaded_at    = NOW(),
+             uploaded_by    = $${chunk.length * COLS + 1}
            RETURNING id`,
           [...vals, req.user.id]
         );
@@ -647,17 +653,18 @@ router.get('/report', verifyToken, applyRegionFilter, async (req, res) => {
     );
     const months = monthsRes.rows.map(r => parseInt(r.month_num, 10));
 
-    // Aggregate: customer × month → sum qty, count invoices
+    // Aggregate: customer × month → sum qty, count invoices, sum bad_return_qty
     const dataRes = await pool.query(
       `SELECT
          sa.customer_code,
-         MAX(sa.customer_name)   AS customer_name,
-         MAX(sa.branch_name)     AS branch_name,
-         MAX(sa.salesrep_name)   AS salesrep_name,
-         MAX(sa.category_name)   AS category_name,
+         MAX(sa.customer_name)          AS customer_name,
+         MAX(sa.branch_name)            AS branch_name,
+         MAX(sa.salesrep_name)          AS salesrep_name,
+         MAX(sa.category_name)          AS category_name,
          sa.month_num,
-         SUM(sa.qty)             AS total_qty,
-         COUNT(*)                AS invoice_count
+         SUM(sa.qty)                    AS total_qty,
+         COUNT(*)                       AS invoice_count,
+         SUM(sa.bad_return_qty)         AS total_bad_return_qty
        FROM sales_activity sa
        WHERE ${where}
        GROUP BY sa.customer_code, sa.month_num`,
@@ -678,19 +685,21 @@ router.get('/report', verifyToken, applyRegionFilter, async (req, res) => {
       const code = row.customer_code;
       if (!custMap.has(code)) {
         custMap.set(code, {
-          customer_code: code,
-          customer_name: row.customer_name,
-          branch_name:   row.branch_name,
-          salesrep_name: row.salesrep_name,
-          category_name: row.category_name,
-          months:        {},
-          total:         0,
+          customer_code:       code,
+          customer_name:       row.customer_name,
+          branch_name:         row.branch_name,
+          salesrep_name:       row.salesrep_name,
+          category_name:       row.category_name,
+          months:              {},
+          total:               0,
+          total_bad_return_qty: 0,
         });
       }
-      const c = custMap.get(code);
+      const c  = custMap.get(code);
       const mn = parseInt(row.month_num, 10);
-      c.months[mn] = parseInt(row.invoice_count, 10);
-      c.total     += parseInt(row.invoice_count, 10);
+      c.months[mn]           = parseInt(row.invoice_count, 10);
+      c.total               += parseInt(row.invoice_count, 10);
+      c.total_bad_return_qty += parseInt(row.total_bad_return_qty || 0, 10);
     }
 
     // Add note & active_current flag

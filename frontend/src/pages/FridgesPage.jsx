@@ -1085,7 +1085,7 @@ function SalesReportTab({ regions }) {
     const header = [
       'رقم العميل','اسم العميل','المنطقة','المندوب',
       'عدد الثلاجات','أرقام الثلاجات',
-      'إجمالي الكميات','عدد الفواتير',
+      'إجمالي الكميات','عدد الفواتير','صافي المرتجعات',
       ...(hasTarget ? ['الهدف MTD','التحقيق %','الإنذار'] : []),
       'آخر نشاط','الحالة',
     ];
@@ -1100,6 +1100,7 @@ function SalesReportTab({ regions }) {
         `"${r.asset_numbers || ''}"`,
         r.total_qty,
         r.invoice_count,
+        r.total_bad_return_qty || 0,
         ...(hasTarget ? [r.target, `${r.achieve_pct}%`, risk.label] : []),
         r.last_active_ym
           ? `${r.last_year}/${String(r.last_active_ym).slice(-2)}${r.last_day ? `/${r.last_day}` : ''}`
@@ -1387,6 +1388,9 @@ function SalesReportTab({ regions }) {
                 <th onClick={() => toggleSort('total_qty')} className={`frg-th-sort frg-th-num${sortCol==='total_qty'?' frg-th-sort-active':''}`}>
                   الكمية <SortIcon col="total_qty" />
                 </th>
+                <th onClick={() => toggleSort('total_bad_return_qty')} className={`frg-th-sort frg-th-num${sortCol==='total_bad_return_qty'?' frg-th-sort-active':''}`}>
+                  المرتجعات <SortIcon col="total_bad_return_qty" />
+                </th>
                 {hasTarget && (<>
                   <th onClick={() => toggleSort('target')} className={`frg-th-sort frg-th-num${sortCol==='target'?' frg-th-sort-active':''}`}>
                     الهدف <SortIcon col="target" />
@@ -1436,6 +1440,12 @@ function SalesReportTab({ regions }) {
                     <td className="frg-td-num">{r.invoice_count > 0 ? r.invoice_count.toLocaleString('ar-SA') : '—'}</td>
                     <td className="frg-td-num frg-td-qty">
                       {active ? r.total_qty.toLocaleString('ar-SA') : '—'}
+                    </td>
+                    <td className="frg-td-num frg-td-return">
+                      {r.total_bad_return_qty > 0
+                        ? <span className="frg-return-badge">{r.total_bad_return_qty.toLocaleString('ar-SA')}</span>
+                        : <span className="frg-td-dash">—</span>
+                      }
                     </td>
                     {hasTarget && (<>
                       <td className="frg-td-num frg-td-target">

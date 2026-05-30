@@ -548,7 +548,8 @@ router.get('/sales-report', async (req, res) => {
       SELECT
         sa.customer_code,
         SUM(sa.qty)::int                        AS total_qty,
-        COUNT(DISTINCT sa.invoice_number)::int  AS invoice_count
+        COUNT(DISTINCT sa.invoice_number)::int  AS invoice_count,
+        SUM(sa.bad_return_qty)::int             AS total_bad_return_qty
       FROM sales_activity sa
       JOIN invoices i ON i.invoice_number = sa.invoice_number
       WHERE EXTRACT(YEAR  FROM i.invoice_date)::int = $${p++}
@@ -563,7 +564,8 @@ router.get('/sales-report', async (req, res) => {
     saSubquery = `
       SELECT NULL::varchar AS customer_code,
              0::int        AS total_qty,
-             0::int        AS invoice_count
+             0::int        AS invoice_count,
+             0::int        AS total_bad_return_qty
       WHERE FALSE
     `;
   }
@@ -601,8 +603,9 @@ router.get('/sales-report', async (req, res) => {
          STRING_AGG(DISTINCT f.asset_number, ', '
                     ORDER BY f.asset_number)                               AS asset_numbers,
          -- Quantities from pre-aggregated subquery (one row per customer → no multiplication)
-         COALESCE(MAX(sa.total_qty),   0)::int              AS total_qty,
-         COALESCE(MAX(sa.invoice_count), 0)::int            AS invoice_count,
+         COALESCE(MAX(sa.total_qty),           0)::int      AS total_qty,
+         COALESCE(MAX(sa.invoice_count),       0)::int      AS invoice_count,
+         COALESCE(MAX(sa.total_bad_return_qty),0)::int      AS total_bad_return_qty,
          -- Last activity: always from full history (independent of period filter)
          MAX(hist.last_ym)                                  AS last_active_ym,
          MAX(hist.last_month_name)                          AS last_month_name,

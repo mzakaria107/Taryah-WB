@@ -602,10 +602,71 @@ function PctCell({ pct, visited, total, hasDayData }) {
   );
 }
 
+/* ── Sort icon for ranking table headers ─────────────────────── */
+function RankSortIcon({ col, sortCol, sortDir }) {
+  if (sortCol !== col) return <span className="cov-rsort-icon cov-rsort-none">⇅</span>;
+  return <span className="cov-rsort-icon cov-rsort-active">{sortDir === 'desc' ? '↓' : '↑'}</span>;
+}
+
 /* ── Ranking matrix table ────────────────────────────────────── */
 function RankingMatrix({ reps, workingDays, year, month }) {
   const MEDALS = { 1: '🥇', 2: '🥈', 3: '🥉' };
   const fmtN = n => Math.round(n ?? 0).toLocaleString('en-SA');
+
+  /* ── Sort state — default: overall coverage desc ── */
+  const [sortCol, setSortCol] = React.useState('overall_pct');
+  const [sortDir, setSortDir] = React.useState('desc');
+
+  function toggleSort(col) {
+    if (sortCol === col) {
+      setSortDir(d => d === 'desc' ? 'asc' : 'desc');
+    } else {
+      setSortCol(col);
+      setSortDir('desc');
+    }
+  }
+
+  /* ── Enrich each rep with computed sort values ── */
+  const enriched = React.useMemo(() => reps.map(rep => {
+    const avgQty    = workingDays > 0 ? Math.round(rep.total_qty / workingDays) : 0;
+    const activeWD  = rep.has_day_data ? calcActiveWorkDays(rep.weeks, year, month) : 0;
+    const avgVisitsNum = activeWD > 0 ? rep.overall.visits / activeWD : 0;
+    return { ...rep, _avgQty: avgQty, _avgVisits: avgVisitsNum };
+  }), [reps, workingDays, year, month]);
+
+  /* ── Sort ── */
+  const sorted = React.useMemo(() => {
+    const dir = sortDir === 'desc' ? -1 : 1;
+    const getValue = (rep) => {
+      switch (sortCol) {
+        case 'customers':    return rep.total_customers;
+        case 'week0':        return rep.weeks[0]?.pct ?? 0;
+        case 'week1':        return rep.weeks[1]?.pct ?? 0;
+        case 'week2':        return rep.weeks[2]?.pct ?? 0;
+        case 'week3':        return rep.weeks[3]?.pct ?? 0;
+        case 'week4':        return rep.weeks[4]?.pct ?? 0;
+        case 'overall_pct':  return rep.overall.pct;
+        case 'eff_pct':      return rep.overall.effPct;
+        case 'total_qty':    return rep.total_qty;
+        case 'avg_qty':      return rep._avgQty;
+        case 'avg_visits':   return rep._avgVisits;
+        default:             return rep.overall.pct;
+      }
+    };
+    return [...enriched].sort((a, b) => (getValue(b) - getValue(a)) * dir);
+  }, [enriched, sortCol, sortDir]);
+
+  /* sortable th helper */
+  const Th = ({ col, cls, title, children }) => (
+    <th
+      className={`cov-rth${cls ? ' ' + cls : ''} cov-rth--sortable${sortCol === col ? ' cov-rth--sorted' : ''}`}
+      onClick={() => toggleSort(col)}
+      title={title}
+    >
+      {children} <RankSortIcon col={col} sortCol={sortCol} sortDir={sortDir} />
+    </th>
+  );
+
   return (
     <div className="cov-rtable-wrap">
       <table className="cov-rtable">
@@ -614,29 +675,28 @@ function RankingMatrix({ reps, workingDays, year, month }) {
             <th className="cov-rth cov-rth--rank">#</th>
             <th className="cov-rth cov-rth--name">المندوب</th>
             <th className="cov-rth">المنطقة</th>
-            <th className="cov-rth cov-rth--num">العملاء</th>
-            <th className="cov-rth cov-rth--week">أسبوع 1</th>
-            <th className="cov-rth cov-rth--week">أسبوع 2</th>
-            <th className="cov-rth cov-rth--week">أسبوع 3</th>
-            <th className="cov-rth cov-rth--week">أسبوع 4</th>
-            <th className="cov-rth cov-rth--week">أسبوع 5</th>
-            <th className="cov-rth cov-rth--overall">الإجمالي</th>
-            <th className="cov-rth cov-rth--eff" title="متوسط نسبة العملاء بـ≥2 زيارة/أسبوع">كفاءة ≥2</th>
-            <th className="cov-rth cov-rth--qty" title="إجمالي صافي الكميات بالشهر الحالي">الكميات</th>
-            <th className="cov-rth cov-rth--avg" title={`متوسط الكميات لكل يوم عمل (${workingDays} يوم)`}>كمية/يوم</th>
-            <th className="cov-rth cov-rth--avg" title="متوسط الزيارات لكل يوم عمل (يُستثنى الأسابيع الصفرية)">زيارة/يوم</th>
+            <Th col="customers" cls="cov-rth--num">العملاء</Th>
+            <Th col="week0" cls="cov-rth--week">أسبوع 1</Th>
+            <Th col="week1" cls="cov-rth--week">أسبوع 2</Th>
+            <Th col="week2" cls="cov-rth--week">أسبوع 3</Th>
+            <Th col="week3" cls="cov-rth--week">أسبوع 4</Th>
+            <Th col="week4" cls="cov-rth--week">أسبوع 5</Th>
+            <Th col="overall_pct" cls="cov-rth--overall">الإجمالي</Th>
+            <Th col="eff_pct" cls="cov-rth--eff" title="متوسط نسبة العملاء بـ≥2 زيارة/أسبوع">كفاءة ≥2</Th>
+            <Th col="total_qty" cls="cov-rth--qty" title="إجمالي صافي الكميات بالشهر الحالي">الكميات</Th>
+            <Th col="avg_qty" cls="cov-rth--avg" title={`متوسط الكميات لكل يوم عمل (${workingDays} يوم)`}>كمية/يوم</Th>
+            <Th col="avg_visits" cls="cov-rth--avg" title="متوسط الزيارات لكل يوم عمل (يُستثنى الأسابيع الصفرية)">زيارة/يوم</Th>
           </tr>
         </thead>
         <tbody>
-          {reps.map((rep, i) => {
-            const avgQty = workingDays > 0 ? Math.round(rep.total_qty / workingDays) : 0;
-            // Visits avg: only count working days in weeks where rep had actual visits
-            const activeWD  = rep.has_day_data ? calcActiveWorkDays(rep.weeks, year, month) : 0;
-            const avgVisits = activeWD > 0 ? (rep.overall.visits / activeWD).toFixed(1) : '—';
+          {sorted.map((rep, i) => {
+            const rank = i + 1;  // rank = position in current sort
+            const avgQty    = rep._avgQty;
+            const avgVisits = rep._avgVisits > 0 ? rep._avgVisits.toFixed(1) : '—';
             return (
               <tr key={rep.rep_name} className={`cov-rtr${i % 2 !== 0 ? ' cov-rtr--alt' : ''}`}>
                 <td className="cov-rtd cov-rtd--rank">
-                  {MEDALS[rep.rank] || <span className="cov-rank-num">{rep.rank}</span>}
+                  {MEDALS[rank] || <span className="cov-rank-num">{rank}</span>}
                 </td>
                 <td className="cov-rtd cov-rtd--name">{rep.rep_name}</td>
                 <td className="cov-rtd cov-rtd--branch">

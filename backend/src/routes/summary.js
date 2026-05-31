@@ -85,8 +85,11 @@ router.get('/', verifyToken, applyRegionFilter, async (req, res) => {
     else if (req.query.region_id) regionId = parseInt(req.query.region_id, 10);
 
     /* ── Helper: run a sales_activity aggregate ─────────────
-       Returns a single-row aggregate for a given month.        */
-    async function salesAgg(y, m, includeBreakdown = false) {
+       Definitions aligned with SalesActivityPage /kpi endpoint:
+       - active_customers   = COUNT(DISTINCT customer_code) — any invoice this month
+       - inactive_customers = customers whose net SUM(qty) <= 0 this month (غير متعاملة)
+       - total_qty / total_returns = plain sums                               */
+    async function salesAgg(y, m) {
       const params = [y, m];
       const b = mkBranch(branch, 3, 'sa');
       if (b.val !== null) params.push(b.val);
@@ -94,19 +97,34 @@ router.get('/', verifyToken, applyRegionFilter, async (req, res) => {
       const repSql = rep ? ` AND sa.salesrep_name = $${params.length}` : '';
 
       const r = await pool.query(`
+        WITH cust AS (
+          SELECT
+            sa.customer_code,
+            SUM(sa.qty) AS net_qty
+          FROM sales_activity sa
+          WHERE sa.report_year=$1 AND sa.month_num=$2
+            ${b.sql}${repSql}
+          GROUP BY sa.customer_code
+        )
         SELECT
-          COUNT(DISTINCT sa.customer_code) FILTER (WHERE sa.qty > 0)  AS active_customers,
-          COUNT(DISTINCT sa.customer_code) FILTER (WHERE sa.qty <= 0) AS inactive_customers,
-          COALESCE(SUM(sa.qty), 0)::bigint            AS total_qty,
-          COALESCE(SUM(sa.bad_return_qty), 0)::bigint AS total_returns
-        FROM sales_activity sa
-        WHERE sa.report_year=$1 AND sa.month_num=$2
-          ${b.sql}${repSql}
+          COUNT(*)::int                                        AS active_customers,
+          COUNT(CASE WHEN net_qty <= 0 THEN 1 END)::int       AS inactive_customers,
+          (SELECT COALESCE(SUM(sa2.qty),0)::bigint
+           FROM sales_activity sa2
+           WHERE sa2.report_year=$1 AND sa2.month_num=$2
+             ${b.sql}${repSql})                               AS total_qty,
+          (SELECT COALESCE(SUM(sa2.bad_return_qty),0)::bigint
+           FROM sales_activity sa2
+           WHERE sa2.report_year=$1 AND sa2.month_num=$2
+             ${b.sql}${repSql})                               AS total_returns
+        FROM cust
       `, params);
-      return r.rows[0];
+      return r.rows[0] ?? { active_customers:0, inactive_customers:0, total_qty:0, total_returns:0 };
     }
 
-    /* ── Helper: get distinct active customer codes ───────── */
+    /* ── Helper: distinct customer codes present in a month ──
+       No qty filter — matches SalesActivityPage definition:
+       any invoice appearance = active / stopped / new        */
     async function activeCodes(y, m) {
       const params = [y, m];
       const b = mkBranch(branch, 3, null);
@@ -117,10 +135,34 @@ router.get('/', verifyToken, applyRegionFilter, async (req, res) => {
       const r = await pool.query(`
         SELECT DISTINCT customer_code
         FROM sales_activity
-        WHERE report_year=$1 AND month_num=$2 AND qty > 0
+        WHERE report_year=$1 AND month_num=$2
           ${b.sql}${repSql}
       `, params);
       return new Set(r.rows.map(x => x.customer_code));
+    }
+
+    /* ── Helper: new customers count ─────────────────────────
+       In current month but NOT in any earlier month this year.
+       Mirrors SalesActivityPage /kpi newCurrentMonth logic.   */
+    async function newCustomersCount(y, m) {
+      const params = [y, m];
+      const b = mkBranch(branch, 3, null);
+      if (b.val !== null) params.push(b.val);
+      if (rep) params.push(rep);
+      const repSql = rep ? ` AND salesrep_name = $${params.length}` : '';
+
+      const r = await pool.query(`
+        SELECT COUNT(DISTINCT customer_code)::int AS cnt
+        FROM sales_activity
+        WHERE report_year=$1 AND month_num=$2
+          ${b.sql}${repSql}
+          AND customer_code NOT IN (
+            SELECT DISTINCT customer_code
+            FROM sales_activity
+            WHERE report_year=$1 AND month_num < $2
+          )
+      `, params);
+      return Number(r.rows[0]?.cnt || 0);
     }
 
     /* ── Helper: per-branch breakdown ──────────────────────── */
@@ -133,10 +175,10 @@ router.get('/', verifyToken, applyRegionFilter, async (req, res) => {
 
       const r = await pool.query(`
         SELECT
-          COALESCE(TRIM(sa.branch_name), 'غير محدد')                 AS branch_name,
-          COUNT(DISTINCT sa.customer_code) FILTER (WHERE sa.qty > 0) AS active_customers,
-          COALESCE(SUM(sa.qty), 0)::bigint                           AS total_qty,
-          COALESCE(SUM(sa.bad_return_qty), 0)::bigint                AS total_returns
+          COALESCE(TRIM(sa.branch_name), 'غير محدد') AS branch_name,
+          COUNT(DISTINCT sa.customer_code)::int       AS active_customers,
+          COALESCE(SUM(sa.qty), 0)::bigint            AS total_qty,
+          COALESCE(SUM(sa.bad_return_qty), 0)::bigint AS total_returns
         FROM sales_activity sa
         WHERE sa.report_year=$1 AND sa.month_num=$2
           ${b.sql}${repSql}
@@ -156,11 +198,11 @@ router.get('/', verifyToken, applyRegionFilter, async (req, res) => {
 
       const r = await pool.query(`
         SELECT
-          TRIM(sa.salesrep_name)                                     AS salesrep_name,
-          COALESCE(TRIM(sa.branch_name), 'غير محدد')                 AS branch_name,
-          COUNT(DISTINCT sa.customer_code) FILTER (WHERE sa.qty > 0) AS active_customers,
-          COALESCE(SUM(sa.qty), 0)::bigint                           AS total_qty,
-          COALESCE(SUM(sa.bad_return_qty), 0)::bigint                AS total_returns
+          TRIM(sa.salesrep_name)                      AS salesrep_name,
+          COALESCE(TRIM(sa.branch_name), 'غير محدد')  AS branch_name,
+          COUNT(DISTINCT sa.customer_code)::int        AS active_customers,
+          COALESCE(SUM(sa.qty), 0)::bigint             AS total_qty,
+          COALESCE(SUM(sa.bad_return_qty), 0)::bigint  AS total_returns
         FROM sales_activity sa
         WHERE sa.report_year=$1 AND sa.month_num=$2
           AND sa.salesrep_name IS NOT NULL AND TRIM(sa.salesrep_name) != ''
@@ -244,6 +286,7 @@ router.get('/', verifyToken, applyRegionFilter, async (req, res) => {
       repCur, repPrev,
       colCur, colPrev,
       debt,
+      newCustCount,
     ] = await Promise.all([
       salesAgg(year, month),
       salesAgg(prevYear, prevMonth),
@@ -256,9 +299,11 @@ router.get('/', verifyToken, applyRegionFilter, async (req, res) => {
       collectionsTotal(year, month),
       collectionsTotal(prevYear, prevMonth),
       debtData(),
+      newCustomersCount(year, month),
     ]);
 
-    /* ── Stopped customers: active last month, gone this month */
+    /* ── Stopped customers: appeared last month, gone this month
+       Mirrors SalesActivityPage: no qty filter on either side   */
     const stoppedCount = [...codesPrev].filter(c => !codesCur.has(c)).length;
 
     /* ── Merge prev_qty into region rows ───────────────────── */
@@ -313,6 +358,7 @@ router.get('/', verifyToken, applyRegionFilter, async (req, res) => {
       },
 
       stopped_customers: stoppedCount,
+      new_customers: newCustCount,
 
       collections: {
         total_paid:      tColCur,

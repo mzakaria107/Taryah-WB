@@ -278,7 +278,7 @@ export default function SummaryPage() {
             <KpiCard
               icon="🟢"
               accent="green"
-              label="العملاء النشطون"
+              label="العملاء المتعاملون"
               value={fmt(s?.cur?.active_customers)}
               sub={`الشهر الماضي: ${fmt(s?.prev?.active_customers)}`}
               deviation={s?.prev?.active_customers > 0
@@ -290,14 +290,21 @@ export default function SummaryPage() {
               accent="red"
               label="العملاء المتوقفون"
               value={fmt(data.stopped_customers)}
-              sub="نشطون الشهر الماضي، غائبون هذا الشهر"
+              sub={`كانوا نشطين في ${prevMonthName} وغابوا هذا الشهر`}
+            />
+            <KpiCard
+              icon="🆕"
+              accent="blue"
+              label="العملاء الجدد"
+              value={fmt(data.new_customers)}
+              sub={`أول ظهور لهم في ${monthName} ${year}`}
             />
             <KpiCard
               icon="⚪"
               accent="muted"
-              label="العملاء غير المتعاملين"
+              label="غير المتعاملين (كمية ≤ 0)"
               value={fmt(s?.cur?.inactive_customers)}
-              sub={`إجمالي الشهر: كمية ≤ 0`}
+              sub="لديهم فواتير لكن صافي الكمية صفر أو سالب"
             />
           </div>
 

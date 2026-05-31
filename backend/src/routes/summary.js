@@ -191,7 +191,13 @@ router.get('/', verifyToken, applyRegionFilter, async (req, res) => {
       let p = 1;
       if (regionId) { clauses.push(`i.region_id=$${p++}`); params.push(regionId); }
       if (rep)      { clauses.push(`i.sales_rep_name=$${p++}`); params.push(rep); }
-      const where = clauses.length ? 'WHERE ' + clauses.join(' AND ') : '';
+
+      // Always exclude "direct" sales rep — they are not real reps and
+      // their balance must not inflate any region's (e.g. Shaqra) total.
+      const directExclude = `LOWER(TRIM(COALESCE(i.sales_rep_name, ''))) != 'direct'`;
+      const where = clauses.length
+        ? 'WHERE ' + clauses.join(' AND ') + ` AND ${directExclude}`
+        : `WHERE ${directExclude}`;
 
       const [byReg, byRep, tot] = await Promise.all([
         pool.query(`

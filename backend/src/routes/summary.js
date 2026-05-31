@@ -100,7 +100,7 @@ router.get('/', verifyToken, applyRegionFilter, async (req, res) => {
           COALESCE(SUM(sa.qty), 0)::bigint            AS total_qty,
           COALESCE(SUM(sa.bad_return_qty), 0)::bigint AS total_returns
         FROM sales_activity sa
-        WHERE sa.report_year=$1 AND sa.report_month=$2
+        WHERE sa.report_year=$1 AND sa.month_num=$2
           ${b.sql}${repSql}
       `, params);
       return r.rows[0];
@@ -117,7 +117,7 @@ router.get('/', verifyToken, applyRegionFilter, async (req, res) => {
       const r = await pool.query(`
         SELECT DISTINCT customer_code
         FROM sales_activity
-        WHERE report_year=$1 AND report_month=$2 AND qty > 0
+        WHERE report_year=$1 AND month_num=$2 AND qty > 0
           ${b.sql}${repSql}
       `, params);
       return new Set(r.rows.map(x => x.customer_code));
@@ -138,7 +138,7 @@ router.get('/', verifyToken, applyRegionFilter, async (req, res) => {
           COALESCE(SUM(sa.qty), 0)::bigint                           AS total_qty,
           COALESCE(SUM(sa.bad_return_qty), 0)::bigint                AS total_returns
         FROM sales_activity sa
-        WHERE sa.report_year=$1 AND sa.report_month=$2
+        WHERE sa.report_year=$1 AND sa.month_num=$2
           ${b.sql}${repSql}
         GROUP BY COALESCE(TRIM(sa.branch_name), 'غير محدد')
         ORDER BY total_qty DESC
@@ -162,7 +162,7 @@ router.get('/', verifyToken, applyRegionFilter, async (req, res) => {
           COALESCE(SUM(sa.qty), 0)::bigint                           AS total_qty,
           COALESCE(SUM(sa.bad_return_qty), 0)::bigint                AS total_returns
         FROM sales_activity sa
-        WHERE sa.report_year=$1 AND sa.report_month=$2
+        WHERE sa.report_year=$1 AND sa.month_num=$2
           AND sa.salesrep_name IS NOT NULL AND TRIM(sa.salesrep_name) != ''
           ${b.sql}${repSql}
         GROUP BY TRIM(sa.salesrep_name), COALESCE(TRIM(sa.branch_name), 'غير محدد')

@@ -58,12 +58,20 @@ function lookupMonth(name) {
 
 const BATCH_SIZE = 500;
 
-/* Resolve a region_id to its branch_name (name_ar) for sales_activity filtering */
+/**
+ * Resolve a region_id → array of possible branch_name values.
+ * sales_activity stores English names (from Excel "Branch Name English"),
+ * but regions table has both Arabic and English names.
+ * We return all non-null variants so the filter can use = ANY($x).
+ */
 async function resolveRegionBranch(regionId) {
   if (!regionId) return null;
   try {
-    const res = await pool.query('SELECT name_ar FROM regions WHERE id = $1', [regionId]);
-    return res.rows[0]?.name_ar || null;
+    const res = await pool.query('SELECT name_ar, name_en FROM regions WHERE id = $1', [regionId]);
+    if (!res.rows.length) return null;
+    const { name_ar, name_en } = res.rows[0];
+    const names = [name_ar, name_en].filter(Boolean);
+    return names.length ? names : null;
   } catch { return null; }
 }
 
@@ -338,13 +346,31 @@ router.post('/upload', verifyToken, applyRegionFilter, csvUpload.single('file'),
   }
 });
 
+// ── Branch condition helper ──────────────────────────────────
+// branch: string | string[] | null
+// Returns { sql: ' AND branch_name = $N' | ' AND branch_name = ANY($N::text[])', val }
+function branchCondition(branch, p, alias = '') {
+  if (!branch) return { sql: '', val: null };
+  const col = `${alias}branch_name`;
+  if (Array.isArray(branch)) {
+    return { sql: ` AND ${col} = ANY($${p}::text[])`, val: branch };
+  }
+  return { sql: ` AND ${col} = $${p}`, val: branch };
+}
+
 // ── Filter helper: builds WHERE clause starting at the given $N ─
+// branch can be a string (exact match) or an array (= ANY match)
 function filterClause(branch, rep, startAt) {
   const conds = [];
   const vals  = [];
   let p = startAt;
-  if (branch) { conds.push(`branch_name = $${p++}`);   vals.push(branch); }
-  if (rep)    { conds.push(`salesrep_name = $${p++}`); vals.push(rep);    }
+  if (branch) {
+    const bc = branchCondition(branch, p);
+    conds.push(bc.sql.replace(/^ AND /, ''));
+    vals.push(bc.val);
+    p++;
+  }
+  if (rep) { conds.push(`salesrep_name = $${p++}`); vals.push(rep); }
   return { sql: conds.length ? ' AND ' + conds.join(' AND ') : '', vals };
 }
 
@@ -634,8 +660,14 @@ router.get('/report', verifyToken, applyRegionFilter, async (req, res) => {
     const params     = [year];
     let   p          = 2;
 
-    if (branch) { conditions.push(`sa.branch_name = $${p++}`); params.push(branch); }
-    if (rep)    { conditions.push(`sa.salesrep_name = $${p++}`); params.push(rep); }
+    if (branch) {
+      if (Array.isArray(branch)) {
+        conditions.push(`sa.branch_name = ANY($${p++}::text[])`); params.push(branch);
+      } else {
+        conditions.push(`sa.branch_name = $${p++}`); params.push(branch);
+      }
+    }
+    if (rep) { conditions.push(`sa.salesrep_name = $${p++}`); params.push(rep); }
 
     const where = conditions.join(' AND ');
 
@@ -746,7 +778,7 @@ router.get('/new-customers', verifyToken, applyRegionFilter, async (req, res) =>
     const filterParams = [year, currentMonth];
     let p = 3;
 
-    if (branch) { filterConds.push(`sa.branch_name = $${p++}`); filterParams.push(branch); }
+    if (branch) { const bc = branchCondition(branch, p++, 'sa.'); filterConds.push(bc.sql.replace(/^ AND /, '')); filterParams.push(bc.val); }
     if (rep)    { filterConds.push(`sa.salesrep_name = $${p++}`); filterParams.push(rep); }
 
     const extraWhere = filterConds.length ? ' AND ' + filterConds.join(' AND ') : '';
@@ -815,13 +847,16 @@ router.get('/meta', verifyToken, applyRegionFilter, async (req, res) => {
   if (req.regionFilter) branch = await resolveRegionBranch(req.regionFilter);
 
   try {
+    const bc2      = branchCondition(branch, 2);  // $2 position
+    const branchVal = branch ? [bc2.val] : [];
+
     // Reps are filtered by branch when a branch is selected
     const repQuery = branch
       ? pool.query(
           `SELECT DISTINCT salesrep_name FROM sales_activity
-           WHERE report_year = $1 AND branch_name = $2 AND salesrep_name IS NOT NULL
+           WHERE report_year = $1${bc2.sql} AND salesrep_name IS NOT NULL
            ORDER BY salesrep_name`,
-          [year, branch]
+          [year, ...branchVal]
         )
       : pool.query(
           `SELECT DISTINCT salesrep_name FROM sales_activity
@@ -833,9 +868,9 @@ router.get('/meta', verifyToken, applyRegionFilter, async (req, res) => {
     const branchQuery = req.regionFilter
       ? pool.query(
           `SELECT DISTINCT branch_name FROM sales_activity
-           WHERE report_year = $1 AND branch_name = $2 AND branch_name IS NOT NULL
+           WHERE report_year = $1${bc2.sql} AND branch_name IS NOT NULL
            ORDER BY branch_name`,
-          [year, branch]
+          [year, ...branchVal]
         )
       : pool.query(
           `SELECT DISTINCT branch_name FROM sales_activity
@@ -1031,7 +1066,7 @@ router.get('/export', verifyToken, applyRegionFilter, async (req, res) => {
         const filterConds  = [];
         const filterParams = [year, maxMonth];
         let p = 3;
-        if (branch) { filterConds.push(`sa.branch_name = $${p++}`);    filterParams.push(branch); }
+        if (branch) { const bc = branchCondition(branch, p++, 'sa.'); filterConds.push(bc.sql.replace(/^ AND /, '')); filterParams.push(bc.val); }
         if (rep)    { filterConds.push(`sa.salesrep_name = $${p++}`);  filterParams.push(rep); }
         const extraWhere = filterConds.length ? ' AND ' + filterConds.join(' AND ') : '';
 
@@ -1138,7 +1173,7 @@ router.get('/export', verifyToken, applyRegionFilter, async (req, res) => {
       const conditions = ['sa.report_year = $1'];
       const params     = [year];
       let   p          = 2;
-      if (branch) { conditions.push(`sa.branch_name = $${p++}`);   params.push(branch); }
+      if (branch) { const bc = branchCondition(branch, p++, 'sa.'); conditions.push(bc.sql.replace(/^ AND /, '')); params.push(bc.val); }
       if (rep)    { conditions.push(`sa.salesrep_name = $${p++}`); params.push(rep); }
       const where = conditions.join(' AND ');
 

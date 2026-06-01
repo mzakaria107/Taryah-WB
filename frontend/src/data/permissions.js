@@ -31,6 +31,7 @@ export const PAGES = [
   { key: 'sales_report',  label: 'صفحة المبيعات',     path: '/sales-report',   desc: 'تقرير مبيعات المناديب حسب المنطقة (NetSuite مباشر)' },
   { key: 'coverage',      label: 'تغطية المناديب',    path: '/coverage',       desc: 'بروفايل أداء المندوب ومصفوفة التغطية الأسبوعية' },
   { key: 'summary',       label: 'الملخص العام',       path: '/summary',         desc: 'ملخص شامل للمبيعات والتحصيل والمديونية مع رسوم بيانية' },
+  { key: 'hypermarkets',  label: 'Hypermarkets',       path: '/hypermarkets',    desc: 'أداء مبيعات ومرتجعات فئة Hypermarkets مع مؤشرات شهرية' },
 ];
 
 /* Default access matrix — fallback before API loads */
@@ -52,6 +53,7 @@ export const DEFAULT_PERMS = {
   sales_report:    { super_admin:2, it_admin:2, top_management:2, sales_manager:2, supervisor:1, region_manager:1, sales_rep:0, fridge_admin:0, accounts:0, viewer:0 },
   coverage:        { super_admin:2, it_admin:2, top_management:1, sales_manager:2, supervisor:2, region_manager:2, sales_rep:1, fridge_admin:0, accounts:0, viewer:0 },
   summary:         { super_admin:2, it_admin:2, top_management:2, sales_manager:2, supervisor:1, region_manager:1, sales_rep:0, fridge_admin:0, accounts:1, viewer:1 },
+  hypermarkets:    { super_admin:2, it_admin:2, top_management:0, sales_manager:0, supervisor:0, region_manager:0, sales_rep:0, fridge_admin:0, accounts:0, viewer:0 },
 };
 
 /* Access level display config */

@@ -56,30 +56,32 @@ function TrendChart({ trend, highlight }) {
 
   return (
     <div className="hm-trend">
-      {trend.map((t, i) => {
-        const isHL = t.month_num === highlight;
-        const qtyPct = (t.total_qty / maxQty * 100).toFixed(1);
-        const retPct = (t.total_returns / maxQty * 100).toFixed(1);
-        return (
-          <div key={i} className={`hm-trend__col${isHL ? ' hm-trend__col--active' : ''}`}>
-            <div className="hm-trend__bars">
-              <div className="hm-trend__bar-wrap" title={`كمية: ${fmt(t.total_qty)}`}>
-                <div className="hm-trend__bar hm-trend__bar--qty"
-                     style={{ height: `${qtyPct}%` }} />
+      <div className="hm-trend__cols">
+        {trend.map((t, i) => {
+          const isHL = t.month_num === highlight;
+          const qtyPct = (t.total_qty / maxQty * 100).toFixed(1);
+          const retPct = (t.total_returns / maxQty * 100).toFixed(1);
+          return (
+            <div key={i} className={`hm-trend__col${isHL ? ' hm-trend__col--active' : ''}`}>
+              <div className="hm-trend__bars">
+                <div className="hm-trend__bar-wrap" title={`كمية: ${fmt(t.total_qty)}`}>
+                  <div className="hm-trend__bar hm-trend__bar--qty"
+                       style={{ height: `${qtyPct}%` }} />
+                </div>
+                <div className="hm-trend__bar-wrap" title={`مرتجعات: ${fmt(t.total_returns)}`}>
+                  <div className="hm-trend__bar hm-trend__bar--ret"
+                       style={{ height: `${retPct}%` }} />
+                </div>
               </div>
-              <div className="hm-trend__bar-wrap" title={`مرتجعات: ${fmt(t.total_returns)}`}>
-                <div className="hm-trend__bar hm-trend__bar--ret"
-                     style={{ height: `${retPct}%` }} />
-              </div>
+              <div className="hm-trend__label">{t.month_name}</div>
+              <div className="hm-trend__qty">{fmt(t.total_qty)}</div>
+              {t.total_returns > 0 && (
+                <div className="hm-trend__ret">↩{fmt(t.total_returns)}</div>
+              )}
             </div>
-            <div className="hm-trend__label">{t.month_name}</div>
-            <div className="hm-trend__qty">{fmt(t.total_qty)}</div>
-            {t.total_returns > 0 && (
-              <div className="hm-trend__ret">↩{fmt(t.total_returns)}</div>
-            )}
-          </div>
-        );
-      })}
+          );
+        })}
+      </div>
       <div className="hm-trend__legend">
         <span className="hm-trend__legend-item hm-trend__legend-item--qty">■ كمية المبيعات</span>
         <span className="hm-trend__legend-item hm-trend__legend-item--ret">■ المرتجعات</span>

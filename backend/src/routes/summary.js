@@ -91,10 +91,13 @@ router.get('/', verifyToken, applyRegionFilter, async (req, res) => {
        - total_qty / total_returns = plain sums                               */
     async function salesAgg(y, m) {
       const params = [y, m];
-      const b = mkBranch(branch, 3, 'sa');
+      const b   = mkBranch(branch, 3, 'sa');   // for CTE (alias sa)
+      const b2  = mkBranch(branch, 3, 'sa2');  // for subqueries (alias sa2) — same $N
       if (b.val !== null) params.push(b.val);
+      const repIdx = params.length + 1;
       if (rep) params.push(rep);
-      const repSql = rep ? ` AND sa.salesrep_name = $${params.length}` : '';
+      const repSql  = rep ? ` AND sa.salesrep_name  = $${repIdx}` : '';
+      const repSql2 = rep ? ` AND sa2.salesrep_name = $${repIdx}` : '';
 
       const r = await pool.query(`
         WITH cust AS (
@@ -112,11 +115,11 @@ router.get('/', verifyToken, applyRegionFilter, async (req, res) => {
           (SELECT COALESCE(SUM(sa2.qty),0)::bigint
            FROM sales_activity sa2
            WHERE sa2.report_year=$1 AND sa2.month_num=$2
-             ${b.sql}${repSql})                               AS total_qty,
+             ${b2.sql}${repSql2})                             AS total_qty,
           (SELECT COALESCE(SUM(sa2.bad_return_qty),0)::bigint
            FROM sales_activity sa2
            WHERE sa2.report_year=$1 AND sa2.month_num=$2
-             ${b.sql}${repSql})                               AS total_returns
+             ${b2.sql}${repSql2})                             AS total_returns
         FROM cust
       `, params);
       return r.rows[0] ?? { active_customers:0, inactive_customers:0, total_qty:0, total_returns:0 };

@@ -286,8 +286,27 @@ router.get('/', verifyToken, applyRegionFilter, async (req, res) => {
       const clauses = [];
       const params  = [];
       let p = 1;
-      if (regionId) { clauses.push(`i.region_id=$${p++}`); params.push(regionId); }
-      if (rep)      { clauses.push(`i.sales_rep_name=$${p++}`); params.push(rep); }
+
+      if (regionId) {
+        clauses.push(`i.region_id = $${p++}`);
+        params.push(regionId);
+      } else if (branch) {
+        /* Filter by branch name via regions sub-query — works for both
+           string ('Madinah') and array (['Madinah','المدينة']) values. */
+        if (Array.isArray(branch)) {
+          clauses.push(
+            `i.region_id IN (SELECT id FROM regions WHERE name_en = ANY($${p}::text[]) OR name_ar = ANY($${p}::text[]))`
+          );
+        } else {
+          clauses.push(
+            `i.region_id IN (SELECT id FROM regions WHERE name_en = $${p} OR name_ar = $${p})`
+          );
+        }
+        params.push(branch);
+        p++;
+      }
+
+      if (rep) { clauses.push(`i.sales_rep_name=$${p++}`); params.push(rep); }
 
       // Always exclude "direct" sales rep — they are not real reps and
       // their balance must not inflate any region's (e.g. Shaqra) total.

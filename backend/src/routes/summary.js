@@ -216,16 +216,54 @@ router.get('/', verifyToken, applyRegionFilter, async (req, res) => {
       return r.rows;
     }
 
-    /* ── Helper: collections total ─────────────────────────── */
+    /* ── Helper: collections total (region/rep-aware) ─────── */
     async function collectionsTotal(y, m) {
+      const params  = [y, m];
+      const filters = [];
+
+      /* Decide which JOINs are needed */
+      const needInv = !!(regionId || branch || rep);
+      const needRgn = !!(branch && !regionId); // name match requires regions table
+
+      if (regionId) {
+        params.push(regionId);
+        filters.push(`inv.region_id = $${params.length}`);
+      } else if (branch) {
+        if (Array.isArray(branch)) {
+          params.push(branch);
+          filters.push(
+            `(rgn.name_en = ANY($${params.length}::text[]) OR rgn.name_ar = ANY($${params.length}::text[]))`
+          );
+        } else {
+          params.push(branch);
+          filters.push(
+            `(rgn.name_en = $${params.length} OR rgn.name_ar = $${params.length})`
+          );
+        }
+      }
+
+      if (rep) {
+        params.push(rep);
+        filters.push(`inv.sales_rep_name = $${params.length}`);
+      }
+
+      const joinSql = [
+        needInv ? `JOIN invoices inv ON inv.invoice_number = p.invoice_number` : '',
+        needRgn ? `JOIN regions  rgn ON rgn.id = inv.region_id`                : '',
+      ].filter(Boolean).join('\n          ');
+
+      const filterSql = filters.length ? ' AND ' + filters.join(' AND ') : '';
+
       const r = await pool.query(`
         SELECT
-          COALESCE(SUM(total_paid), 0)::numeric AS total_paid,
-          COUNT(*)::int                         AS tx_count
-        FROM payments
-        WHERE EXTRACT(YEAR FROM tran_date)=$1
-          AND EXTRACT(MONTH FROM tran_date)=$2
-      `, [y, m]);
+          COALESCE(SUM(p.total_paid), 0)::numeric AS total_paid,
+          COUNT(*)::int                           AS tx_count
+        FROM payments p
+        ${joinSql}
+        WHERE EXTRACT(YEAR  FROM p.tran_date) = $1
+          AND EXTRACT(MONTH FROM p.tran_date) = $2
+          ${filterSql}
+      `, params);
       return r.rows[0];
     }
 

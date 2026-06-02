@@ -272,7 +272,7 @@ router.get('/', verifyToken, applyRegionFilter, async (req, res) => {
         WHERE EXTRACT(YEAR  FROM p.tran_date) = $1
           AND EXTRACT(MONTH FROM p.tran_date) = $2
           AND p.customer_code IN (
-            SELECT DISTINCT i.customer_code
+            SELECT DISTINCT i.customer_id
             FROM   invoices i
             ${subJoin}
             ${subWhere}

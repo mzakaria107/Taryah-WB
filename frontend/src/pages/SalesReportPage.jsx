@@ -780,8 +780,8 @@ function SalesContent({ period }) {
         </div>
       )}
 
-      {/* Active custom date-range badge */}
-      {(filterFrom || filterTo) && (
+      {/* Active custom date-range badge — monthly only */}
+      {isMonthly && (filterFrom || filterTo) && (
         <div className="srp-date-range srp-date-range--custom srp-no-print">
           🔍 الفترة المحددة:&nbsp;
           <strong>{filterFrom ? new Date(filterFrom).toLocaleDateString('ar-SA', {day:'numeric',month:'long',year:'numeric'}) : '…'}</strong>
@@ -850,28 +850,30 @@ function SalesContent({ period }) {
             </div>
           )}
 
-          {/* ── Date range ── */}
-          <div className="srp-filter-divider" />
-          <div className="srp-filter-group">
-            <label className="srp-filter-label">🗓 من تاريخ</label>
-            <input
-              type="date"
-              className="srp-filter-select srp-filter-date"
-              value={filterFrom}
-              max={filterTo || undefined}
-              onChange={e => setFilterFrom(e.target.value)}
-            />
-          </div>
-          <div className="srp-filter-group">
-            <label className="srp-filter-label">🗓 إلى تاريخ</label>
-            <input
-              type="date"
-              className="srp-filter-select srp-filter-date"
-              value={filterTo}
-              min={filterFrom || undefined}
-              onChange={e => setFilterTo(e.target.value)}
-            />
-          </div>
+          {/* ── Date range — monthly only ── */}
+          {isMonthly && (<>
+            <div className="srp-filter-divider" />
+            <div className="srp-filter-group">
+              <label className="srp-filter-label">🗓 من تاريخ</label>
+              <input
+                type="date"
+                className="srp-filter-select srp-filter-date"
+                value={filterFrom}
+                max={filterTo || undefined}
+                onChange={e => setFilterFrom(e.target.value)}
+              />
+            </div>
+            <div className="srp-filter-group">
+              <label className="srp-filter-label">🗓 إلى تاريخ</label>
+              <input
+                type="date"
+                className="srp-filter-select srp-filter-date"
+                value={filterTo}
+                min={filterFrom || undefined}
+                onChange={e => setFilterTo(e.target.value)}
+              />
+            </div>
+          </>)}
 
           {/* Reset */}
           {hasActiveFilter && (

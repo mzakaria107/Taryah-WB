@@ -602,6 +602,195 @@
   }
 }
 
+/* ── Gap warning bar ──────────────────────────────────────── */
+.prf-gap-warning {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  margin-bottom: 10px;
+  background: #fff7ed;
+  border: 1.5px solid #fed7aa;
+  border-radius: 8px;
+  font-size: 0.8rem;
+  color: #92400e;
+  flex-wrap: wrap;
+}
+.prf-gap-warning svg { color: #f97316; flex-shrink: 0; }
+
+/* ── Add Day button (header) ──────────────────────────────── */
+.prf-add-day-btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 11px;
+  background: #f0fdf4;
+  border: 1.5px solid #86efac;
+  color: #166534;
+  border-radius: 7px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.prf-add-day-btn:hover { background: #dcfce7; }
+
+/* ── Gap add button (inline) ──────────────────────────────── */
+.prf-gap-add-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 9px;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  color: #1e40af;
+  border-radius: 5px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.prf-gap-add-btn:hover { background: #dbeafe; }
+
+/* ── Gap row in table ─────────────────────────────────────── */
+.prf-gap-row {
+  background: #fffbeb !important;
+}
+.prf-gap-row td { opacity: 0.75; }
+.prf-gap-cell { color: #94a3b8 !important; font-style: italic; }
+.prf-gap-badge {
+  display: inline-block;
+  background: #fde68a;
+  color: #92400e;
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 4px;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+
+/* ── Add Missing Day Modal ────────────────────────────────── */
+.prf-add-day-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.45);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.prf-add-day-modal {
+  background: var(--color-surface, #fff);
+  border-radius: 14px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.25);
+  width: 380px;
+  max-width: 95vw;
+  direction: rtl;
+  overflow: hidden;
+}
+.prf-add-day-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  background: #1e40af;
+  color: #fff;
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+.prf-add-day-close {
+  background: none;
+  border: none;
+  color: #fff;
+  cursor: pointer;
+  padding: 2px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  opacity: 0.8;
+}
+.prf-add-day-close:hover { opacity: 1; }
+.prf-add-day-form {
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.prf-add-day-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.prf-add-day-row label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--color-text-muted, #64748b);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.prf-auto-label {
+  font-size: 0.72rem;
+  color: #16a34a;
+  font-weight: 500;
+}
+.prf-add-day-row input {
+  padding: 8px 10px;
+  border: 1.5px solid var(--color-border, #e2e8f0);
+  border-radius: 8px;
+  font-size: 0.85rem;
+  background: var(--color-bg, #f8fafc);
+  color: var(--color-text, #1e293b);
+  direction: ltr;
+  text-align: right;
+  font-family: var(--font-en, monospace);
+}
+.prf-add-day-row input:focus {
+  outline: none;
+  border-color: #3b82f6;
+}
+.prf-add-day-err {
+  padding: 8px 12px;
+  background: #fef2f2;
+  border: 1px solid #fca5a5;
+  border-radius: 7px;
+  font-size: 0.8rem;
+  color: #dc2626;
+}
+.prf-add-day-actions {
+  display: flex;
+  gap: 8px;
+  padding-top: 4px;
+}
+.prf-add-day-save {
+  flex: 1;
+  padding: 9px;
+  background: #1e40af;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.prf-add-day-save:hover:not(:disabled) { background: #1d4ed8; }
+.prf-add-day-save:disabled { opacity: 0.6; cursor: not-allowed; }
+.prf-add-day-cancel {
+  padding: 9px 16px;
+  background: transparent;
+  border: 1.5px solid var(--color-border, #e2e8f0);
+  border-radius: 8px;
+  font-size: 0.85rem;
+  color: var(--color-text-muted, #64748b);
+  cursor: pointer;
+}
+.prf-add-day-cancel:hover { background: var(--color-bg-hover, #f1f5f9); }
+
 @media (max-width: 480px) {
   .prf-kpi-row {
     display: grid;

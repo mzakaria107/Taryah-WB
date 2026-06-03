@@ -1,9 +1,9 @@
 import React, { useState, useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   TrendingUp, RefreshCw, ChevronDown, ChevronLeft,
   AlertCircle, Clock, DollarSign, BarChart2, Percent, Package,
-  CalendarDays, TrendingDown, Activity, Minus,
+  CalendarDays, TrendingDown, Activity, Minus, PlusCircle, X,
 } from 'lucide-react';
 import client from '../api/client';
 import './ProfitabilityPage.css';
@@ -250,8 +250,86 @@ const AR_MONTHS = [
   'يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر',
 ];
 
+/* ── Add Missing Day Form ─────────────────────────────────── */
+function AddMissingDayForm({ onClose, onSaved, defaultDate }) {
+  const [date,    setDate]    = useState(defaultDate || '');
+  const [rev,     setRev]     = useState('');
+  const [cost,    setCost]    = useState('');
+  const [gp,      setGp]      = useState('');
+  const [qty,     setQty]     = useState('');
+  const [saving,  setSaving]  = useState(false);
+  const [err,     setErr]     = useState('');
+
+  // Auto-calc GP when rev/cost change
+  const autoGp = rev && cost ? (parseFloat(rev) - parseFloat(cost)).toFixed(2) : '';
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    if (!date || !rev) { setErr('التاريخ والإيرادات مطلوبان'); return; }
+    setSaving(true); setErr('');
+    try {
+      await client.post('/profitability/import-daily', {
+        snapshot_date:      date,
+        daily_revenue:      parseFloat(rev)  || 0,
+        daily_cost:         parseFloat(cost) || 0,
+        daily_gross_profit: parseFloat(gp || autoGp) || 0,
+        daily_qty:          parseInt(qty)    || 0,
+      });
+      onSaved();
+    } catch (e) {
+      setErr(e?.response?.data?.error || 'حدث خطأ أثناء الحفظ');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="prf-add-day-overlay">
+      <div className="prf-add-day-modal">
+        <div className="prf-add-day-header">
+          <span>إضافة يوم ناقص</span>
+          <button className="prf-add-day-close" onClick={onClose}><X size={16}/></button>
+        </div>
+        <form className="prf-add-day-form" onSubmit={handleSubmit}>
+          <div className="prf-add-day-row">
+            <label>التاريخ *</label>
+            <input type="date" value={date} onChange={e => setDate(e.target.value)} required />
+          </div>
+          <div className="prf-add-day-row">
+            <label>إيرادات اليوم (ر.س) *</label>
+            <input type="number" step="0.01" placeholder="0.00" value={rev}  onChange={e => setRev(e.target.value)} required />
+          </div>
+          <div className="prf-add-day-row">
+            <label>تكلفة اليوم (ر.س)</label>
+            <input type="number" step="0.01" placeholder="0.00" value={cost} onChange={e => setCost(e.target.value)} />
+          </div>
+          <div className="prf-add-day-row">
+            <label>ربح اليوم (ر.س) {autoGp && !gp ? <span className="prf-auto-label">محسوب: {autoGp}</span> : ''}</label>
+            <input type="number" step="0.01" placeholder={autoGp || '0.00'} value={gp} onChange={e => setGp(e.target.value)} />
+          </div>
+          <div className="prf-add-day-row">
+            <label>كمية اليوم</label>
+            <input type="number" placeholder="0" value={qty} onChange={e => setQty(e.target.value)} />
+          </div>
+          {err && <div className="prf-add-day-err">{err}</div>}
+          <div className="prf-add-day-actions">
+            <button type="submit" className="prf-add-day-save" disabled={saving}>
+              {saving ? <><RefreshCw size={13} className="prf-spin"/> جاري الحفظ…</> : 'حفظ اليوم'}
+            </button>
+            <button type="button" className="prf-add-day-cancel" onClick={onClose}>إلغاء</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 /* ── Daily Performance Section ───────────────────────────── */
 function DailyPerformanceSection({ selectedYear, selectedMonth, onMonthChange, onSaveNow, isSaving }) {
+  const queryClient = useQueryClient();
+  const [showAddDay, setShowAddDay] = useState(false);
+  const [addDayDate, setAddDayDate] = useState('');
+
   const { data: dailyData, isLoading } = useQuery({
     queryKey: ['profitability-daily', selectedYear, selectedMonth],
     queryFn:  () => client.get(`/profitability/daily?year=${selectedYear}&month=${selectedMonth}`).then(r => r.data),
@@ -287,6 +365,21 @@ function DailyPerformanceSection({ selectedYear, selectedMonth, onMonthChange, o
   const projectedRevenue = dailyAvgRevenue * totalWorkingDays;
   const dailyAvgGP       = avgDenominator > 0 ? cumGP / avgDenominator : 0;
   const timePct          = totalWorkingDays > 0 ? (workingDaysElapsed / totalWorkingDays) * 100 : 0;
+
+  // ── Detect missing working days (gaps) ──────────────────────────
+  const snapshotDates = new Set(snapshots.map(s => String(s.snapshot_date).slice(0, 10)));
+  const today = new Date();
+  const gapDates = [];
+  if (isCurrentMonth) {
+    // Check working days from month start to yesterday
+    const checkUpTo = today.getDate() - 1;
+    for (let d = 1; d <= checkUpTo; d++) {
+      const dt = new Date(resYear, (resMonth || today.getMonth()+1) - 1, d);
+      if (dt.getDay() === 5) continue; // skip Friday
+      const iso = dt.toISOString().slice(0, 10);
+      if (!snapshotDates.has(iso)) gapDates.push(iso);
+    }
+  }
 
   // ── Trend calculations (snapshots = DESC, sparkline needs ASC) ──
   const sparkSnaps  = [...snapshots].reverse();
@@ -326,6 +419,18 @@ function DailyPerformanceSection({ selectedYear, selectedMonth, onMonthChange, o
 
   return (
     <div className="prf-daily-card">
+      {/* Add Missing Day Modal */}
+      {showAddDay && (
+        <AddMissingDayForm
+          defaultDate={addDayDate}
+          onClose={() => setShowAddDay(false)}
+          onSaved={() => {
+            setShowAddDay(false);
+            queryClient.invalidateQueries({ queryKey: ['profitability-daily'] });
+          }}
+        />
+      )}
+
       {/* Header */}
       <div className="prf-daily-header">
         <div className="prf-daily-title">
@@ -350,6 +455,14 @@ function DailyPerformanceSection({ selectedYear, selectedMonth, onMonthChange, o
               ))}
             </select>
           )}
+          <button
+            className="prf-add-day-btn"
+            onClick={() => { setAddDayDate(''); setShowAddDay(true); }}
+            title="إضافة يوم ناقص يدوياً"
+          >
+            <PlusCircle size={13}/>
+            إضافة يوم
+          </button>
           {isCurrentMonth && (
             <button className={`prf-save-btn${isSaving ? ' prf-fetching' : ''}`} onClick={onSaveNow} disabled={isSaving}>
               <RefreshCw size={13} className={isSaving ? 'prf-spin' : ''}/>
@@ -362,6 +475,22 @@ function DailyPerformanceSection({ selectedYear, selectedMonth, onMonthChange, o
           </div>
         </div>
       </div>
+
+      {/* Gap warning */}
+      {gapDates.length > 0 && (
+        <div className="prf-gap-warning">
+          <AlertCircle size={14}/>
+          <span>أيام ناقصة ({gapDates.length}): {gapDates.map(d => {
+            const dt = new Date(d + 'T12:00:00');
+            return dt.toLocaleDateString('ar-SA', { weekday: 'short', day: 'numeric', month: 'short' });
+          }).join(' · ')}</span>
+          {gapDates.length === 1 && (
+            <button className="prf-gap-add-btn" onClick={() => { setAddDayDate(gapDates[0]); setShowAddDay(true); }}>
+              إضافة
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Progress bar */}
       <div className="prf-progress-wrap">
@@ -468,26 +597,54 @@ function DailyPerformanceSection({ selectedYear, selectedMonth, onMonthChange, o
                   const isToday = i === 0 && isCurrentMonth;
                   const dailyRev = parseFloat(s.daily_revenue);
                   const dailyGP  = parseFloat(s.daily_gross_profit);
+                  const snapDate = String(s.snapshot_date).slice(0, 10);
+
+                  // Find any gap days between this snapshot and the next one (DESC order)
+                  const nextSnap  = snapshots[i + 1];
+                  const nextDate  = nextSnap ? String(nextSnap.snapshot_date).slice(0, 10) : null;
+                  const gapRowsHere = nextDate
+                    ? gapDates.filter(g => g > nextDate && g < snapDate)
+                    : gapDates.filter(g => g < snapDate);
+
                   return (
-                    <tr key={i} className={isToday ? 'prf-daily-today' : ''}>
-                      <td className="prf-daily-date">
-                        {isToday && <span className="prf-today-badge">اليوم</span>}
-                        {new Date(s.snapshot_date).toLocaleDateString('ar-SA', {
-                          day: 'numeric', month: 'short', weekday: 'short',
-                        })}
-                      </td>
-                      <td className={`prf-daily-num prf-daily-col-highlight prf-revenue ${dailyRev < 0 ? 'prf-gp-neg' : ''}`}>
-                        {s.daily_revenue != null ? `ر.س ${fmtNum(dailyRev)}` : '—'}
-                      </td>
-                      <td className={`prf-daily-num prf-daily-col-highlight ${gpClass(dailyGP > 0 && dailyRev > 0 ? (dailyGP/dailyRev)*100 : 0)}`}>
-                        {s.daily_gross_profit != null ? `ر.س ${fmtNum(dailyGP)}` : '—'}
-                      </td>
-                      <td className="prf-daily-num">{`ر.س ${fmtNum(s.total_revenue)}`}</td>
-                      <td className="prf-daily-num">{`ر.س ${fmtNum(s.gross_profit)}`}</td>
-                      <td className={`prf-daily-num prf-pct-cell ${gpClass(gp)}`}>{fmtPct(gp)}</td>
-                      <td className="prf-daily-num">{s.daily_qty != null ? fmtQty(s.daily_qty) : '—'}</td>
-                      <td className="prf-daily-num">{fmtQty(s.qty)}</td>
-                    </tr>
+                    <React.Fragment key={i}>
+                      <tr className={isToday ? 'prf-daily-today' : ''}>
+                        <td className="prf-daily-date">
+                          {isToday && <span className="prf-today-badge">اليوم</span>}
+                          {new Date(snapDate + 'T12:00:00').toLocaleDateString('ar-SA', {
+                            day: 'numeric', month: 'short', weekday: 'short',
+                          })}
+                        </td>
+                        <td className={`prf-daily-num prf-daily-col-highlight prf-revenue ${dailyRev < 0 ? 'prf-gp-neg' : ''}`}>
+                          {s.daily_revenue != null ? `ر.س ${fmtNum(dailyRev)}` : '—'}
+                        </td>
+                        <td className={`prf-daily-num prf-daily-col-highlight ${gpClass(dailyGP > 0 && dailyRev > 0 ? (dailyGP/dailyRev)*100 : 0)}`}>
+                          {s.daily_gross_profit != null ? `ر.س ${fmtNum(dailyGP)}` : '—'}
+                        </td>
+                        <td className="prf-daily-num">{`ر.س ${fmtNum(s.total_revenue)}`}</td>
+                        <td className="prf-daily-num">{`ر.س ${fmtNum(s.gross_profit)}`}</td>
+                        <td className={`prf-daily-num prf-pct-cell ${gpClass(gp)}`}>{fmtPct(gp)}</td>
+                        <td className="prf-daily-num">{s.daily_qty != null ? fmtQty(s.daily_qty) : '—'}</td>
+                        <td className="prf-daily-num">{fmtQty(s.qty)}</td>
+                      </tr>
+                      {/* Gap rows — missing working days */}
+                      {gapRowsHere.map(gDate => (
+                        <tr key={`gap-${gDate}`} className="prf-gap-row">
+                          <td className="prf-daily-date">
+                            <span className="prf-gap-badge">ناقص</span>
+                            {new Date(gDate + 'T12:00:00').toLocaleDateString('ar-SA', {
+                              day: 'numeric', month: 'short', weekday: 'short',
+                            })}
+                          </td>
+                          <td className="prf-daily-num prf-daily-col-highlight prf-gap-cell" colSpan={2}>
+                            <button className="prf-gap-add-btn" onClick={() => { setAddDayDate(gDate); setShowAddDay(true); }}>
+                              <PlusCircle size={11}/> إضافة بيانات
+                            </button>
+                          </td>
+                          <td className="prf-gap-cell" colSpan={5}>—</td>
+                        </tr>
+                      ))}
+                    </React.Fragment>
                   );
                 })}
               </tbody>

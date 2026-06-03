@@ -377,13 +377,12 @@ router.post('/import-daily', verifyToken, requireRoles('super_admin', 'it_admin'
       return res.status(400).json({ error: 'snapshot_date and daily_revenue are required' });
     }
 
-    // Get the previous day's cumulative total (most recent row in same month)
+    // Get the previous day's cumulative total (most recent row before this date, any source)
     const { rows: prev } = await pool.query(`
       SELECT total_revenue, total_cost, gross_profit, qty
       FROM profitability_snapshots
       WHERE snapshot_date >= date_trunc('month', $1::date)
         AND snapshot_date <  $1::date
-        AND source = 'excel'
       ORDER BY snapshot_date DESC
       LIMIT 1
     `, [snapshot_date]);

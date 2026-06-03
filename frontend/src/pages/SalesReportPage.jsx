@@ -291,6 +291,8 @@ function SalesContent({ period }) {
   const [filterDay,        setFilterDay]        = useState('');
   const [filterMonth,      setFilterMonth]      = useState('');
   const [filterYear,       setFilterYear]       = useState('');
+  const [filterFrom,       setFilterFrom]       = useState('');   // YYYY-MM-DD
+  const [filterTo,         setFilterTo]         = useState('');   // YYYY-MM-DD
 
   /* ── Type filter (server-persisted, shared across all users) ── */
   const { data: savedTypes = [] } = useQuery({
@@ -484,7 +486,7 @@ function SalesContent({ period }) {
   }, [warehouseFiltered, filterMonth, filterYear]);
 
   const hasDateData    = filterOptions.months.length > 0;
-  const hasActiveFilter = filterRegion || filterDay || filterMonth || filterYear;
+  const hasActiveFilter = filterRegion || filterDay || filterMonth || filterYear || filterFrom || filterTo;
 
   /* ── Step 3: apply region + date filters ────────────────────── */
   const regions = useMemo(() => {
@@ -532,6 +534,34 @@ function SalesContent({ period }) {
       }).filter(Boolean);
     }
 
+    // Date range filter (from / to) — DD/MM/YYYY → compared as YYYY-MM-DD string
+    if (filterFrom || filterTo) {
+      result = result.map(region => {
+        const filteredReps = region.reps.map(rep => {
+          const filteredItems = rep.items.filter(item => {
+            if (!item.date) return true;
+            const parts = item.date.split('/');
+            if (parts.length !== 3) return true;
+            const d = `${parts[2]}-${parts[1].padStart(2,'0')}-${parts[0].padStart(2,'0')}`;
+            if (filterFrom && d < filterFrom) return false;
+            if (filterTo   && d > filterTo)   return false;
+            return true;
+          });
+          if (!filteredItems.length) return null;
+          const rQty   = filteredItems.reduce((s,i) => s + i.qty,   0);
+          const rTotal = filteredItems.reduce((s,i) => s + i.total, 0);
+          return { ...rep, items: filteredItems, qty: rQty, total: rTotal,
+            avgPrice: rQty !== 0 ? rTotal / Math.abs(rQty) : 0 };
+        }).filter(Boolean);
+        if (!filteredReps.length) return null;
+        const rgQty   = filteredReps.reduce((s,r) => s + r.qty,   0);
+        const rgTotal = filteredReps.reduce((s,r) => s + r.total, 0);
+        return { ...region, reps: filteredReps, qty: rgQty, total: rgTotal,
+          avgPrice: rgQty !== 0 ? rgTotal / Math.abs(rgQty) : 0,
+          repsCount: filteredReps.length };
+      }).filter(Boolean);
+    }
+
     // Type filter — applied globally for all users (savedTypes empty = show all)
     if (savedTypes.length > 0) {
       result = result.map(region => {
@@ -555,7 +585,7 @@ function SalesContent({ period }) {
     }
 
     return result;
-  }, [warehouseFiltered, savedRegions, filterRegion, filterDay, filterMonth, filterYear, savedTypes]);
+  }, [warehouseFiltered, savedRegions, filterRegion, filterDay, filterMonth, filterYear, filterFrom, filterTo, savedTypes]);
 
   /* ── Step 4: KPIs always reflect visible filtered regions ────── */
   const kpi = useMemo(() => {
@@ -750,6 +780,21 @@ function SalesContent({ period }) {
         </div>
       )}
 
+      {/* Active custom date-range badge */}
+      {(filterFrom || filterTo) && (
+        <div className="srp-date-range srp-date-range--custom srp-no-print">
+          🔍 الفترة المحددة:&nbsp;
+          <strong>{filterFrom ? new Date(filterFrom).toLocaleDateString('ar-SA', {day:'numeric',month:'long',year:'numeric'}) : '…'}</strong>
+          &nbsp;—&nbsp;
+          <strong>{filterTo   ? new Date(filterTo  ).toLocaleDateString('ar-SA', {day:'numeric',month:'long',year:'numeric'}) : '…'}</strong>
+          {filterFrom && filterTo && (() => {
+            const days = Math.round((new Date(filterTo) - new Date(filterFrom)) / 86400000) + 1;
+            return <span className="srp-date-range-days"> ({days} يوم)</span>;
+          })()}
+          <button className="srp-date-range-clear" onClick={() => { setFilterFrom(''); setFilterTo(''); }}>✕</button>
+        </div>
+      )}
+
       {/* Filters */}
       {!isLoading && (filterOptions.regions.length > 1 || hasDateData) && (
         <div className="srp-filters srp-no-print">
@@ -805,9 +850,36 @@ function SalesContent({ period }) {
             </div>
           )}
 
+          {/* ── Date range ── */}
+          <div className="srp-filter-divider" />
+          <div className="srp-filter-group">
+            <label className="srp-filter-label">🗓 من تاريخ</label>
+            <input
+              type="date"
+              className="srp-filter-select srp-filter-date"
+              value={filterFrom}
+              max={filterTo || undefined}
+              onChange={e => setFilterFrom(e.target.value)}
+            />
+          </div>
+          <div className="srp-filter-group">
+            <label className="srp-filter-label">🗓 إلى تاريخ</label>
+            <input
+              type="date"
+              className="srp-filter-select srp-filter-date"
+              value={filterTo}
+              min={filterFrom || undefined}
+              onChange={e => setFilterTo(e.target.value)}
+            />
+          </div>
+
           {/* Reset */}
           {hasActiveFilter && (
-            <button className="srp-filter-reset" onClick={() => { setFilterRegion(''); setFilterDay(''); setFilterMonth(''); setFilterYear(''); }}>
+            <button className="srp-filter-reset" onClick={() => {
+              setFilterRegion(''); setFilterDay('');
+              setFilterMonth(''); setFilterYear('');
+              setFilterFrom('');  setFilterTo('');
+            }}>
               ✕ إعادة تعيين
             </button>
           )}

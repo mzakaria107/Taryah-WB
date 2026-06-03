@@ -957,6 +957,54 @@
   margin-bottom: 16px;
 }
 
+/* Custom selected date range badge */
+.srp-date-range--custom {
+  background: #fef3c7;
+  border-color: #fcd34d;
+  color: #92400e;
+  font-weight: 500;
+}
+.srp-date-range-days {
+  font-size: 0.76rem;
+  opacity: 0.75;
+  margin-inline-start: 2px;
+}
+.srp-date-range-clear {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #b45309;
+  font-size: 0.78rem;
+  padding: 1px 4px;
+  border-radius: 4px;
+  margin-inline-start: 4px;
+  line-height: 1;
+}
+.srp-date-range-clear:hover { background: #fde68a; }
+
+/* ── Date input consistent with select ───────────────────────── */
+.srp-filter-date {
+  appearance: none;
+  -webkit-appearance: none;
+  min-width: 140px;
+  cursor: pointer;
+  padding-inline-end: 10px !important; /* override the select padding */
+}
+.srp-filter-date::-webkit-calendar-picker-indicator {
+  opacity: 0.6;
+  cursor: pointer;
+  filter: invert(0.3);
+}
+
+/* ── Divider between regular filters and date range ─────────── */
+.srp-filter-divider {
+  width: 1px;
+  height: 32px;
+  background: var(--color-border, #e2e8f0);
+  align-self: flex-end;
+  margin: 0 4px 6px;
+}
+
 /* ── Tab content wrapper ─────────────────────────────────────── */
 .srp-tab-content {
   animation: srpTabIn 200ms ease;

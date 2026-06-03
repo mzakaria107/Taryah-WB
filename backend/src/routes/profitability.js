@@ -269,7 +269,8 @@ async function fetchFromNetSuite() {
   const grossProfit    = totalRevenue - totalCost;
   const grossProfitPct = totalRevenue > 0 ? (grossProfit / totalRevenue) * 100 : 0;
   const qty            = data.groups.reduce((s, g) => s + (g.summary?.qty          || 0), 0);
-  const today          = new Date().toISOString().slice(0, 10);
+  // Use Riyadh timezone so midnight-to-3am saves land on the correct calendar day
+  const today          = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Riyadh' });
 
   await pool.query(`
     INSERT INTO profitability_snapshots
@@ -332,7 +333,7 @@ router.get('/daily', verifyToken, async (req, res) => {
           AND snapshot_date <= (date_trunc('month', $1::date) + interval '1 month' - interval '1 day')
       )
       SELECT
-        snapshot_date,
+        snapshot_date::text AS snapshot_date,   -- return plain YYYY-MM-DD string; avoids pg Date→UTC-offset serialization
         total_revenue,
         total_cost,
         gross_profit,

@@ -383,6 +383,7 @@ function DailyPerformanceSection({ selectedYear, selectedMonth, onMonthChange, o
 
   // ── Trend calculations (snapshots = DESC, sparkline needs ASC) ──
   const sparkSnaps  = [...snapshots].reverse();
+  // slice(0,10) extracts YYYY-MM-DD; T12:00:00 = local noon avoids UTC-offset day shift
   const sparkLabels = sparkSnaps.map(s => {
     const d = new Date(String(s.snapshot_date).slice(0, 10) + 'T12:00:00');
     return d.toLocaleDateString('ar-SA', { day: 'numeric', month: 'short', weekday: 'short' });
@@ -597,6 +598,8 @@ function DailyPerformanceSection({ selectedYear, selectedMonth, onMonthChange, o
                   const isToday = i === 0 && isCurrentMonth;
                   const dailyRev = parseFloat(s.daily_revenue);
                   const dailyGP  = parseFloat(s.daily_gross_profit);
+                  // Slice to YYYY-MM-DD then add T12:00:00 (local noon) so any UTC offset
+                  // cannot push the date into the previous or next calendar day
                   const snapDate = String(s.snapshot_date).slice(0, 10);
 
                   // Find any gap days between this snapshot and the next one (DESC order)

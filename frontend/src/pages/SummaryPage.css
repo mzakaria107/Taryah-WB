@@ -94,6 +94,91 @@
   border-color: var(--color-primary, #3b82f6);
 }
 
+/* ── Date filter input ────────────────────────────────────── */
+.sm-filter-date {
+  padding: 7px 10px;
+  border: 1.5px solid var(--color-border, #e2e8f0);
+  border-radius: 8px;
+  font-size: 0.83rem;
+  background: var(--color-bg, #f8fafc);
+  color: var(--color-text, #1e293b);
+  min-width: 140px;
+  cursor: pointer;
+  font-family: inherit;
+  direction: ltr;
+}
+.sm-filter-date:focus {
+  outline: none;
+  border-color: var(--color-primary, #3b82f6);
+}
+
+/* ── Filter divider (vertical separator) ─────────────────── */
+.sm-filter-divider {
+  width: 1px;
+  height: 36px;
+  background: var(--color-border, #e2e8f0);
+  align-self: flex-end;
+  margin-bottom: 2px;
+  flex-shrink: 0;
+}
+
+/* ── Active date-range badge ──────────────────────────────── */
+.sm-date-range-badge {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 14px;
+  background: #fefce8;
+  border: 1.5px solid #fde047;
+  border-radius: 10px;
+  font-size: 0.82rem;
+  color: #713f12;
+  margin-bottom: 14px;
+  margin-top: -8px;
+}
+.sm-date-range-badge span:first-child {
+  font-weight: 700;
+  color: #92400e;
+}
+.sm-date-range-from,
+.sm-date-range-to {
+  font-weight: 600;
+  color: #1e293b;
+}
+.sm-date-range-sep {
+  color: #fbbf24;
+  font-size: 1rem;
+  font-weight: 700;
+}
+.sm-date-range-days {
+  background: #fde68a;
+  color: #78350f;
+  border-radius: 12px;
+  padding: 1px 9px;
+  font-size: 0.77rem;
+  font-weight: 600;
+}
+.sm-date-range-clear {
+  margin-right: auto;
+  background: none;
+  border: none;
+  color: #ef4444;
+  cursor: pointer;
+  font-size: 0.85rem;
+  padding: 2px 6px;
+  border-radius: 6px;
+  line-height: 1;
+}
+.sm-date-range-clear:hover { background: #fee2e2; }
+
+/* ── Period badge range variant ──────────────────────────── */
+.sm-period-cur--range {
+  background: #fef9c3;
+  color: #78350f;
+  border: 1px solid #fde047;
+}
+
 /* ── Period badge ─────────────────────────────────────────── */
 .sm-period-badge {
   display: flex;

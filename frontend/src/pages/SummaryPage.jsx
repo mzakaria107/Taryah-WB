@@ -109,6 +109,8 @@ export default function SummaryPage() {
   const [month,      setMonth]      = useState(currentMonth);
   const [branchName, setBranchName] = useState('');
   const [repName,    setRepName]    = useState('');
+  const [filterFrom, setFilterFrom] = useState('');
+  const [filterTo,   setFilterTo]   = useState('');
   const [activeTab,  setActiveTab]  = useState('overview'); // overview | regions | reps | debt
 
   /* ── Rep sort ─────────────────────────────────────────── */
@@ -149,9 +151,11 @@ export default function SummaryPage() {
   const params = new URLSearchParams({ year, month });
   if (branchName) params.set('branch_name', branchName);
   if (repName)    params.set('salesrep_name', repName);
+  if (filterFrom) params.set('date_from', filterFrom);
+  if (filterTo)   params.set('date_to',   filterTo);
 
   const { data, isLoading, isError } = useQuery({
-    queryKey: ['summary', year, month, branchName, repName],
+    queryKey: ['summary', year, month, branchName, repName, filterFrom, filterTo],
     queryFn: () => client.get(`/summary?${params}`).then(r => r.data),
     staleTime: 2 * 60 * 1000,
   });
@@ -175,8 +179,25 @@ export default function SummaryPage() {
     setRepName('');  // reset rep when branch changes
   }
 
+  /* ── Handle date-from: also sync year/month dropdowns ─── */
+  function handleFilterFrom(val) {
+    setFilterFrom(val);
+    if (val) {
+      const d = new Date(val);
+      if (!isNaN(d)) {
+        setYear(d.getFullYear());
+        setMonth(d.getMonth() + 1);
+      }
+    }
+  }
+
   /* ── Reset filters ─────────────────────────────────────── */
-  function resetFilters() { setBranchName(''); setRepName(''); }
+  function resetFilters() {
+    setBranchName('');
+    setRepName('');
+    setFilterFrom('');
+    setFilterTo('');
+  }
 
   /* ── Month name ───────────────────────────────────────── */
   const monthName = MONTHS.find(m => m[0] === month)?.[1] || '';
@@ -246,10 +267,52 @@ export default function SummaryPage() {
             {repOptions.map(r => <option key={r.name} value={r.name}>{r.name}</option>)}
           </select>
         </div>
-        {(branchName || repName) && (
+
+        {/* ── Date range inputs ─────────────────────────── */}
+        <div className="sm-filter-divider" />
+        <div className="sm-filter-group">
+          <label>من تاريخ</label>
+          <input
+            type="date"
+            value={filterFrom}
+            onChange={e => handleFilterFrom(e.target.value)}
+            className="sm-filter-date"
+          />
+        </div>
+        <div className="sm-filter-group">
+          <label>إلى تاريخ</label>
+          <input
+            type="date"
+            value={filterTo}
+            min={filterFrom || undefined}
+            onChange={e => setFilterTo(e.target.value)}
+            className="sm-filter-date"
+          />
+        </div>
+
+        {(branchName || repName || filterFrom || filterTo) && (
           <button className="sm-btn sm-btn--ghost sm-no-print" onClick={resetFilters}>✕ إعادة تعيين</button>
         )}
       </div>
+
+      {/* ── Active date-range badge ───────────────────────── */}
+      {(filterFrom || filterTo) && (
+        <div className="sm-date-range-badge sm-no-print">
+          <span>📅 فلتر التاريخ:</span>
+          <span className="sm-date-range-from">
+            {filterFrom ? new Date(filterFrom + 'T00:00:00').toLocaleDateString('ar-SA', { day: '2-digit', month: 'long', year: 'numeric' }) : '…'}
+          </span>
+          <span className="sm-date-range-sep">←</span>
+          <span className="sm-date-range-to">
+            {filterTo ? new Date(filterTo + 'T00:00:00').toLocaleDateString('ar-SA', { day: '2-digit', month: 'long', year: 'numeric' }) : '…'}
+          </span>
+          {filterFrom && filterTo && (() => {
+            const days = Math.round((new Date(filterTo) - new Date(filterFrom)) / 86400000) + 1;
+            return <span className="sm-date-range-days">({days} يوم)</span>;
+          })()}
+          <button className="sm-date-range-clear" onClick={() => { setFilterFrom(''); setFilterTo(''); }}>✕</button>
+        </div>
+      )}
 
       {/* ── Loading / Error ───────────────────────────────── */}
       {isLoading && (
@@ -266,10 +329,28 @@ export default function SummaryPage() {
         <>
           {/* ── Period badge ────────────────────────────── */}
           <div className="sm-period-badge">
-            <span className="sm-period-cur">{monthName} {year}</span>
-            <span className="sm-period-vs">مقارنةً بـ</span>
-            <span className="sm-period-prev">{prevMonthName} {month === 1 ? year - 1 : year}</span>
-            <span className="sm-period-wd">· أيام العمل: {data.meta.working_days_cur}</span>
+            {(filterFrom || filterTo) ? (
+              <>
+                <span className="sm-period-cur sm-period-cur--range">
+                  {filterFrom
+                    ? new Date(filterFrom + 'T00:00:00').toLocaleDateString('ar-SA', { day: '2-digit', month: 'long' })
+                    : '…'}
+                  {' — '}
+                  {filterTo
+                    ? new Date(filterTo + 'T00:00:00').toLocaleDateString('ar-SA', { day: '2-digit', month: 'long', year: 'numeric' })
+                    : '…'}
+                </span>
+                <span className="sm-period-vs">التحصيل في هذه الفترة</span>
+                <span className="sm-period-wd">· مقارنة بالشهر: {prevMonthName}</span>
+              </>
+            ) : (
+              <>
+                <span className="sm-period-cur">{monthName} {year}</span>
+                <span className="sm-period-vs">مقارنةً بـ</span>
+                <span className="sm-period-prev">{prevMonthName} {month === 1 ? year - 1 : year}</span>
+                <span className="sm-period-wd">· أيام العمل: {data.meta.working_days_cur}</span>
+              </>
+            )}
           </div>
 
           {/* ── KPI Row 1: Customers ─────────────────────── */}

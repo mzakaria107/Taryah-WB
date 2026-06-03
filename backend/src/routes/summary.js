@@ -64,9 +64,11 @@ function workingDays(year, month) {
    GET /api/summary
 ───────────────────────────────────────────────────────────── */
 router.get('/', verifyToken, applyRegionFilter, async (req, res) => {
-  const year  = parseInt(req.query.year)  || new Date().getFullYear();
-  const month = parseInt(req.query.month) || (new Date().getMonth() + 1);
-  const rep   = (req.query.salesrep_name || '').trim() || null;
+  const year     = parseInt(req.query.year)  || new Date().getFullYear();
+  const month    = parseInt(req.query.month) || (new Date().getMonth() + 1);
+  const rep      = (req.query.salesrep_name || '').trim() || null;
+  const dateFrom = (req.query.date_from || '').trim() || null;
+  const dateTo   = (req.query.date_to   || '').trim() || null;
 
   const prevMonth = month === 1 ? 12 : month - 1;
   const prevYear  = month === 1 ? year - 1 : year;
@@ -216,19 +218,34 @@ router.get('/', verifyToken, applyRegionFilter, async (req, res) => {
       return r.rows;
     }
 
-    /* ── Helper: collections total (region/rep-aware) ─────── */
-    async function collectionsTotal(y, m) {
-      const params = [y, m];
+    /* ── Helper: collections total (region/rep/date-range-aware)
+       applyDateRange=true  → use dateFrom/dateTo when they are set
+       applyDateRange=false → always use year/month extraction (prev period) */
+    async function collectionsTotal(y, m, applyDateRange = false) {
+      const params = [];
+      const dateConditions = [];
 
-      /* No filter → simple aggregation (fast path) */
+      if (applyDateRange && (dateFrom || dateTo)) {
+        /* Exact date-range filter on tran_date */
+        if (dateFrom) { params.push(dateFrom); dateConditions.push(`p.tran_date >= $${params.length}`); }
+        if (dateTo)   { params.push(dateTo);   dateConditions.push(`p.tran_date <= $${params.length}`); }
+      } else {
+        /* Default: filter by year + month */
+        params.push(y, m);
+        dateConditions.push(`EXTRACT(YEAR  FROM p.tran_date) = $1`);
+        dateConditions.push(`EXTRACT(MONTH FROM p.tran_date) = $2`);
+      }
+
+      const dateSql = dateConditions.join(' AND ');
+
+      /* No region/rep filter → simple aggregation (fast path) */
       if (!regionId && !branch && !rep) {
         const r = await pool.query(`
           SELECT
-            COALESCE(SUM(total_paid), 0)::numeric AS total_paid,
-            COUNT(*)::int                         AS tx_count
-          FROM payments
-          WHERE EXTRACT(YEAR  FROM tran_date) = $1
-            AND EXTRACT(MONTH FROM tran_date) = $2
+            COALESCE(SUM(p.total_paid), 0)::numeric AS total_paid,
+            COUNT(*)::int                           AS tx_count
+          FROM payments p
+          WHERE ${dateSql}
         `, params);
         return r.rows[0];
       }
@@ -269,8 +286,7 @@ router.get('/', verifyToken, applyRegionFilter, async (req, res) => {
           COALESCE(SUM(p.total_paid), 0)::numeric AS total_paid,
           COUNT(*)::int                           AS tx_count
         FROM payments p
-        WHERE EXTRACT(YEAR  FROM p.tran_date) = $1
-          AND EXTRACT(MONTH FROM p.tran_date) = $2
+        WHERE ${dateSql}
           AND p.customer_code IN (
             SELECT DISTINCT i.customer_id
             FROM   invoices i
@@ -370,8 +386,8 @@ router.get('/', verifyToken, applyRegionFilter, async (req, res) => {
       regionBreakdown(prevYear, prevMonth),
       repBreakdown(year, month),
       repBreakdown(prevYear, prevMonth),
-      collectionsTotal(year, month),
-      collectionsTotal(prevYear, prevMonth),
+      collectionsTotal(year, month, true),   // uses dateFrom/dateTo when set
+      collectionsTotal(prevYear, prevMonth), // always month-based (for comparison)
       debtData(),
       newCustomersCount(year, month),
     ]);
@@ -410,7 +426,7 @@ router.get('/', verifyToken, applyRegionFilter, async (req, res) => {
     const tColPrev = Number(colPrev.total_paid);
 
     res.json({
-      meta: { year, month, prev_year: prevYear, prev_month: prevMonth, working_days_cur: wdCur, working_days_prev: wdPrev },
+      meta: { year, month, prev_year: prevYear, prev_month: prevMonth, working_days_cur: wdCur, working_days_prev: wdPrev, date_from: dateFrom, date_to: dateTo },
 
       sales: {
         cur: {

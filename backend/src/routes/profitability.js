@@ -308,8 +308,12 @@ router.get('/daily', verifyToken, async (req, res) => {
     const workingDaysElapsed = countWorkingDays(year, jsMonth, 1, dayUpTo);
     const totalWorkingDays   = countWorkingDays(year, jsMonth, 1, daysInMonth);
 
-    // Fetch snapshots for the requested month with daily increments via LAG
-    // Also pull last snapshot from previous month for first-day delta
+    // Fetch snapshots for the requested month with daily increments via LAG.
+    // Previous month's last row is included in the window so LAG sees it,
+    // but we guard against cross-month subtraction: when the prev row belongs
+    // to a different month (or doesn't exist) the cumulative value itself IS
+    // the daily figure (first working day of the month).
+    const monthStart = `${year}-${String(month).padStart(2,'0')}-01`;
     const { rows } = await pool.query(`
       WITH base AS (
         SELECT
@@ -319,6 +323,7 @@ router.get('/daily', verifyToken, async (req, res) => {
           gross_profit,
           gross_profit_pct,
           qty,
+          LAG(snapshot_date) OVER (ORDER BY snapshot_date) AS prev_date,
           LAG(total_revenue) OVER (ORDER BY snapshot_date) AS prev_revenue,
           LAG(gross_profit)  OVER (ORDER BY snapshot_date) AS prev_gross_profit,
           LAG(qty)           OVER (ORDER BY snapshot_date) AS prev_qty
@@ -334,13 +339,30 @@ router.get('/daily', verifyToken, async (req, res) => {
         gross_profit_pct,
         qty,
         EXTRACT(DAY FROM snapshot_date)::int AS snap_day,
-        ROUND(total_revenue - COALESCE(prev_revenue, 0), 2) AS daily_revenue,
-        ROUND(gross_profit  - COALESCE(prev_gross_profit, 0), 2) AS daily_gross_profit,
-        ROUND(qty           - COALESCE(prev_qty, 0)::numeric, 0)::int AS daily_qty
+        /* If prev row is from the previous month (or absent), this row's
+           cumulative IS the daily value — don't subtract across months. */
+        ROUND(
+          CASE WHEN prev_date IS NULL OR prev_date < date_trunc('month', $1::date)
+          THEN total_revenue
+          ELSE total_revenue - COALESCE(prev_revenue, 0)
+          END
+        , 2) AS daily_revenue,
+        ROUND(
+          CASE WHEN prev_date IS NULL OR prev_date < date_trunc('month', $1::date)
+          THEN gross_profit
+          ELSE gross_profit - COALESCE(prev_gross_profit, 0)
+          END
+        , 2) AS daily_gross_profit,
+        ROUND(
+          CASE WHEN prev_date IS NULL OR prev_date < date_trunc('month', $1::date)
+          THEN qty
+          ELSE qty - COALESCE(prev_qty, 0)::numeric
+          END
+        , 0)::int AS daily_qty
       FROM base
       WHERE snapshot_date >= date_trunc('month', $1::date)
       ORDER BY snapshot_date DESC
-    `, [`${year}-${String(month).padStart(2,'0')}-01`]);
+    `, [monthStart]);
 
     // Working days up to the latest snapshot date (not today), used for accurate daily averages
     const workingDaysWithData = rows.length > 0

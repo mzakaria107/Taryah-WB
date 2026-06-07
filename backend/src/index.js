@@ -30,6 +30,7 @@ const coverageRoutes           = require('./routes/coverage');
 const summaryRoutes            = require('./routes/summary');
 const hypermarketsRoutes       = require('./routes/hypermarkets');
 const collectionsRoutes        = require('./routes/collections');
+const agingRoutes              = require('./routes/aging');
 
 /* ── Auto-run pending DB migrations on startup ── */
 async function runMigrations() {
@@ -99,6 +100,7 @@ app.use('/api/coverage',         coverageRoutes);
 app.use('/api/summary',          summaryRoutes);
 app.use('/api/hypermarkets',     hypermarketsRoutes);
 app.use('/api/collections',      collectionsRoutes);
+app.use('/api/aging',            agingRoutes);
 
 /* ── Daily profitability snapshot — 11:59 PM every day ──────── */
 const cron = require('node-cron');

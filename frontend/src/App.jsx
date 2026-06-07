@@ -25,6 +25,7 @@ const CoveragePage        = lazy(() => import('./pages/CoveragePage'));
 const SummaryPage         = lazy(() => import('./pages/SummaryPage'));
 const HypermarketsPage             = lazy(() => import('./pages/HypermarketsPage'));
 const CollectionsPerformancePage   = lazy(() => import('./pages/CollectionsPerformancePage'));
+const AgingPage                    = lazy(() => import('./pages/AgingPage'));
 
 /* ── Guards ──────────────────────────────────────── */
 function PrivateRoute({ children }) {
@@ -211,6 +212,14 @@ export default function App() {
         <RoleRoute pageKey="collections_performance">
           <AppLayout>
             <PageSuspense><CollectionsPerformancePage /></PageSuspense>
+          </AppLayout>
+        </RoleRoute>
+      } />
+
+      <Route path="/aging" element={
+        <RoleRoute pageKey="aging">
+          <AppLayout>
+            <PageSuspense><AgingPage /></PageSuspense>
           </AppLayout>
         </RoleRoute>
       } />

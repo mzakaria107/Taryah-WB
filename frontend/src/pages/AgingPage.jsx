@@ -1,4 +1,5 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import ReactDOM from 'react-dom';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Printer, ClockArrowUp, X, ExternalLink, ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react';
@@ -462,10 +463,17 @@ function InvoiceModal({ customer, onClose }) {
     retry: 1,
   });
 
+  /* Close on Escape key */
+  useEffect(() => {
+    const handler = e => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', handler);
+    return () => document.removeEventListener('keydown', handler);
+  }, [onClose]);
+
   const fmtN = n => n != null ? Number(n).toLocaleString('ar-SA', { maximumFractionDigits: 0 }) : '—';
   const invoices = data?.invoices || [];
 
-  return (
+  return ReactDOM.createPortal(
     <div className="age-modal-overlay" onClick={onClose}>
       <div className="age-modal" onClick={e => e.stopPropagation()}>
         <div className="age-modal-header">
@@ -591,6 +599,7 @@ function InvoiceModal({ customer, onClose }) {
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

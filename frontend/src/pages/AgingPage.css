@@ -189,6 +189,7 @@
 }
 .age-coll-fill--warn  { background: #f59e0b; }
 .age-coll-fill--alert { background: #ef4444; }
+.age-coll-fill--low   { background: #fde68a; }
 .age-coll-pct { font-size: 0.75rem; color: var(--color-text-muted); min-width: 36px; text-align: left; }
 
 /* ── Sort icon ───────────────────────────────────────────────── */

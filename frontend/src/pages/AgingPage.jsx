@@ -277,6 +277,7 @@ function CustomerTable({ customers, kpis, sortBy, sortDir, onSort, onOpenModal }
             <SortIcon col="collection_rate" sortBy={sortBy} sortDir={sortDir} />
             نسبة التحصيل
           </th>
+          <th>نسبة المتبقي</th>
           <th onClick={() => onSort('total_balance')} className={sortBy === 'total_balance' ? 'age-th--sorted' : ''}>
             <SortIcon col="total_balance" sortBy={sortBy} sortDir={sortDir} />
             إجمالي الدين
@@ -300,6 +301,7 @@ function CustomerTable({ customers, kpis, sortBy, sortDir, onSort, onOpenModal }
             <td key={b.key}>{fmtN(foot[b.key])}</td>
           ))}
           <td>—</td>
+          <td>—</td>
           <td style={{ fontWeight: 800 }}>{fmtN(foot.total_balance)}</td>
           <td>—</td>
           <td />
@@ -310,8 +312,12 @@ function CustomerTable({ customers, kpis, sortBy, sortDir, onSort, onOpenModal }
 }
 
 function CustomerRow({ c, fmtN, onOpenModal }) {
-  const change = parseFloat(c.daily_change || 0);
-  const collRate = parseFloat(c.collection_rate || 0);
+  const change    = parseFloat(c.daily_change    || 0);
+  const collRate  = parseFloat(c.collection_rate || 0);
+  const totalAmt  = parseFloat(c.total_amount    || 0);
+  const totalBal  = parseFloat(c.total_balance   || 0);
+  // نسبة المتبقي = المتبقي / الأصل × 100
+  const remRate   = totalAmt > 0 ? parseFloat((totalBal / totalAmt * 100).toFixed(1)) : 0;
 
   const changeEl = change === 0
     ? <span className="age-change age-change--flat">— بدون تغيير</span>
@@ -320,6 +326,8 @@ function CustomerRow({ c, fmtN, onOpenModal }) {
       : <span className="age-change age-change--up"><span className="age-change-arrow">▲</span>{fmtN(change)}</span>;
 
   const collColor = collRate >= 75 ? '' : collRate >= 50 ? 'age-coll-fill--warn' : 'age-coll-fill--alert';
+  // نسبة المتبقي: كلما ارتفعت زاد الخطر (أحمر عالي، برتقالي متوسط، أصفر منخفض)
+  const remColor  = remRate >= 70 ? 'age-coll-fill--alert' : remRate >= 40 ? 'age-coll-fill--warn' : 'age-coll-fill--low';
 
   return (
     <tr>
@@ -354,6 +362,19 @@ function CustomerRow({ c, fmtN, onOpenModal }) {
             />
           </div>
           <span className="age-coll-pct">{collRate}%</span>
+        </div>
+      </td>
+
+      {/* نسبة المتبقي */}
+      <td>
+        <div className="age-coll-bar">
+          <div className="age-coll-track">
+            <div
+              className={`age-coll-fill ${remColor}`}
+              style={{ width: `${Math.min(remRate, 100)}%` }}
+            />
+          </div>
+          <span className="age-coll-pct">{remRate}%</span>
         </div>
       </td>
 
@@ -434,13 +455,15 @@ function RegionTable({ regions, total }) {
    InvoiceModal — invoice-level detail for one customer
 ═══════════════════════════════════════════════════════════════ */
 function InvoiceModal({ customer, onClose }) {
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['aging-invoices', customer.id],
     queryFn:  () => fetchInvoices(customer.id),
     staleTime: 60_000,
+    retry: 1,
   });
 
   const fmtN = n => n != null ? Number(n).toLocaleString('ar-SA', { maximumFractionDigits: 0 }) : '—';
+  const invoices = data?.invoices || [];
 
   return (
     <div className="age-modal-overlay" onClick={onClose}>
@@ -466,15 +489,34 @@ function InvoiceModal({ customer, onClose }) {
         <div className="age-modal-body">
           {isLoading && <div className="age-loading">جاري التحميل…</div>}
 
-          {!isLoading && data && (
+          {isError && (
+            <div className="age-empty" style={{ color: '#dc2626' }}>
+              حدث خطأ في تحميل بيانات الفواتير
+              <button
+                onClick={() => refetch()}
+                style={{ marginRight: 10, padding: '4px 12px', borderRadius: 6, border: '1px solid #dc2626', background: 'none', color: '#dc2626', cursor: 'pointer' }}
+              >
+                إعادة المحاولة
+              </button>
+            </div>
+          )}
+
+          {!isLoading && !isError && invoices.length === 0 && (
+            <div className="age-empty">لا توجد فواتير مستحقة لهذا العميل</div>
+          )}
+
+          {!isLoading && !isError && invoices.length > 0 && (
             <>
               {/* Summary chips */}
-              <div style={{ display: 'flex', gap: 10, marginBottom: 14, flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', gap: 10, marginBottom: 14, flexWrap: 'wrap', alignItems: 'center' }}>
                 <span style={{ fontSize: '0.83rem', color: 'var(--color-text-muted)' }}>
-                  {data.invoices.length} فاتورة مستحقة
+                  {invoices.length} فاتورة مستحقة
                 </span>
                 <span style={{ fontSize: '0.83rem', fontWeight: 700 }}>
-                  إجمالي الدين: {fmtN(data.invoices.reduce((s, i) => s + parseFloat(i.balance || 0), 0))} ر.س
+                  إجمالي الدين: {fmtN(invoices.reduce((s, i) => s + parseFloat(i.balance || 0), 0))} ر.س
+                </span>
+                <span style={{ fontSize: '0.83rem', color: 'var(--color-text-muted)' }}>
+                  القيمة الأصلية: {fmtN(invoices.reduce((s, i) => s + parseFloat(i.original_amount || 0), 0))} ر.س
                 </span>
               </div>
 
@@ -493,12 +535,12 @@ function InvoiceModal({ customer, onClose }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {data.invoices.map((inv, i) => {
+                  {invoices.map((inv, i) => {
                     const paidPct = parseFloat(inv.paid_pct || 0);
                     const remPct  = parseFloat(inv.remaining_pct || 0);
                     return (
                       <tr key={inv.invoice_number || i}>
-                        <td style={{ fontFamily: 'monospace' }}>{inv.invoice_number}</td>
+                        <td style={{ fontFamily: 'monospace', direction: 'ltr', textAlign: 'right' }}>{inv.invoice_number}</td>
                         <td>{fmtDate(inv.invoice_date)}</td>
                         <td>
                           <span className={`age-badge ${ageBadgeClass(inv.age_days)}`}>
@@ -532,24 +574,20 @@ function InvoiceModal({ customer, onClose }) {
                   <tr>
                     <td colSpan={3} style={{ fontWeight: 700 }}>الإجمالي</td>
                     <td style={{ fontWeight: 700 }}>
-                      {fmtN(data.invoices.reduce((s, i) => s + parseFloat(i.original_amount || 0), 0))}
+                      {fmtN(invoices.reduce((s, i) => s + parseFloat(i.original_amount || 0), 0))}
                     </td>
                     <td style={{ color: '#15803d', fontWeight: 700 }}>
-                      {fmtN(data.invoices.reduce((s, i) => s + parseFloat(i.paid_amount || 0), 0))}
+                      {fmtN(invoices.reduce((s, i) => s + parseFloat(i.paid_amount || 0), 0))}
                     </td>
                     <td />
                     <td style={{ color: '#dc2626', fontWeight: 700 }}>
-                      {fmtN(data.invoices.reduce((s, i) => s + parseFloat(i.balance || 0), 0))}
+                      {fmtN(invoices.reduce((s, i) => s + parseFloat(i.balance || 0), 0))}
                     </td>
                     <td />
                   </tr>
                 </tfoot>
               </table>
             </>
-          )}
-
-          {!isLoading && data?.invoices?.length === 0 && (
-            <div className="age-empty">لا توجد فواتير مستحقة لهذا العميل</div>
           )}
         </div>
       </div>

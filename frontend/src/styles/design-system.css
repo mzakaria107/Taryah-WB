@@ -28,6 +28,12 @@
   --color-bg-alt:    #F8FAFC;
   --color-bg-header: #1B2B1E;
 
+  /* Aliases — used by AgingPage, CollectionsPerformancePage, etc. */
+  --color-surface:   #ffffff;
+  --color-bg:        #F4F6F8;
+  --color-text:      #1A202C;
+  --color-primary:   #0ea5e9;
+
   /* Borders */
   --color-border:       #E2E8F0;
   --color-border-hover: #B2C5B5;

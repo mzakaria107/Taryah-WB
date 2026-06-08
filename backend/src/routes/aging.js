@@ -33,6 +33,7 @@ const SORT_COLS = {
   customer_name:   'customer_name',
   daily_change:    'daily_change',
   collection_rate: 'collection_rate',
+  avg_age_days:    'avg_age_days',
 };
 
 /* ═══════════════════════════════════════════════════════════════
@@ -144,6 +145,14 @@ router.get('/', verifyToken, applyRegionFilter, async (req, res) => {
         ROUND(SUM(i.paid_amount)::numeric, 2)       AS total_paid,
         COUNT(*)::int                               AS invoice_count,
         ROUND((SUM(i.paid_amount) / NULLIF(SUM(i.original_amount),0) * 100)::numeric, 1) AS collection_rate,
+        -- Weighted-average debt age (days), weighted by outstanding balance
+        ROUND(
+          SUM(
+            CASE WHEN i.invoice_date IS NOT NULL
+            THEN (CURRENT_DATE - i.invoice_date) * i.balance
+            ELSE 121 * i.balance END
+          ) / NULLIF(SUM(i.balance), 0)
+        )::int AS avg_age_days,
         -- Daily change vs most recent previous snapshot
         COALESCE(bs.total_balance, SUM(i.balance)) AS prev_balance,
         ROUND((SUM(i.balance) - COALESCE(bs.total_balance, SUM(i.balance)))::numeric, 2) AS daily_change

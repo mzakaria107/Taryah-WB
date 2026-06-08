@@ -203,6 +203,19 @@
 .age-coll-fill--low   { background: #fde68a; }
 .age-coll-pct { font-size: 0.75rem; color: var(--color-text-muted); min-width: 36px; text-align: left; }
 
+/* ── Average-age badge ───────────────────────────────────────── */
+.age-avg-badge {
+  display: inline-block; border-radius: 20px;
+  padding: 2px 10px; font-size: 0.78rem; font-weight: 700;
+  white-space: nowrap; direction: ltr;
+}
+.age-avg--b1 { background: #dcfce7; color: #15803d; }
+.age-avg--b2 { background: #ecfccb; color: #4d7c0f; }
+.age-avg--b3 { background: #fef9c3; color: #854d0e; }
+.age-avg--b4 { background: #ffedd5; color: #c2410c; }
+.age-avg--b5 { background: #fee2e2; color: #dc2626; }
+.age-avg--b6 { background: #450a0a; color: #fca5a5; }
+
 /* ── Sort icon ───────────────────────────────────────────────── */
 .age-sort-icon { font-size: 0.7rem; margin-right: 3px; opacity: 0.7; }
 

@@ -50,7 +50,7 @@ router.get('/', verifyToken, applyRegionFilter, async (req, res) => {
     } = req.query;
 
     /* ── Build WHERE conditions ───────────────────────────────── */
-    const conditions = [`i.status IN ('unpaid','partial')`];
+    const conditions = [`(i.status IN ('unpaid','partial') OR i.balance < 0)`];
     const params     = [];
     let   p          = 1;
 
@@ -98,7 +98,7 @@ router.get('/', verifyToken, applyRegionFilter, async (req, res) => {
           ROUND(SUM(balance)::numeric, 2),
           COUNT(*)::int
         FROM invoices
-        WHERE status IN ('unpaid','partial')
+        WHERE (status IN ('unpaid','partial') OR balance < 0)
         GROUP BY customer_id
         ON CONFLICT (snapshot_date, customer_id) DO UPDATE
           SET total_balance = EXCLUDED.total_balance,

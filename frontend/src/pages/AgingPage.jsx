@@ -128,7 +128,7 @@ export default function AgingPage() {
       '1-15 يوم', '16-30 يوم', '31-60 يوم',
       '61-90 يوم', '91-120 يوم', 'أكثر من 120',
       'نسبة التحصيل %', 'نسبة المتبقي %',
-      'متوسط العمر (يوم)', 'إجمالي الدين', 'التغير اليومي',
+      'عمر أقدم دين (يوم)', 'إجمالي الدين', 'التغير اليومي',
     ];
     const custRows = (data.customers || []).map(c => {
       const totalAmt = parseFloat(c.total_amount || 0);
@@ -440,7 +440,7 @@ function CustomerTable({ customers, kpis, sortBy, sortDir, onSort, onOpenModal }
           <th>نسبة المتبقي</th>
           <th onClick={() => onSort('avg_age_days')} className={sortBy === 'avg_age_days' ? 'age-th--sorted' : ''}>
             <SortIcon col="avg_age_days" sortBy={sortBy} sortDir={sortDir} />
-            متوسط العمر
+            عمر أقدم دين
           </th>
           <th onClick={() => onSort('total_balance')} className={sortBy === 'total_balance' ? 'age-th--sorted' : ''}>
             <SortIcon col="total_balance" sortBy={sortBy} sortDir={sortDir} />

@@ -1,7 +1,8 @@
 -- Migration 053: fridge contract file attachments
+-- Note: fridges.id is UUID, so fridge_id must be UUID too
 CREATE TABLE IF NOT EXISTS fridge_contracts (
-  id            SERIAL PRIMARY KEY,
-  fridge_id     INTEGER      NOT NULL REFERENCES fridges(id) ON DELETE CASCADE,
+  id            SERIAL       PRIMARY KEY,
+  fridge_id     UUID         NOT NULL REFERENCES fridges(id) ON DELETE CASCADE,
   original_name VARCHAR(500) NOT NULL,
   stored_name   VARCHAR(500) NOT NULL,
   file_size     INTEGER,

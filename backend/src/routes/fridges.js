@@ -16,11 +16,39 @@
 const express = require('express');
 const multer  = require('multer');
 const xlsx    = require('xlsx');
+const path    = require('path');
+const fs      = require('fs');
 const router  = express.Router();
 const pool    = require('../db/pool');
 const { verifyToken, requireRoles, applyRegionFilter } = require('../middleware/auth');
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
+
+/* ── Contract file storage ─────────────────────────────────── */
+const CONTRACT_DIR = path.resolve(process.env.UPLOAD_DIR || './uploads', 'fridge-contracts');
+if (!fs.existsSync(CONTRACT_DIR)) fs.mkdirSync(CONTRACT_DIR, { recursive: true });
+
+function fixName(raw) {
+  try { return Buffer.from(raw, 'latin1').toString('utf8'); } catch { return raw; }
+}
+
+const contractStorage = multer.diskStorage({
+  destination: (req, _file, cb) => {
+    const dir = path.join(CONTRACT_DIR, String(req.params.id || 'unknown'));
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    cb(null, dir);
+  },
+  filename: (_req, file, cb) => {
+    const ts   = Date.now();
+    const name = fixName(file.originalname);
+    const safe = name.replace(/[^a-zA-Z0-9.؀-ۿ_-]/g, '_');
+    cb(null, `${ts}-${safe}`);
+  },
+});
+const contractUpload = multer({
+  storage: contractStorage,
+  limits:  { fileSize: 50 * 1024 * 1024, files: 10 },
+});
 
 /* ── Roles allowed to write/modify fridges ─────────────────── */
 const FRIDGE_EDITORS = ['super_admin', 'it_admin'];
@@ -440,7 +468,8 @@ router.get('/', async (req, res) => {
          r.name_ar AS region_name,
          (SELECT COUNT(*) FROM fridges f2
           WHERE f2.customer_code = f.customer_code AND f.customer_code IS NOT NULL
-         )::int AS customer_fridge_count
+         )::int AS customer_fridge_count,
+         (SELECT COUNT(*) FROM fridge_contracts fc WHERE fc.fridge_id = f.id)::int AS contract_count
        FROM fridges f
        LEFT JOIN regions r ON r.id = f.region_id
        ${where}
@@ -688,9 +717,10 @@ router.get('/sales-report', async (req, res) => {
 /* ── Detail ────────────────────────────────────────────────── */
 router.get('/:id', async (req, res) => {
   try {
-    const [fridgeRes, histRes] = await Promise.all([
+    const [fridgeRes, histRes, contractsRes] = await Promise.all([
       pool.query(
-        `SELECT f.*, r.name_ar AS region_name
+        `SELECT f.*, r.name_ar AS region_name,
+           (SELECT COUNT(*) FROM fridge_contracts fc WHERE fc.fridge_id = f.id)::int AS contract_count
          FROM fridges f
          LEFT JOIN regions r ON r.id = f.region_id
          WHERE f.id = $1`,
@@ -700,9 +730,14 @@ router.get('/:id', async (req, res) => {
         `SELECT * FROM fridge_transfers WHERE fridge_id = $1 ORDER BY transferred_at DESC`,
         [req.params.id]
       ),
+      pool.query(
+        `SELECT id, original_name, stored_name, file_size, mime_type, uploaded_at
+         FROM fridge_contracts WHERE fridge_id = $1 ORDER BY uploaded_at DESC`,
+        [req.params.id]
+      ),
     ]);
     if (!fridgeRes.rowCount) return res.status(404).json({ error: 'الثلاجة غير موجودة' });
-    res.json({ fridge: fridgeRes.rows[0], history: histRes.rows });
+    res.json({ fridge: fridgeRes.rows[0], history: histRes.rows, contracts: contractsRes.rows });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -827,6 +862,105 @@ router.post('/:id/transfer', canEdit, async (req, res) => {
     res.status(500).json({ error: e.message });
   } finally {
     client.release();
+  }
+});
+
+/* ══════════════════════════════════════════════════════════════
+   CONTRACT FILES  — /api/fridges/:id/contracts
+══════════════════════════════════════════════════════════════ */
+
+/* ── List contracts ── */
+router.get('/:id/contracts', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, original_name, file_size, mime_type, uploaded_at
+       FROM fridge_contracts WHERE fridge_id = $1 ORDER BY uploaded_at DESC`,
+      [req.params.id]
+    );
+    res.json({ contracts: rows });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+/* ── Upload one or more contract files ── */
+router.post(
+  '/:id/contracts',
+  canEdit,
+  contractUpload.array('files', 10),
+  async (req, res) => {
+    if (!req.files?.length) return res.status(400).json({ error: 'لم يتم إرفاق ملفات' });
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      const inserted = [];
+      for (const f of req.files) {
+        const originalName = fixName(f.originalname);
+        const { rows } = await client.query(
+          `INSERT INTO fridge_contracts
+             (fridge_id, original_name, stored_name, file_size, mime_type, uploaded_by)
+           VALUES ($1, $2, $3, $4, $5, $6)
+           RETURNING id, original_name, file_size, mime_type, uploaded_at`,
+          [req.params.id, originalName, f.filename, f.size, f.mimetype, req.user.id]
+        );
+        inserted.push(rows[0]);
+      }
+
+      await client.query('COMMIT');
+      res.status(201).json({ contracts: inserted, count: inserted.length });
+    } catch (e) {
+      await client.query('ROLLBACK');
+      // Clean up uploaded files on DB error
+      for (const f of req.files) {
+        try { fs.unlinkSync(f.path); } catch (_) {}
+      }
+      res.status(500).json({ error: e.message });
+    } finally {
+      client.release();
+    }
+  }
+);
+
+/* ── Download a contract file ── */
+router.get('/:id/contracts/:fileId/download', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT * FROM fridge_contracts WHERE id = $1 AND fridge_id = $2`,
+      [req.params.fileId, req.params.id]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'الملف غير موجود' });
+
+    const file = rows[0];
+    const filePath = path.join(CONTRACT_DIR, String(req.params.id), file.stored_name);
+
+    if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'الملف محذوف من الخادم' });
+
+    res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(file.original_name)}`);
+    res.setHeader('Content-Type', file.mime_type || 'application/octet-stream');
+    res.sendFile(filePath);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+/* ── Delete a contract file ── */
+router.delete('/:id/contracts/:fileId', canEdit, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `DELETE FROM fridge_contracts WHERE id = $1 AND fridge_id = $2 RETURNING *`,
+      [req.params.fileId, req.params.id]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'الملف غير موجود' });
+
+    // Delete physical file
+    const filePath = path.join(CONTRACT_DIR, String(req.params.id), rows[0].stored_name);
+    try { if (fs.existsSync(filePath)) fs.unlinkSync(filePath); } catch (_) {}
+
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
   }
 });
 

@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { X, Pencil, Trash2, Search, RefreshCw, Plus, Upload, FileText, CheckCircle, AlertCircle, ChevronDown, ArrowUp, ArrowDown, ArrowUpDown, Printer } from 'lucide-react';
+import { X, Pencil, Trash2, Search, RefreshCw, Plus, Upload, FileText, CheckCircle, AlertCircle, ChevronDown, ArrowUp, ArrowDown, ArrowUpDown, Printer, Paperclip, Download, Trash } from 'lucide-react';
 import client from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import './FridgesPage.css';
@@ -51,6 +51,17 @@ const api = {
       headers: { 'Content-Type': 'multipart/form-data' },
     }).then(r => r.data);
   },
+  /* contract files */
+  contracts:       (id)         => client.get(`/fridges/${id}/contracts`).then(r => r.data.contracts),
+  uploadContracts: (id, files)  => {
+    const fd = new FormData();
+    files.forEach(f => fd.append('files', f));
+    return client.post(`/fridges/${id}/contracts`, fd, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }).then(r => r.data);
+  },
+  deleteContract:  (id, fileId) => client.delete(`/fridges/${id}/contracts/${fileId}`).then(r => r.data),
+  downloadContractUrl: (id, fileId) => `/api/fridges/${id}/contracts/${fileId}/download`,
 };
 
 /* ── Helpers ─────────────────────────────────────────────── */
@@ -374,6 +385,149 @@ function AddFridgeForm({ regions, onSaved, editData, editId, onCancel }) {
 }
 
 /* ══════════════════════════════════════════════════════════
+   CONTRACT FILES SECTION
+   ══════════════════════════════════════════════════════════ */
+function ContractFilesSection({ fridgeId, contracts: initialContracts, admin, onChanged }) {
+  const qc = useQueryClient();
+  const fileInputRef = useRef(null);
+  const dropRef      = useRef(null);
+
+  const [contracts, setContracts] = useState(initialContracts);
+  const [uploading, setUploading] = useState(false);
+  const [uploadErr, setUploadErr] = useState('');
+  const [dragging,  setDragging]  = useState(false);
+
+  // Sync when parent re-fetches
+  useEffect(() => { setContracts(initialContracts); }, [initialContracts]);
+
+  const doUpload = async (files) => {
+    if (!files?.length) return;
+    setUploading(true); setUploadErr('');
+    try {
+      const res = await api.uploadContracts(fridgeId, Array.from(files));
+      setContracts(prev => [...res.contracts, ...prev]);
+      onChanged?.();
+      qc.invalidateQueries({ queryKey: ['fridges'] });
+    } catch (e) {
+      setUploadErr(e.response?.data?.error || 'فشل رفع الملفات');
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const doDelete = async (fileId, name) => {
+    if (!window.confirm(`حذف الملف "${name}"؟`)) return;
+    try {
+      await api.deleteContract(fridgeId, fileId);
+      setContracts(prev => prev.filter(c => c.id !== fileId));
+      onChanged?.();
+      qc.invalidateQueries({ queryKey: ['fridges'] });
+    } catch (e) {
+      alert(e.response?.data?.error || 'فشل الحذف');
+    }
+  };
+
+  /* drag & drop handlers */
+  const onDragOver  = (e) => { e.preventDefault(); setDragging(true);  };
+  const onDragLeave = ()  => setDragging(false);
+  const onDrop      = (e) => { e.preventDefault(); setDragging(false); doUpload(e.dataTransfer.files); };
+
+  function fmtSize(bytes) {
+    if (!bytes) return '';
+    if (bytes < 1024)       return `${bytes} B`;
+    if (bytes < 1024*1024)  return `${(bytes/1024).toFixed(1)} KB`;
+    return `${(bytes/1024/1024).toFixed(1)} MB`;
+  }
+
+  return (
+    <div className="frg-contracts-section">
+      {/* Header */}
+      <div className="frg-contracts-header">
+        <span className="frg-contracts-title">
+          <Paperclip size={14} />
+          ملفات العقد
+          {contracts.length > 0
+            ? <span className="frg-contracts-count frg-contracts-count--yes">{contracts.length} ملف</span>
+            : <span className="frg-contracts-count frg-contracts-count--no">لا يوجد ملف</span>
+          }
+        </span>
+        {admin && (
+          <>
+            <button
+              className="frg-btn frg-btn-sm frg-btn-primary"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploading}
+            >
+              {uploading
+                ? <><RefreshCw size={12} className="frg-spin" /> جارٍ الرفع…</>
+                : <><Upload size={12} /> رفع ملف</>
+              }
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.xls,.xlsx"
+              style={{ display: 'none' }}
+              onChange={e => doUpload(e.target.files)}
+            />
+          </>
+        )}
+      </div>
+
+      {uploadErr && <div className="frg-alert frg-alert-error" style={{ margin: '6px 0' }}>{uploadErr}</div>}
+
+      {/* Drop zone (shown when no files or always) */}
+      {admin && (
+        <div
+          ref={dropRef}
+          className={`frg-drop-zone${dragging ? ' frg-drop-zone--active' : ''}`}
+          onDragOver={onDragOver}
+          onDragLeave={onDragLeave}
+          onDrop={onDrop}
+          onClick={() => fileInputRef.current?.click()}
+        >
+          <Upload size={16} />
+          <span>اسحب الملفات هنا أو انقر للاختيار</span>
+          <span style={{ fontSize: '0.72rem', color: '#9ca3af' }}>PDF · Word · صورة · Excel — حتى 50 MB لكل ملف</span>
+        </div>
+      )}
+
+      {/* File list */}
+      {contracts.length > 0 && (
+        <ul className="frg-contract-list">
+          {contracts.map(c => (
+            <li key={c.id} className="frg-contract-item">
+              <FileText size={15} className="frg-contract-icon" />
+              <span className="frg-contract-name" title={c.original_name}>{c.original_name}</span>
+              <span className="frg-contract-size">{fmtSize(c.file_size)}</span>
+              <a
+                href={api.downloadContractUrl(fridgeId, c.id)}
+                className="frg-btn frg-btn-ghost frg-btn-xs"
+                title="تنزيل"
+                download
+              >
+                <Download size={12} />
+              </a>
+              {admin && (
+                <button
+                  className="frg-btn frg-btn-danger frg-btn-xs"
+                  title="حذف الملف"
+                  onClick={() => doDelete(c.id, c.original_name)}
+                >
+                  <Trash size={12} />
+                </button>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════════════════
    FRIDGE DETAIL MODAL
    ══════════════════════════════════════════════════════════ */
 function FridgeDetailModal({ fridgeId, regions, onClose, onChanged }) {
@@ -587,6 +741,14 @@ function FridgeDetailModal({ fridgeId, regions, onClose, onChanged }) {
                   </div>
                 )}
               </div>
+
+              {/* ── Contract Files Section ── */}
+              <ContractFilesSection
+                fridgeId={fridgeId}
+                contracts={data.contracts || []}
+                admin={admin}
+                onChanged={invalidate}
+              />
 
               {/* ── Action Buttons ── */}
               <div className="frg-detail-actions">
@@ -865,6 +1027,7 @@ function FridgesList({ regions, onAddClick }) {
                 <th>الخط</th>
                 <th>الحالة</th>
                 <th>تاريخ العقد</th>
+                <th title="ملفات العقد المرفوعة">ملف العقد</th>
                 <th>الثلاجات/عميل</th>
                 <th className="frg-no-print">إجراءات</th>
               </tr>
@@ -894,6 +1057,16 @@ function FridgesList({ regions, onAddClick }) {
                     <td dir="ltr">{f.route_code ?? '—'}</td>
                     <td><StatusBadge status={f.status} /></td>
                     <td>{formatDate(f.contract_date)}</td>
+                    <td>
+                      {f.contract_count > 0
+                        ? <span className="frg-contract-badge frg-contract-badge--yes" title={`${f.contract_count} ملف مرفوع`}>
+                            <Paperclip size={11} /> {f.contract_count}
+                          </span>
+                        : <span className="frg-contract-badge frg-contract-badge--no" title="لا يوجد ملف عقد">
+                            لا يوجد
+                          </span>
+                      }
+                    </td>
                     <td>
                       {cnt > 1
                         ? <span className="frg-multi-badge">{cnt} ثلاجات</span>

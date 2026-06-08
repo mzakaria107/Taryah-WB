@@ -56,10 +56,11 @@ async function fetchInvoices(customerId) {
 ═══════════════════════════════════════════════════════════════ */
 export default function AgingPage() {
   /* ── Filters ─────────────────────────────────────────────────── */
-  const [regionId,  setRegionId]  = useState('');
-  const [routeId,   setRouteId]   = useState('');
-  const [search,    setSearch]    = useState('');
-  const [custType,  setCustType]  = useState('');
+  const [regionId,      setRegionId]      = useState('');
+  const [routeId,       setRouteId]       = useState('');
+  const [search,        setSearch]        = useState('');
+  const [custType,      setCustType]      = useState('');
+  const [excludeDirect, setExcludeDirect] = useState(true); // ON by default
   const [sortBy,    setSortBy]    = useState('total_balance');
   const [sortDir,   setSortDir]   = useState('DESC');
   const [activeTab, setActiveTab] = useState('customers'); // 'customers' | 'regions'
@@ -70,12 +71,14 @@ export default function AgingPage() {
   /* ── Query ───────────────────────────────────────────────────── */
   const qParams = useMemo(() => {
     const p = { sort_by: sortBy, sort_dir: sortDir, limit: 1000 };
-    if (regionId)  p.region_id    = regionId;
-    if (routeId)   p.route_id     = routeId;
-    if (search)    p.search       = search;
-    if (custType)  p.customer_type = custType;
+    if (regionId)  p.region_id     = regionId;
+    if (routeId)   p.route_id      = routeId;
+    if (search)    p.search        = search;
+    // excludeDirect overrides the manual custType filter
+    if (excludeDirect)       p.customer_type = 'route';
+    else if (custType)       p.customer_type = custType;
     return p;
-  }, [regionId, routeId, search, custType, sortBy, sortDir]);
+  }, [regionId, routeId, search, custType, excludeDirect, sortBy, sortDir]);
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['aging', qParams],
@@ -240,6 +243,16 @@ export default function AgingPage() {
 
       {/* Filters */}
       <div className="age-filters age-no-print">
+
+        {/* ── زر استبعاد المباشر — دائم الظهور ── */}
+        <button
+          className={`age-exclude-direct-btn${excludeDirect ? ' age-exclude-direct-btn--on' : ''}`}
+          onClick={() => setExcludeDirect(v => !v)}
+        >
+          <span className={`age-exclude-dot${excludeDirect ? ' age-exclude-dot--on' : ''}`} />
+          {excludeDirect ? '✕ مديونية المندوب مستبعدة' : '⊕ عرض مديونية المندوب'}
+        </button>
+
         <div className="age-filter-group">
           <span className="age-filter-label">بحث عن عميل</span>
           <input
@@ -258,14 +271,17 @@ export default function AgingPage() {
             ))}
           </select>
         </div>
-        <div className="age-filter-group">
-          <span className="age-filter-label">نوع العميل</span>
-          <select className="age-filter-select" value={custType} onChange={e => setCustType(e.target.value)}>
-            <option value="">الكل</option>
-            <option value="route">مسارات</option>
-            <option value="direct">مباشر</option>
-          </select>
-        </div>
+        {/* نوع العميل — يُخفى إذا كان الاستبعاد مفعّلاً */}
+        {!excludeDirect && (
+          <div className="age-filter-group">
+            <span className="age-filter-label">نوع العميل</span>
+            <select className="age-filter-select" value={custType} onChange={e => setCustType(e.target.value)}>
+              <option value="">الكل</option>
+              <option value="route">مسارات</option>
+              <option value="direct">مباشر</option>
+            </select>
+          </div>
+        )}
         {isDirty && (
           <button className="age-filter-reset" onClick={handleReset}>إعادة تعيين</button>
         )}

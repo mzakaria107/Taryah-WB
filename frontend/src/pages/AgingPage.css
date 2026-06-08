@@ -51,6 +51,32 @@
   background: var(--color-bg); color: var(--color-text);
   min-width: 140px; direction: rtl;
 }
+/* ── Exclude-direct toggle ───────────────────────────────────── */
+.age-exclude-direct-btn {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 16px; border-radius: 8px; font-size: 0.85rem;
+  font-weight: 700; cursor: pointer; transition: all 0.18s;
+  align-self: flex-end; white-space: nowrap;
+  border: 1.5px solid var(--color-border);
+  background: var(--color-surface, #fff);
+  color: var(--color-text-muted);
+}
+.age-exclude-direct-btn--on {
+  background: #1e3a5f;
+  border-color: #1e3a5f;
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(30,58,95,0.25);
+}
+.age-exclude-direct-btn:hover:not(.age-exclude-direct-btn--on) {
+  border-color: #1e3a5f; color: #1e3a5f;
+}
+.age-exclude-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--color-border);
+  flex-shrink: 0;
+}
+.age-exclude-dot--on { background: #60a5fa; }
+
 .age-filter-reset {
   padding: 8px 14px; background: transparent;
   border: 1.5px solid var(--color-danger, #ef4444);

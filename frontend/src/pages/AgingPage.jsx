@@ -2,7 +2,8 @@ import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import ReactDOM from 'react-dom';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Printer, ClockArrowUp, X, ExternalLink, ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react';
+import { Printer, ClockArrowUp, X, ExternalLink, ChevronUp, ChevronDown, ChevronsUpDown, FileSpreadsheet } from 'lucide-react';
+import * as XLSX from 'xlsx';
 import api from '../api/client';
 import './AgingPage.css';
 
@@ -105,6 +106,107 @@ export default function AgingPage() {
     window.onafterprint = () => { document.title = prev; };
   };
 
+  /* ── Excel export ────────────────────────────────────────────── */
+  const handleExport = () => {
+    if (!data) return;
+    const wb = XLSX.utils.book_new();
+
+    /* ── Sheet 1: Customers matrix ── */
+    const custHeader = [
+      'العميل',
+      '1-15 يوم', '16-30 يوم', '31-60 يوم',
+      '61-90 يوم', '91-120 يوم', 'أكثر من 120',
+      'نسبة التحصيل %', 'نسبة المتبقي %',
+      'إجمالي الدين', 'التغير اليومي',
+    ];
+    const custRows = (data.customers || []).map(c => {
+      const totalAmt = parseFloat(c.total_amount || 0);
+      const totalBal = parseFloat(c.total_balance || 0);
+      const remRate  = totalAmt > 0 ? parseFloat((totalBal / totalAmt * 100).toFixed(1)) : 0;
+      return [
+        c.customer_name,
+        parseFloat(c.b_1_15    || 0),
+        parseFloat(c.b_16_30   || 0),
+        parseFloat(c.b_31_60   || 0),
+        parseFloat(c.b_61_90   || 0),
+        parseFloat(c.b_91_120  || 0),
+        parseFloat(c.b_120_plus|| 0),
+        parseFloat(c.collection_rate || 0),
+        remRate,
+        totalBal,
+        parseFloat(c.daily_change || 0),
+      ];
+    });
+    // Footer totals row
+    const k = data.kpis || {};
+    custRows.push([
+      'الإجمالي',
+      parseFloat(k.b_1_15 || 0), parseFloat(k.b_16_30 || 0),
+      parseFloat(k.b_31_60 || 0), parseFloat(k.b_61_90 || 0),
+      parseFloat(k.b_91_120 || 0), parseFloat(k.b_120_plus || 0),
+      '', '', parseFloat(k.total_balance || 0), '',
+    ]);
+    const ws1 = XLSX.utils.aoa_to_sheet([custHeader, ...custRows]);
+    // Column widths
+    ws1['!cols'] = [
+      { wch: 28 }, { wch: 12 }, { wch: 12 }, { wch: 12 },
+      { wch: 12 }, { wch: 13 }, { wch: 14 },
+      { wch: 16 }, { wch: 16 }, { wch: 14 }, { wch: 13 },
+    ];
+    XLSX.utils.book_append_sheet(wb, ws1, 'العملاء');
+
+    /* ── Sheet 2: Region summary ── */
+    const regHeader = [
+      'المنطقة', '1-15 يوم', '16-30 يوم', '31-60 يوم',
+      '61-90 يوم', '91-120 يوم', 'أكثر من 120',
+      'إجمالي الدين', '% من الإجمالي', 'عدد العملاء',
+    ];
+    const grandTotal = parseFloat(k.total_balance || 0);
+    const regRows = (data.by_region || []).map(r => {
+      const bal = parseFloat(r.total_balance || 0);
+      return [
+        r.region_name || `منطقة ${r.region_id}`,
+        parseFloat(r.b_1_15 || 0), parseFloat(r.b_16_30 || 0),
+        parseFloat(r.b_31_60 || 0), parseFloat(r.b_61_90 || 0),
+        parseFloat(r.b_91_120 || 0), parseFloat(r.b_120_plus || 0),
+        bal,
+        grandTotal > 0 ? parseFloat((bal / grandTotal * 100).toFixed(1)) : 0,
+        r.customer_count || 0,
+      ];
+    });
+    const ws2 = XLSX.utils.aoa_to_sheet([regHeader, ...regRows]);
+    ws2['!cols'] = [
+      { wch: 20 }, { wch: 12 }, { wch: 12 }, { wch: 12 },
+      { wch: 12 }, { wch: 13 }, { wch: 14 },
+      { wch: 14 }, { wch: 13 }, { wch: 13 },
+    ];
+    XLSX.utils.book_append_sheet(wb, ws2, 'المناطق');
+
+    /* ── Sheet 3: KPI summary ── */
+    const today = data.snapshot_date || new Date().toLocaleDateString('en-CA');
+    const kpiRows = [
+      ['تاريخ التقرير', today],
+      ['مقارنة بتاريخ', data.prev_date || '—'],
+      [''],
+      ['إجمالي المديونية',    parseFloat(k.total_balance || 0)],
+      ['عدد العملاء',         k.customer_count || 0],
+      ['عدد الفواتير',        k.invoice_count  || 0],
+      [''],
+      ['الفئة', 'المبلغ', '% من الإجمالي'],
+      ['1-15 يوم',      parseFloat(k.b_1_15    || 0), grandTotal > 0 ? +((k.b_1_15    / grandTotal * 100).toFixed(1)) : 0],
+      ['16-30 يوم',     parseFloat(k.b_16_30   || 0), grandTotal > 0 ? +((k.b_16_30   / grandTotal * 100).toFixed(1)) : 0],
+      ['31-60 يوم',     parseFloat(k.b_31_60   || 0), grandTotal > 0 ? +((k.b_31_60   / grandTotal * 100).toFixed(1)) : 0],
+      ['61-90 يوم',     parseFloat(k.b_61_90   || 0), grandTotal > 0 ? +((k.b_61_90   / grandTotal * 100).toFixed(1)) : 0],
+      ['91-120 يوم',    parseFloat(k.b_91_120  || 0), grandTotal > 0 ? +((k.b_91_120  / grandTotal * 100).toFixed(1)) : 0],
+      ['أكثر من 120 يوم', parseFloat(k.b_120_plus || 0), grandTotal > 0 ? +((k.b_120_plus / grandTotal * 100).toFixed(1)) : 0],
+    ];
+    const ws3 = XLSX.utils.aoa_to_sheet(kpiRows);
+    ws3['!cols'] = [{ wch: 22 }, { wch: 16 }, { wch: 16 }];
+    XLSX.utils.book_append_sheet(wb, ws3, 'ملخص KPI');
+
+    XLSX.writeFile(wb, `أعمار_المديونيات_${today}.xlsx`);
+  };
+
   /* ─────────────────────────────────────────────────────────────
      Render
   ───────────────────────────────────────────────────────────── */
@@ -122,6 +224,14 @@ export default function AgingPage() {
       <div className="age-header age-no-print">
         <ClockArrowUp size={24} color="#dc2626" />
         <h1 className="age-title">أعمار المديونيات</h1>
+        <button
+          className="age-export-btn"
+          onClick={handleExport}
+          disabled={!data}
+          title="تصدير إلى Excel"
+        >
+          <FileSpreadsheet size={16} /> تصدير Excel
+        </button>
         <button className="age-print-btn" onClick={handlePrint}>
           <Printer size={16} /> طباعة / PDF
         </button>

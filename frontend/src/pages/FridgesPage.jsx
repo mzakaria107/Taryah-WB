@@ -20,7 +20,7 @@ const STATUS_OPTS = [
 const STATUS_MAP = Object.fromEntries(STATUS_OPTS.map(s => [s.v, s]));
 
 /* Roles allowed to create / edit / delete fridges */
-const FRIDGE_EDIT_ROLES = ['super_admin', 'it_admin'];
+const FRIDGE_EDIT_ROLES = ['super_admin', 'it_admin', 'fridge_admin'];
 function isAdmin(user) { return FRIDGE_EDIT_ROLES.includes(user?.role); }
 
 function formatDate(d) {

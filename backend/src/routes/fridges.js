@@ -51,7 +51,7 @@ const contractUpload = multer({
 });
 
 /* ── Roles allowed to write/modify fridges ─────────────────── */
-const FRIDGE_EDITORS = ['super_admin', 'it_admin'];
+const FRIDGE_EDITORS = ['super_admin', 'it_admin', 'fridge_admin'];
 const canEdit = requireRoles(...FRIDGE_EDITORS);
 
 router.use(verifyToken, applyRegionFilter);

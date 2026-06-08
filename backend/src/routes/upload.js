@@ -235,6 +235,31 @@ router.post(
 
       console.log(`[Upload] ${invoiceRows.length} valid rows, ${errors.length} skipped`);
 
+      // ── Save pre-upload snapshot for daily-change tracking ───────
+      // Capture current balances BEFORE wiping, so aging page can show delta.
+      // We upsert into yesterday's date so tomorrow's aging view shows the change.
+      try {
+        const yesterday = new Date();
+        yesterday.setDate(yesterday.getDate() - 1);
+        const snapDate = yesterday.toLocaleDateString('en-CA', { timeZone: 'Asia/Riyadh' });
+        await pool.query(`
+          INSERT INTO balance_snapshots (snapshot_date, customer_id, customer_name, total_balance, invoice_count)
+          SELECT $1::date, customer_id, MAX(customer_name),
+                 ROUND(SUM(balance)::numeric, 2), COUNT(*)::int
+          FROM invoices
+          WHERE status IN ('unpaid','partial') AND balance > 0
+          GROUP BY customer_id
+          ON CONFLICT (snapshot_date, customer_id) DO UPDATE
+            SET total_balance = EXCLUDED.total_balance,
+                invoice_count = EXCLUDED.invoice_count,
+                customer_name = EXCLUDED.customer_name
+        `, [snapDate]);
+        console.log(`[Upload] Pre-upload balance snapshot saved for ${snapDate}`);
+      } catch (snapErr) {
+        // Non-fatal — don't block the upload if snapshot fails
+        console.warn('[Upload] Balance snapshot save failed (non-fatal):', snapErr.message);
+      }
+
       // ── Replace ALL data in a single transaction ──────────────
       // TRUNCATE … CASCADE removes notes (ON DELETE CASCADE) — fresh start
       const dbClient = await pool.connect();

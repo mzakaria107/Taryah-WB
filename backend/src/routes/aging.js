@@ -100,7 +100,10 @@ router.get('/', verifyToken, applyRegionFilter, async (req, res) => {
         FROM invoices
         WHERE status IN ('unpaid','partial') AND balance > 0
         GROUP BY customer_id
-        ON CONFLICT (snapshot_date, customer_id) DO NOTHING
+        ON CONFLICT (snapshot_date, customer_id) DO UPDATE
+          SET total_balance = EXCLUDED.total_balance,
+              invoice_count = EXCLUDED.invoice_count,
+              customer_name = EXCLUDED.customer_name
       `, [todayStr]);
     }
 

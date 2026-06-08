@@ -118,6 +118,53 @@
 .age-kpi-value { font-size: 1.2rem; font-weight: 800; color: var(--color-text); direction: ltr; text-align: right; }
 .age-kpi-pct   { font-size: 0.72rem; color: var(--color-text-muted); }
 
+/* ── Bucket period filter bar ────────────────────────────────── */
+.age-bucket-filters {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+  margin-bottom: 12px;
+}
+.age-bucket-label {
+  font-size: 0.78rem; color: var(--color-text-muted);
+  font-weight: 600; margin-left: 4px; white-space: nowrap;
+}
+.age-bucket-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 5px 13px; border-radius: 20px; font-size: 0.8rem; font-weight: 600;
+  border: 1.5px solid var(--color-border);
+  background: var(--color-surface, #fff); color: var(--color-text-muted);
+  cursor: pointer; transition: all 0.15s; white-space: nowrap;
+}
+.age-bucket-btn:hover { border-color: #94a3b8; color: var(--color-text); }
+
+/* active = الكل */
+.age-bucket-btn--active {
+  background: #1e293b !important; color: #fff !important;
+  border-color: #1e293b !important;
+}
+
+/* per-bucket accent when active */
+.age-bucket-btn--b_1_15.age-bucket-btn--active    { background: #16a34a !important; border-color: #15803d !important; }
+.age-bucket-btn--b_16_30.age-bucket-btn--active   { background: #65a30d !important; border-color: #4d7c0f !important; }
+.age-bucket-btn--b_31_60.age-bucket-btn--active   { background: #d97706 !important; border-color: #b45309 !important; }
+.age-bucket-btn--b_61_90.age-bucket-btn--active   { background: #ea580c !important; border-color: #c2410c !important; }
+.age-bucket-btn--b_91_120.age-bucket-btn--active  { background: #dc2626 !important; border-color: #b91c1c !important; }
+.age-bucket-btn--b_120_plus.age-bucket-btn--active { background: #7f1d1d !important; border-color: #450a0a !important; }
+
+/* subtle hover accent per bucket (not active) */
+.age-bucket-btn--b_1_15:hover    { border-color: #22c55e; color: #15803d; }
+.age-bucket-btn--b_16_30:hover   { border-color: #84cc16; color: #4d7c0f; }
+.age-bucket-btn--b_31_60:hover   { border-color: #f59e0b; color: #b45309; }
+.age-bucket-btn--b_61_90:hover   { border-color: #f97316; color: #c2410c; }
+.age-bucket-btn--b_91_120:hover  { border-color: #ef4444; color: #dc2626; }
+.age-bucket-btn--b_120_plus:hover { border-color: #991b1b; color: #7f1d1d; }
+
+.age-bucket-count {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 18px; height: 18px; border-radius: 10px;
+  background: rgba(0,0,0,0.12); font-size: 0.7rem; padding: 0 4px;
+}
+.age-bucket-btn--active .age-bucket-count { background: rgba(255,255,255,0.25); }
+
 /* ── Tab bar ─────────────────────────────────────────────────── */
 .age-tabs {
   display: flex; gap: 6px; margin-bottom: 16px;

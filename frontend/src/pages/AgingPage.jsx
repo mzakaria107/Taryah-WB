@@ -61,9 +61,10 @@ export default function AgingPage() {
   const [search,        setSearch]        = useState('');
   const [custType,      setCustType]      = useState('');
   const [excludeDirect, setExcludeDirect] = useState(true); // ON by default
-  const [sortBy,    setSortBy]    = useState('total_balance');
-  const [sortDir,   setSortDir]   = useState('DESC');
-  const [activeTab, setActiveTab] = useState('customers'); // 'customers' | 'regions'
+  const [sortBy,       setSortBy]       = useState('total_balance');
+  const [sortDir,      setSortDir]      = useState('DESC');
+  const [activeTab,    setActiveTab]    = useState('customers'); // 'customers' | 'regions'
+  const [bucketFilter, setBucketFilter] = useState(''); // '' | b_1_15 | b_16_30 | …
 
   /* ── Modal state ─────────────────────────────────────────────── */
   const [modalCustomer, setModalCustomer] = useState(null); // {id, name}
@@ -96,6 +97,13 @@ export default function AgingPage() {
   /* ── Computed totals for footer ──────────────────────────────── */
   const kpis = data?.kpis || {};
   const total = parseFloat(kpis.total_balance || 0);
+
+  /* ── Bucket filter — applied on already-fetched customers ────── */
+  const filteredCustomers = useMemo(() => {
+    const all = data?.customers || [];
+    if (!bucketFilter) return all;
+    return all.filter(c => parseFloat(c[bucketFilter] || 0) > 0);
+  }, [data?.customers, bucketFilter]);
 
   /* ── Reset ───────────────────────────────────────────────────── */
   const isDirty = regionId || routeId || search || custType;
@@ -322,10 +330,32 @@ export default function AgingPage() {
             </div>
           </div>
 
+          {/* ── Bucket period filter ─────────────────────────────── */}
+          <div className="age-bucket-filters age-no-print">
+            <span className="age-bucket-label">فلتر حسب فترة الدين:</span>
+            <button
+              className={`age-bucket-btn${!bucketFilter ? ' age-bucket-btn--active' : ''}`}
+              onClick={() => setBucketFilter('')}
+            >الكل</button>
+            {BUCKETS.map(b => {
+              const count = (data?.customers || []).filter(c => parseFloat(c[b.key]||0) > 0).length;
+              return (
+                <button
+                  key={b.key}
+                  className={`age-bucket-btn age-bucket-btn--${b.key}${bucketFilter === b.key ? ' age-bucket-btn--active' : ''}`}
+                  onClick={() => setBucketFilter(prev => prev === b.key ? '' : b.key)}
+                >
+                  {b.label}
+                  <span className="age-bucket-count">{count}</span>
+                </button>
+              );
+            })}
+          </div>
+
           {/* ── Tabs ─────────────────────────────────────────────── */}
           <div className="age-tabs age-no-print">
             <button className={`age-tab${activeTab === 'customers' ? ' age-tab--active' : ''}`} onClick={() => setActiveTab('customers')}>
-              العملاء ({fmt(data.total)})
+              العملاء ({fmt(bucketFilter ? filteredCustomers.length : data.total)})
             </button>
             <button className={`age-tab${activeTab === 'regions' ? ' age-tab--active' : ''}`} onClick={() => setActiveTab('regions')}>
               ملخص المناطق
@@ -334,12 +364,14 @@ export default function AgingPage() {
 
           {/* ── Customer matrix table ─────────────────────────────── */}
           <div style={{ display: activeTab === 'customers' ? 'block' : 'none' }}>
-            {!data.customers?.length ? (
-              <div className="age-empty">لا توجد مديونيات</div>
+            {!filteredCustomers.length ? (
+              <div className="age-empty">
+                {bucketFilter ? 'لا يوجد عملاء لديهم ديون في هذه الفترة' : 'لا توجد مديونيات'}
+              </div>
             ) : (
               <div className="age-table-wrap">
                 <CustomerTable
-                  customers={data.customers}
+                  customers={filteredCustomers}
                   kpis={kpis}
                   sortBy={sortBy}
                   sortDir={sortDir}

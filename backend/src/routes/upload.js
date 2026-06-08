@@ -247,7 +247,7 @@ router.post(
           SELECT $1::date, customer_id, MAX(customer_name),
                  ROUND(SUM(balance)::numeric, 2), COUNT(*)::int
           FROM invoices
-          WHERE status IN ('unpaid','partial') AND balance > 0
+          WHERE status IN ('unpaid','partial')
           GROUP BY customer_id
           ON CONFLICT (snapshot_date, customer_id) DO UPDATE
             SET total_balance = EXCLUDED.total_balance,

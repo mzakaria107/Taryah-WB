@@ -61,7 +61,17 @@ const api = {
     }).then(r => r.data);
   },
   deleteContract:  (id, fileId) => client.delete(`/fridges/${id}/contracts/${fileId}`).then(r => r.data),
-  downloadContractUrl: (id, fileId) => `/api/fridges/${id}/contracts/${fileId}/download`,
+  downloadContract: async (id, fileId, originalName) => {
+    const res = await client.get(`/fridges/${id}/contracts/${fileId}/download`, { responseType: 'blob' });
+    const url = URL.createObjectURL(res.data);
+    const a   = document.createElement('a');
+    a.href     = url;
+    a.download = originalName || 'contract';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+  },
 };
 
 /* ── Helpers ─────────────────────────────────────────────── */
@@ -502,14 +512,13 @@ function ContractFilesSection({ fridgeId, contracts: initialContracts, admin, on
               <FileText size={15} className="frg-contract-icon" />
               <span className="frg-contract-name" title={c.original_name}>{c.original_name}</span>
               <span className="frg-contract-size">{fmtSize(c.file_size)}</span>
-              <a
-                href={api.downloadContractUrl(fridgeId, c.id)}
+              <button
                 className="frg-btn frg-btn-ghost frg-btn-xs"
                 title="تنزيل"
-                download
+                onClick={() => api.downloadContract(fridgeId, c.id, c.original_name)}
               >
                 <Download size={12} />
-              </a>
+              </button>
               {admin && (
                 <button
                   className="frg-btn frg-btn-danger frg-btn-xs"

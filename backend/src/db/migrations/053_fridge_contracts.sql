@@ -7,7 +7,7 @@ CREATE TABLE IF NOT EXISTS fridge_contracts (
   stored_name   VARCHAR(500) NOT NULL,
   file_size     INTEGER,
   mime_type     VARCHAR(150),
-  uploaded_by   INTEGER,
+  uploaded_by   UUID         REFERENCES users(id) ON DELETE SET NULL,
   uploaded_at   TIMESTAMPTZ  DEFAULT NOW()
 );
 

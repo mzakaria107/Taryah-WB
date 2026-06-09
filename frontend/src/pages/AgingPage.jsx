@@ -50,6 +50,10 @@ async function fetchInvoices(customerId) {
   const { data } = await api.get(`/aging/invoices/${customerId}`);
   return data;
 }
+async function fetchMeta() {
+  const { data } = await api.get('/invoices/meta');
+  return data;
+}
 
 /* ═══════════════════════════════════════════════════════════════
    Main Page
@@ -58,6 +62,7 @@ export default function AgingPage() {
   /* ── Filters ─────────────────────────────────────────────────── */
   const [regionId,      setRegionId]      = useState('');
   const [routeId,       setRouteId]       = useState('');
+  const [salesRep,      setSalesRep]      = useState('');
   const [search,        setSearch]        = useState('');
   const [custType,      setCustType]      = useState('');
   const [excludeDirect, setExcludeDirect] = useState(true); // ON by default
@@ -69,17 +74,25 @@ export default function AgingPage() {
   /* ── Modal state ─────────────────────────────────────────────── */
   const [modalCustomer, setModalCustomer] = useState(null); // {id, name}
 
+  /* ── Meta (routes + reps lists) ─────────────────────────────── */
+  const { data: meta } = useQuery({
+    queryKey: ['meta'],
+    queryFn:  fetchMeta,
+    staleTime: 300_000,
+  });
+
   /* ── Query ───────────────────────────────────────────────────── */
   const qParams = useMemo(() => {
     const p = { sort_by: sortBy, sort_dir: sortDir, limit: 1000 };
-    if (regionId)  p.region_id     = regionId;
-    if (routeId)   p.route_id      = routeId;
-    if (search)    p.search        = search;
+    if (regionId)   p.region_id      = regionId;
+    if (routeId)    p.route_id       = routeId;
+    if (salesRep)   p.sales_rep_name = salesRep;
+    if (search)     p.search         = search;
     // excludeDirect overrides the manual custType filter
-    if (excludeDirect)       p.customer_type = 'route';
-    else if (custType)       p.customer_type = custType;
+    if (excludeDirect)  p.customer_type = 'route';
+    else if (custType)  p.customer_type = custType;
     return p;
-  }, [regionId, routeId, search, custType, excludeDirect, sortBy, sortDir]);
+  }, [regionId, routeId, salesRep, search, custType, excludeDirect, sortBy, sortDir]);
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['aging', qParams],
@@ -106,8 +119,8 @@ export default function AgingPage() {
   }, [data?.customers, bucketFilter]);
 
   /* ── Reset ───────────────────────────────────────────────────── */
-  const isDirty = regionId || routeId || search || custType;
-  const handleReset = () => { setRegionId(''); setRouteId(''); setSearch(''); setCustType(''); };
+  const isDirty = regionId || routeId || salesRep || search || custType;
+  const handleReset = () => { setRegionId(''); setRouteId(''); setSalesRep(''); setSearch(''); setCustType(''); };
 
   /* ── Print ───────────────────────────────────────────────────── */
   const handlePrint = () => {
@@ -276,6 +289,24 @@ export default function AgingPage() {
             <option value="">كل المناطق</option>
             {(data?.by_region || []).map(r => (
               <option key={r.region_id} value={r.region_id}>{r.region_name || `منطقة ${r.region_id}`}</option>
+            ))}
+          </select>
+        </div>
+        <div className="age-filter-group">
+          <span className="age-filter-label">رقم الخط</span>
+          <select className="age-filter-select" value={routeId} onChange={e => setRouteId(e.target.value)}>
+            <option value="">كل الخطوط</option>
+            {(meta?.routes || []).map(r => (
+              <option key={r} value={r}>{r}</option>
+            ))}
+          </select>
+        </div>
+        <div className="age-filter-group">
+          <span className="age-filter-label">المندوب</span>
+          <select className="age-filter-select" value={salesRep} onChange={e => setSalesRep(e.target.value)}>
+            <option value="">كل المندوبين</option>
+            {(meta?.reps || []).map(r => (
+              <option key={r} value={r}>{r}</option>
             ))}
           </select>
         </div>

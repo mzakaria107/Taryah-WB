@@ -42,7 +42,7 @@ const SORT_COLS = {
 router.get('/', verifyToken, applyRegionFilter, async (req, res) => {
   try {
     const {
-      region_id, route_id, search, customer_type,
+      region_id, route_id, search, customer_type, sales_rep_name,
       sort_by  = 'total_balance',
       sort_dir = 'DESC',
       page  = 1,
@@ -73,6 +73,10 @@ router.get('/', verifyToken, applyRegionFilter, async (req, res) => {
       conditions.push(`(i.customer_name ILIKE $${p} OR i.customer_name_en ILIKE $${p})`);
       params.push(`%${search}%`);
       p++;
+    }
+    if (sales_rep_name) {
+      conditions.push(`i.sales_rep_name = $${p++}`);
+      params.push(sales_rep_name);
     }
 
     const where    = conditions.join(' AND ');

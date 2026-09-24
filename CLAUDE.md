@@ -2998,6 +2998,16 @@ HTTPS connection to GitHub to pick up jobs; no inbound port needs to stay open o
   ownership`). Fixed once, machine-wide, with `git config --system --add safe.directory
   C:/apps/Taryah-WB` (system scope, not `--global`, since `--global` would only apply to whichever
   user runs the command interactively, not the service account actually executing the workflow).
+- **Setup gotcha #2**: this runner version has no standalone `svc.cmd` — the Windows service is
+  installed by answering "Y" to `config.cmd`'s own "Would you like to run the runner as service?"
+  prompt, not a separate command afterward. An early attempt hit `Error: Operation CreateService
+  failed with return code 1072` (service marked for deletion, left over from a prior failed attempt)
+  — resolved itself after a short wait once nothing (Services.msc, Task Manager) held an open handle
+  to the stale registration; `sc.exe query <service-name>` returning error 1060 ("does not exist")
+  confirms it's clear to retry. Once already registered locally, `config.cmd` refuses to reconfigure
+  ("already configured") — run `./config.cmd remove --token <fresh token>` first, then the full
+  registration command again with a newer token (registration tokens expire quickly, within about an
+  hour).
 - Steps: pull → `npm install && npm run build` (frontend) → `npm install` (backend) →
   `pm2 restart taryah-backend` + `pm2 save` → a health-check curl against
   `https://www.sales.taryahpoultry.com.sa/api/health`, failing the job (not just logging) if it

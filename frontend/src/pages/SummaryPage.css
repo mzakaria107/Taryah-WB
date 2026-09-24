@@ -339,6 +339,16 @@
   gap: 10px;
   flex-wrap: wrap;
 }
+.sm-chart-card__title-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.sm-chart-card__title-actions .sm-carrefour-toggle:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
 .sm-chart-card__title--row .sm-carrefour-toggle {
   padding: 6px 12px;
   font-size: 0.72rem;
@@ -601,6 +611,18 @@
   color: #64748b;
 }
 
+/* ── Debt detail print-only report (summary + per-rep invoices) ── */
+.sm-debt-detail-print-only { display: none; }
+.sm-debt-detail-rep-block { break-inside: avoid; margin-top: 18px; }
+.sm-debt-detail-rep-title {
+  font-size: 0.9rem;
+  font-weight: 800;
+  color: #991b1b;
+  margin-bottom: 6px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid #f1f5f9;
+}
+
 @media print {
   @page { size: A4 landscape; margin: 1.2cm 1cm; }
 
@@ -620,6 +642,22 @@
   /* Show all tab content when printing */
   .sm-tab-content,
   .sm-overview-grid { display: grid !important; }
+
+  /* When printing the debt-detail report, hide everything else on the
+     page and show only the dedicated print-only block — same print
+     isolation pattern as the Discount Shops contract print. */
+  body.sm-printing-debt-detail .sm-header,
+  body.sm-printing-debt-detail .sm-filters,
+  body.sm-printing-debt-detail .sm-print-header,
+  body.sm-printing-debt-detail .sm-tabs,
+  body.sm-printing-debt-detail .sm-kpi-row,
+  body.sm-printing-debt-detail .sm-tab-content,
+  body.sm-printing-debt-detail .sm-overview-grid {
+    display: none !important;
+  }
+  body.sm-printing-debt-detail .sm-debt-detail-print-only {
+    display: block !important;
+  }
 }
 
 /* ── Responsive ───────────────────────────────────────────── */

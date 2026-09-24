@@ -1,7 +1,8 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { ExternalLink } from 'lucide-react';
+import * as XLSX from 'xlsx';
 import client from '../api/client';
 import './SummaryPage.css';
 
@@ -180,6 +181,95 @@ export default function SummaryPage() {
       : data.debt.by_rep;
     return [...rows].sort((a, b) => Number(b.total_balance) - Number(a.total_balance));
   }, [data, excludeZeroReps]);
+
+  /* ── Debt export/print (summary + per-rep invoice detail) ── */
+  const [debtExportBusy, setDebtExportBusy] = useState(null); // null | 'excel' | 'print'
+  const [printingDebtDetail, setPrintingDebtDetail] = useState(false);
+  const [debtDetailPrintData, setDebtDetailPrintData] = useState(null);
+
+  async function fetchDebtInvoices() {
+    const res = await client.get(`/summary/debt/invoices?${params}`);
+    return res.data?.rows || [];
+  }
+
+  async function handleExportDebtExcel() {
+    setDebtExportBusy('excel');
+    try {
+      const invoices = await fetchDebtInvoices();
+      const repNamesInView = new Set(sortedDebtReps.map(r => r.salesrep_name));
+      const filteredInvoices = invoices.filter(inv => repNamesInView.has(inv.salesrep_name));
+
+      const summaryAoa = [
+        ['#', 'المندوب', 'رصيد الديون', 'النسبة %', 'إجمالي الفواتير'],
+        ...sortedDebtReps.map((r, i) => [i + 1, r.salesrep_name, Number(r.total_balance), r.pct_of_total, Number(r.total_invoiced)]),
+        [],
+        ['', `الإجمالي (${sortedDebtReps.length} مندوب)`,
+          sortedDebtReps.reduce((s, r) => s + Number(r.total_balance || 0), 0), '',
+          sortedDebtReps.reduce((s, r) => s + Number(r.total_invoiced || 0), 0)],
+      ];
+      const wsSummary = XLSX.utils.aoa_to_sheet(summaryAoa);
+
+      const detailAoa = [
+        ['المندوب', 'العميل', 'كود العميل', 'رقم الفاتورة', 'تاريخ الفاتورة', 'قيمة الفاتورة', 'المدفوع', 'الرصيد', 'الحالة'],
+        ...filteredInvoices.map(inv => [
+          inv.salesrep_name, inv.customer_name, inv.customer_id, inv.invoice_number,
+          inv.invoice_date || '', Number(inv.original_amount), Number(inv.paid_amount), Number(inv.balance), inv.status,
+        ]),
+      ];
+      const wsDetail = XLSX.utils.aoa_to_sheet(detailAoa);
+
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, wsSummary, 'ملخص المناديب');
+      XLSX.utils.book_append_sheet(wb, wsDetail, 'تفاصيل الفواتير');
+      XLSX.writeFile(wb, `مديونية_المناديب_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    } catch (e) {
+      window.alert('حدث خطأ أثناء تصدير ملف الإكسيل');
+    } finally {
+      setDebtExportBusy(null);
+    }
+  }
+
+  async function handlePrintDebtDetail() {
+    setDebtExportBusy('print');
+    try {
+      const invoices = await fetchDebtInvoices();
+      const repNamesInView = new Set(sortedDebtReps.map(r => r.salesrep_name));
+      const filteredInvoices = invoices.filter(inv => repNamesInView.has(inv.salesrep_name));
+      setDebtDetailPrintData({ invoices: filteredInvoices });
+      setPrintingDebtDetail(true);
+    } catch (e) {
+      window.alert('حدث خطأ أثناء تجهيز التقرير للطباعة');
+      setDebtExportBusy(null);
+    }
+  }
+
+  useEffect(() => {
+    if (!printingDebtDetail || !debtDetailPrintData) return;
+    document.body.classList.add('sm-printing-debt-detail');
+    const prevTitle = document.title;
+    document.title = `مديونية المناديب - ${monthName} ${year}`;
+    window.print();
+    window.onafterprint = () => {
+      document.body.classList.remove('sm-printing-debt-detail');
+      document.title = prevTitle;
+      setPrintingDebtDetail(false);
+      setDebtDetailPrintData(null);
+      setDebtExportBusy(null);
+      window.onafterprint = null;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [printingDebtDetail, debtDetailPrintData]);
+
+  const debtDetailByRep = useMemo(() => {
+    if (!debtDetailPrintData) return [];
+    const map = new Map();
+    for (const inv of debtDetailPrintData.invoices) {
+      const key = inv.salesrep_name || 'غير محدد';
+      if (!map.has(key)) map.set(key, []);
+      map.get(key).push(inv);
+    }
+    return sortedDebtReps.map(r => ({ rep: r, invoices: map.get(r.salesrep_name) || [] }));
+  }, [debtDetailPrintData, sortedDebtReps]);
 
   /* ── Handle branch change ─────────────────────────────── */
   function handleBranchChange(v) {
@@ -869,14 +959,34 @@ export default function SummaryPage() {
                   <div className="sm-chart-card">
                     <div className="sm-chart-card__title sm-chart-card__title--row">
                       <span>أعلى المناديب ديوناً (أعلى 10)</span>
-                      <button
-                        type="button"
-                        className={`sm-carrefour-toggle${excludeZeroReps ? ' sm-carrefour-toggle--active' : ''}`}
-                        onClick={() => setExcludeZeroReps(v => !v)}
-                        title={excludeZeroReps ? 'إظهار المناديب بقيم صفرية' : 'إخفاء المناديب بقيم صفرية من القائمة'}
-                      >
-                        {excludeZeroReps ? '✅ المناديب الصفرية مستبعدة' : '🚫 استبعاد المناديب بقيم صفرية'}
-                      </button>
+                      <div className="sm-chart-card__title-actions">
+                        <button
+                          type="button"
+                          className={`sm-carrefour-toggle${excludeZeroReps ? ' sm-carrefour-toggle--active' : ''}`}
+                          onClick={() => setExcludeZeroReps(v => !v)}
+                          title={excludeZeroReps ? 'إظهار المناديب بقيم صفرية' : 'إخفاء المناديب بقيم صفرية من القائمة'}
+                        >
+                          {excludeZeroReps ? '✅ المناديب الصفرية مستبعدة' : '🚫 استبعاد المناديب بقيم صفرية'}
+                        </button>
+                        <button
+                          type="button"
+                          className="sm-carrefour-toggle"
+                          onClick={handleExportDebtExcel}
+                          disabled={!!debtExportBusy}
+                          title="تصدير ملخص المناديب وتفاصيل فواتير كل مندوب في ملف إكسيل واحد"
+                        >
+                          {debtExportBusy === 'excel' ? '⏳ جاري التصدير...' : '📥 تصدير Excel'}
+                        </button>
+                        <button
+                          type="button"
+                          className="sm-carrefour-toggle"
+                          onClick={handlePrintDebtDetail}
+                          disabled={!!debtExportBusy}
+                          title="طباعة ملخص المناديب مع تفاصيل فواتير كل مندوب"
+                        >
+                          {debtExportBusy === 'print' ? '⏳ جاري التجهيز...' : '🖨️ طباعة بالتفاصيل'}
+                        </button>
+                      </div>
                     </div>
                     <BarChart
                       rows={sortedDebtReps.slice(0, 10)}
@@ -970,6 +1080,70 @@ export default function SummaryPage() {
             </div>
           )}
         </>
+      )}
+
+      {/* ── Debt detail print-only block (summary + per-rep invoices) ── */}
+      {debtDetailPrintData && (
+        <div className="sm-debt-detail-print-only">
+          <div className="sm-print-title">تقرير مديونية المناديب — التفاصيل الكاملة</div>
+          <div className="sm-print-sub">
+            {monthName} {year}
+            {branchName ? ` · المنطقة: ${branchName}` : ''}
+            {excludeCarrefour ? ' · مديونية كارفور مستبعدة' : ''}
+            {excludeZeroReps ? ' · المناديب الصفرية مستبعدة' : ''}
+          </div>
+
+          <table className="sm-table" style={{ marginTop: 16 }}>
+            <thead>
+              <tr>
+                <th>#</th><th>المندوب</th><th>رصيد الديون</th><th>النسبة %</th><th>إجمالي الفواتير</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sortedDebtReps.map((r, i) => (
+                <tr key={r.salesrep_name + i}>
+                  <td>{i + 1}</td>
+                  <td>{r.salesrep_name}</td>
+                  <td>{fmtCurrency(r.total_balance)}</td>
+                  <td>{r.pct_of_total}%</td>
+                  <td>{fmtCurrency(r.total_invoiced)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          {debtDetailByRep.map(({ rep, invoices }) => (
+            <div key={rep.salesrep_name} className="sm-debt-detail-rep-block">
+              <div className="sm-debt-detail-rep-title">
+                {rep.salesrep_name} — {fmtCurrency(rep.total_balance)}
+              </div>
+              <table className="sm-table">
+                <thead>
+                  <tr>
+                    <th>العميل</th><th>رقم الفاتورة</th><th>التاريخ</th>
+                    <th>قيمة الفاتورة</th><th>المدفوع</th><th>الرصيد</th><th>الحالة</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {invoices.map((inv, i) => (
+                    <tr key={inv.invoice_number + i}>
+                      <td>{inv.customer_name}</td>
+                      <td>{inv.invoice_number}</td>
+                      <td>{inv.invoice_date}</td>
+                      <td>{fmtCurrency(inv.original_amount)}</td>
+                      <td>{fmtCurrency(inv.paid_amount)}</td>
+                      <td>{fmtCurrency(inv.balance)}</td>
+                      <td>{inv.status}</td>
+                    </tr>
+                  ))}
+                  {invoices.length === 0 && (
+                    <tr><td colSpan={7} className="sm-empty">لا توجد فواتير</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          ))}
+        </div>
       )}
     </div>
   );

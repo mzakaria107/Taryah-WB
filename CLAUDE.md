@@ -3108,6 +3108,55 @@ whole tab's total, this one only reshapes this one panel.
 Verified: `npm run build` clean. Deployed via the new self-hosted-runner pipeline (see above) —
 first real feature to ship through the fully automated path end to end.
 
+### Same panel — Excel export + print, summary AND per-rep invoice detail in one file
+
+Follow-up: "اضف زر برنت اكسيل و pdf للداتا المعروضة بجدول المناديب بالأسفل كملخص اجمالي او
+بتفاصيل فواتير لكل مندوب" — clarified with the user (summary-only vs. summary+every rep's invoice
+detail in one file): they wanted the combined version.
+
+**`GET /api/summary/debt/invoices`** (new, `backend/src/routes/summary.js`) — mirrors `debtData()`'s
+WHERE-clause construction line-for-line (region/branch/rep/`cust_category`/`date_from`/`date_to`/
+`exclude_carrefour`, and always excludes the `direct` pseudo-rep) so the exported invoice rows
+always foot to the exact same totals the on-screen summary shows — there's no separate filter logic
+to drift out of sync. Adds `AND i.balance <> 0`, the same "row list filters on balance, not status"
+corollary the debt rule already establishes elsewhere in this file, so the export isn't drowned in
+already-settled zero-balance invoices. Returns a flat list (not grouped server-side) capped at
+20,000 rows as a sanity ceiling — real current open-AR invoice counts are far below that.
+
+- **Frontend fetches this list lazily**, only when the export/print button is actually clicked
+  (`fetchDebtInvoices()`), not as a live `useQuery` — invoice-level detail is a rare, explicit
+  export action, not something that should re-fetch on every filter change the way the aggregate
+  `by_rep` data does.
+- **Client-side filters the fetched invoices down to `sortedDebtReps`' own rep set**
+  (`repNamesInView`) before building either output — the backend endpoint doesn't know about the
+  purely-client-side `excludeZeroReps` toggle, so this is what keeps the exported detail sheet
+  consistent with whichever reps are actually showing on screen at click time.
+- **Excel** (`handleExportDebtExcel`): two sheets in one workbook — "ملخص المناديب" (same rows as
+  the on-screen summary table, plus its footer total row) and "تفاصيل الفواتير" (every matching
+  invoice: rep, customer, code, invoice number/date, original/paid/balance, status).
+- **Print** (`handlePrintDebtDetail`): a dedicated print-only block (`.sm-debt-detail-print-only`),
+  not the page's existing "🖨️ طباعة" button (which prints whatever's on screen as-is, and invoice
+  detail is never on screen) — same "print isolation" pattern already proven on the Discount Shops
+  contract print: fetches the data, sets it into state, then a `useEffect` adds a
+  `body.sm-printing-debt-detail` class, calls `window.print()`, and cleans up
+  (class/title/state/`onafterprint`) once the dialog closes. The summary table prints first, then
+  one sub-section per rep with their own invoice table — grouped via `debtDetailByRep`, ordered to
+  match `sortedDebtReps` so the print order matches the on-screen rank order.
+- **Deliberately did NOT add a second static `@page` rule** for this print mode — this page already
+  has exactly one (`A4 landscape`), and per the Discount Shops contract-print incident documented
+  above, a second unscoped `@page` rule in the same stylesheet is what silently broke that feature
+  (Chrome doesn't reliably honor body-class scoping on `@page` at-rules). Landscape happens to suit
+  a wide invoice table anyway, so this mode just reuses the existing page size instead of needing
+  the `printWithPageSize` dynamic-injection workaround that fix required.
+
+**Not verified against production data this turn** — this session's cloud sandbox has no direct
+database or authenticated-API access (no JWT signing key, no DB connection path), only the public
+HTTPS site and the self-hosted-runner deploy pipeline. Verified instead: `npm run build` clean,
+backend `node -c` syntax check clean, and the new route's SQL WHERE-clause construction reviewed
+line-for-line against the already-proven `debtData()` it mirrors. **Needs a real click-through by
+the user** (or a future session with server access) to confirm the exported Excel/print output
+actually matches on-screen numbers end to end.
+
 ## Ongoing Rules
 - Always update this CLAUDE.md when adding new pages, routes, migrations, or significant business logic changes.
 - After any local code change: `docker compose build && docker compose up -d`

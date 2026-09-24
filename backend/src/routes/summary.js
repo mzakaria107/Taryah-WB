@@ -685,6 +685,84 @@ router.get('/', verifyToken, applyRegionFilter, async (req, res) => {
 });
 
 /* ─────────────────────────────────────────────────────────────
+   GET /api/summary/debt/invoices — invoice-level detail behind
+   the "المديونية" tab's rep list, for the Excel/print export.
+   Mirrors debtData()'s WHERE-clause rules exactly (same rep/
+   branch/cust_category/date_from/date_to/exclude_carrefour
+   filters, always excludes the "direct" pseudo-rep) so the
+   exported detail rows always foot to the same totals the
+   on-screen summary shows. Only non-zero-balance invoices are
+   returned — same "balance <> 0 defines the row list" corollary
+   already used everywhere else debt invoices are listed (see the
+   "Debt Balance" rule in CLAUDE.md), so a sea of already-settled
+   zero-balance invoices doesn't drown out the ones that matter.
+───────────────────────────────────────────────────────────── */
+router.get('/debt/invoices', verifyToken, applyRegionFilter, async (req, res) => {
+  const rep      = (req.query.salesrep_name || '').trim() || null;
+  const dateFrom = (req.query.date_from     || '').trim() || null;
+  const dateTo   = (req.query.date_to       || '').trim() || null;
+  const custCat  = (req.query.cust_category || '').trim() || null;
+  const excludeCarrefour = req.query.exclude_carrefour === '1' || req.query.exclude_carrefour === 'true';
+
+  try {
+    let branch = req.query.branch_name || null;
+    if (req.regionFilter && req.regionFilter.length) branch = await resolveRegionBranch(req.regionFilter);
+
+    let regionId = null;
+    if (req.regionFilter && req.regionFilter.length) regionId = req.regionFilter;
+    else if (req.query.region_id)                    regionId = [parseInt(req.query.region_id, 10)];
+
+    const clauses = [];
+    const params  = [];
+    let p = 1;
+
+    if (regionId) {
+      clauses.push(`i.region_id = ANY($${p}::int[])`);
+      params.push(regionId); p++;
+    } else if (branch) {
+      if (Array.isArray(branch)) {
+        clauses.push(`i.region_id IN (SELECT id FROM regions WHERE name_en = ANY($${p}::text[]) OR name_ar = ANY($${p}::text[]))`);
+      } else {
+        clauses.push(`i.region_id IN (SELECT id FROM regions WHERE name_en = $${p} OR name_ar = $${p})`);
+      }
+      params.push(branch); p++;
+    }
+
+    if (rep)     { clauses.push(`i.sales_rep_name = $${p++}`); params.push(rep); }
+    if (custCat) { clauses.push(`i.customer_id IN (SELECT DISTINCT customer_code FROM sales_activity WHERE LOWER(TRIM(COALESCE(category_name,''))) = LOWER($${p++}))`); params.push(custCat); }
+    if (excludeCarrefour) clauses.push(`i.customer_name NOT ILIKE '%كارفور%'`);
+    if (dateFrom) { clauses.push(`i.invoice_date >= $${p++}`); params.push(dateFrom); }
+    if (dateTo)   { clauses.push(`i.invoice_date <= $${p++}`); params.push(dateTo); }
+
+    clauses.push(`LOWER(TRIM(COALESCE(i.sales_rep_name, ''))) != 'direct'`);
+    clauses.push(`i.balance <> 0`);
+    const where = 'WHERE ' + clauses.join(' AND ');
+
+    const { rows } = await pool.query(`
+      SELECT
+        COALESCE(TRIM(i.sales_rep_name), 'غير محدد') AS salesrep_name,
+        i.customer_name,
+        i.customer_id,
+        i.invoice_number,
+        i.invoice_date::text AS invoice_date,
+        i.original_amount::numeric AS original_amount,
+        i.paid_amount::numeric     AS paid_amount,
+        i.balance::numeric         AS balance,
+        i.status
+      FROM invoices i
+      ${where}
+      ORDER BY COALESCE(TRIM(i.sales_rep_name), 'غير محدد'), i.balance DESC
+      LIMIT 20000
+    `, params);
+
+    res.json({ rows, count: rows.length });
+  } catch (err) {
+    console.error('[Summary/debt/invoices]', err);
+    res.status(500).json({ error: 'خطأ في جلب تفاصيل الفواتير' });
+  }
+});
+
+/* ─────────────────────────────────────────────────────────────
    GET /api/summary/filters  — dropdown data
 ───────────────────────────────────────────────────────────── */
 router.get('/filters', verifyToken, applyRegionFilter, async (req, res) => {

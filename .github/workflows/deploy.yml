@@ -1,0 +1,44 @@
+name: Deploy to production
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: [self-hosted, Windows]
+    defaults:
+      run:
+        shell: powershell
+    steps:
+      - name: Pull latest code
+        run: |
+          cd C:\apps\Taryah-WB
+          git fetch origin main
+          git reset --hard origin/main
+
+      - name: Build frontend
+        run: |
+          cd C:\apps\Taryah-WB\frontend
+          npm install
+          npm run build
+
+      - name: Install backend dependencies
+        run: |
+          cd C:\apps\Taryah-WB\backend
+          npm install
+
+      - name: Restart backend
+        run: |
+          pm2 restart taryah-backend
+          pm2 save
+
+      - name: Verify site is up
+        run: |
+          Start-Sleep -Seconds 5
+          $code = (curl.exe -s -o NUL -w "%{http_code}" https://www.sales.taryahpoultry.com.sa/api/health)
+          Write-Host "Health check status: $code"
+          if ($code -ne "200") {
+            Write-Error "Health check failed with status $code"
+            exit 1
+          }

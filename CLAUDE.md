@@ -2976,7 +2976,32 @@ with a simpler pattern before concluding a file needs adding, to avoid introduci
 - UI: `VehicleProfile` in `FleetManagementPage.jsx` — "إجراءات" column with ✏️ تعديل (inline edit row) / 🗑️ حذف, shown only when `ADMIN_ROLES.includes(user.role)`.
 - Verified live with throwaway vehicle/types/part (edit, type change, delete, 403 for non-admin, 404) — all cleaned up.
 
+## Automated deploy via self-hosted GitHub Actions runner
+
+`.github/workflows/deploy.yml` — pushing to `main` auto-deploys to production, replacing the manual
+`deploy_rep_management.py` workflow (that script, and the excluded root-level `*.py` deploy scripts,
+stay as-is for anyone who still wants to trigger a deploy manually, but are no longer the required
+path). Built because Claude's cloud sandbox sessions can only reach the internet over HTTP(S) through
+an agent proxy — no raw TCP protocol (SSH, RDP, WinRM) can ever pass through from that environment
+regardless of its network-access settings — so a cloud session can never SSH into the Windows server
+directly. A self-hosted GitHub Actions runner installed ON the server instead makes an *outbound*
+HTTPS connection to GitHub to pick up jobs; no inbound port needs to stay open on the server at all.
+
+- Runner registered on `C:\apps\Taryah-WB`'s GitHub repo (Settings → Actions → Runners), running as a
+  Windows service. The workflow does **not** use `actions/checkout`'s default work directory — PM2
+  serves the backend from, and IIS serves the frontend `dist` from, the fixed path
+  `C:\apps\Taryah-WB`, so every step `cd`s there directly and runs `git fetch` + `git reset --hard
+  origin/main` instead of letting the runner check out into its own separate `_work` folder.
+- Steps: pull → `npm install && npm run build` (frontend) → `npm install` (backend) →
+  `pm2 restart taryah-backend` + `pm2 save` → a health-check curl against
+  `https://www.sales.taryahpoultry.com.sa/api/health`, failing the job (not just logging) if it
+  doesn't return 200 — so a deploy that silently broke the backend shows as a failed GitHub Actions
+  run, not a false "success".
+- Superseded `.github/workflows/placeholder.yml` (a no-op stub that existed only to suppress "deploy
+  failed" emails from GitHub, back when there was no real CI/CD) — deleted rather than kept alongside,
+  since it no longer serves any purpose once a real workflow runs on the same trigger.
+
 ## Ongoing Rules
 - Always update this CLAUDE.md when adding new pages, routes, migrations, or significant business logic changes.
 - After any local code change: `docker compose build && docker compose up -d`
-- After pushing to GitHub, deploy on server with the workflow above.
+- Push to `main` → the self-hosted-runner workflow (above) deploys automatically. Manual deploy via `deploy_rep_management.py` (see Production Deployment above) remains available as a fallback.

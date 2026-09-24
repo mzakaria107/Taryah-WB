@@ -1,3 +1,4 @@
+# Auto-deploys to production via the self-hosted runner on the server.
 name: Deploy to production
 
 on:

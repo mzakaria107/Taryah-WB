@@ -50,9 +50,14 @@ jobs:
       - name: Verify site is up
         run: |
           Start-Sleep -Seconds 5
-          $code = (curl.exe -s -o NUL -w "%{http_code}" https://www.sales.taryahpoultry.com.sa/api/health)
+          try {
+            $response = Invoke-WebRequest -Uri "https://www.sales.taryahpoultry.com.sa/api/health" -UseBasicParsing -TimeoutSec 20
+            $code = $response.StatusCode
+          } catch {
+            $code = $_.Exception.Response.StatusCode.value__
+          }
           Write-Host "Health check status: $code"
-          if ($code -ne "200") {
+          if ($code -ne 200) {
             Write-Error "Health check failed with status $code"
             exit 1
           }

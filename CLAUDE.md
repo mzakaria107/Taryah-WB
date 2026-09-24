@@ -3052,8 +3052,25 @@ HTTPS connection to GitHub to pick up jobs; no inbound port needs to stay open o
   (silently the wrong daemon, not an error). Workflow sets
   `$env:PM2_HOME = "C:\Users\Administrator\.pm2"` before every pm2 call so it always controls the
   one real, already-running daemon regardless of which account executes the workflow step.
+- **The real fix, after five separate `NETWORK SERVICE` permission walls (git ownership, `.git`
+  write access, the npm global-install folder, the `AppData` traversal chain, and finally PM2's own
+  named pipe `\\.\pipe\rpc.sock` — which has its own Windows security descriptor set at creation
+  time and can't be touched by `icacls` at all)**: switch the runner Windows service itself to log on
+  as the actual `Administrator` account instead of the default `NT AUTHORITY\NETWORK SERVICE`
+  (`services.msc` → the runner service → Properties → Log On → "This account"). This is standard
+  practice for a self-hosted Windows runner that needs real deploy privileges — `NETWORK SERVICE` is
+  deliberately low-privilege and was never going to have write access to `.git`, PM2's daemon, or
+  anything else Administrator itself owns, no matter how many individual `icacls`/`PM2_HOME`
+  workarounds got layered on. Once switched, every one of the earlier workarounds still works
+  (harmless/redundant now) but stops being load-bearing.
+- **`curl.exe` isn't on PATH when run non-interactively, even as Administrator** — Windows Server
+  2016 doesn't ship curl.exe natively (added to Windows starting with 10 1803 / Server 2019), and
+  whatever earlier install put it on this box's PATH apparently only did so for the interactive
+  logon shell, not the service's process environment. Switched the health-check step to PowerShell's
+  own built-in `Invoke-WebRequest` instead of shelling out to `curl.exe`, removing the external-binary
+  PATH dependency entirely.
 - Steps: pull → `npm install && npm run build` (frontend) → `npm install` (backend) →
-  `pm2 restart taryah-backend` + `pm2 save` → a health-check curl against
+  `pm2 restart taryah-backend` + `pm2 save` → a health-check `Invoke-WebRequest` against
   `https://www.sales.taryahpoultry.com.sa/api/health`, failing the job (not just logging) if it
   doesn't return 200 — so a deploy that silently broke the backend shows as a failed GitHub Actions
   run, not a false "success".

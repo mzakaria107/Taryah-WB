@@ -3078,6 +3078,12 @@ HTTPS connection to GitHub to pick up jobs; no inbound port needs to stay open o
   failed" emails from GitHub, back when there was no real CI/CD) — deleted rather than kept alongside,
   since it no longer serves any purpose once a real workflow runs on the same trigger.
 
+**Verified reliability, not just a one-off pass**: after the first fully-green run (commit
+`a6544eb`), a second real push confirmed the whole pipeline succeeds repeatably, not as a fluke of
+that particular run's state. Independently (from outside the workflow) re-checked
+`https://www.sales.taryahpoultry.com.sa/api/health` returns 200 with ~1s latency across 5
+consecutive requests.
+
 ## Ongoing Rules
 - Always update this CLAUDE.md when adding new pages, routes, migrations, or significant business logic changes.
 - After any local code change: `docker compose build && docker compose up -d`

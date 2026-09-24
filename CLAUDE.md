@@ -2992,6 +2992,12 @@ HTTPS connection to GitHub to pick up jobs; no inbound port needs to stay open o
   serves the backend from, and IIS serves the frontend `dist` from, the fixed path
   `C:\apps\Taryah-WB`, so every step `cd`s there directly and runs `git fetch` + `git reset --hard
   origin/main` instead of letting the runner check out into its own separate `_work` folder.
+- **Setup gotcha**: the runner service runs as `NT AUTHORITY\NETWORK SERVICE`, a different account
+  from whichever admin account originally `git clone`d `C:\apps\Taryah-WB` — git's `safe.directory`
+  ownership check then refuses every git command the workflow runs (`fatal: detected dubious
+  ownership`). Fixed once, machine-wide, with `git config --system --add safe.directory
+  C:/apps/Taryah-WB` (system scope, not `--global`, since `--global` would only apply to whichever
+  user runs the command interactively, not the service account actually executing the workflow).
 - Steps: pull → `npm install && npm run build` (frontend) → `npm install` (backend) →
   `pm2 restart taryah-backend` + `pm2 save` → a health-check curl against
   `https://www.sales.taryahpoultry.com.sa/api/health`, failing the job (not just logging) if it

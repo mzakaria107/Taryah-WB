@@ -124,6 +124,7 @@ export default function SummaryPage() {
   const [filterTo,     setFilterTo]     = useState('');
   const [activeTab,  setActiveTab]  = useState('overview'); // overview | regions | reps | debt
   const [excludeCarrefour, setExcludeCarrefour] = useState(false);
+  const [excludeZeroReps, setExcludeZeroReps] = useState(false);
 
   /* ── Rep sort ─────────────────────────────────────────── */
   const [repSortCol, setRepSortCol] = useState('total_qty');
@@ -174,8 +175,11 @@ export default function SummaryPage() {
 
   const sortedDebtReps = useMemo(() => {
     if (!data?.debt?.by_rep) return [];
-    return [...data.debt.by_rep].sort((a, b) => Number(b.total_balance) - Number(a.total_balance));
-  }, [data]);
+    const rows = excludeZeroReps
+      ? data.debt.by_rep.filter(r => Number(r.total_balance) !== 0)
+      : data.debt.by_rep;
+    return [...rows].sort((a, b) => Number(b.total_balance) - Number(a.total_balance));
+  }, [data, excludeZeroReps]);
 
   /* ── Handle branch change ─────────────────────────────── */
   function handleBranchChange(v) {
@@ -863,9 +867,19 @@ export default function SummaryPage() {
                 {/* By rep */}
                 <div>
                   <div className="sm-chart-card">
-                    <div className="sm-chart-card__title">أعلى المناديب ديوناً (أعلى 10)</div>
+                    <div className="sm-chart-card__title sm-chart-card__title--row">
+                      <span>أعلى المناديب ديوناً (أعلى 10)</span>
+                      <button
+                        type="button"
+                        className={`sm-carrefour-toggle${excludeZeroReps ? ' sm-carrefour-toggle--active' : ''}`}
+                        onClick={() => setExcludeZeroReps(v => !v)}
+                        title={excludeZeroReps ? 'إظهار المناديب بقيم صفرية' : 'إخفاء المناديب بقيم صفرية من القائمة'}
+                      >
+                        {excludeZeroReps ? '✅ المناديب الصفرية مستبعدة' : '🚫 استبعاد المناديب بقيم صفرية'}
+                      </button>
+                    </div>
                     <BarChart
-                      rows={(debt?.by_rep || []).slice(0, 10)}
+                      rows={sortedDebtReps.slice(0, 10)}
                       valueKey="total_balance"
                       labelKey="salesrep_name"
                       colorClass="sm-bar--danger"

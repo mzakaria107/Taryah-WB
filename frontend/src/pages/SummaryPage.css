@@ -332,6 +332,17 @@
   padding-bottom: 10px;
   border-bottom: 1px solid var(--color-border, #f1f5f9);
 }
+.sm-chart-card__title--row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.sm-chart-card__title--row .sm-carrefour-toggle {
+  padding: 6px 12px;
+  font-size: 0.72rem;
+}
 
 /* ── Bar chart ────────────────────────────────────────────── */
 .sm-barchart { display: flex; flex-direction: column; gap: 8px; }

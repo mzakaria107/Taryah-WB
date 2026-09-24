@@ -3084,6 +3084,30 @@ that particular run's state. Independently (from outside the workflow) re-checke
 `https://www.sales.taryahpoultry.com.sa/api/health` returns 200 with ~1s latency across 5
 consecutive requests.
 
+## Summary page — "استبعاد المناديب بقيم صفرية" toggle on the by-rep debt list
+
+Requested from a screenshot of the "المديونية" tab's «أعلى المناديب ديوناً» panel — a client-side
+toggle (`excludeZeroReps`), same pattern as the existing «استبعاد مديونية كارفور» button on this
+same tab, filtering `debt.by_rep` to `total_balance !== 0` before sorting. Placed next to that
+panel's own title (`.sm-chart-card__title--row`, a small flex-header modifier) rather than in the
+tab's global summary card, since it's specific to the rep list — the Carrefour toggle affects the
+whole tab's total, this one only reshapes this one panel.
+
+- Both the top-10 bar chart and the full table below it read from the same filtered/sorted
+  `sortedDebtReps`, so they can never disagree about which reps are shown.
+- The table's footer total (`sortedDebtReps.reduce(...)`) already derived from this same array, so
+  filtering zero reps out automatically correct the "الإجمالي (N مندوب)" count and sums with no
+  separate code path.
+- Each row's rank number is deliberately still computed from the FULL unfiltered `debt.by_rep`
+  (not the filtered list) — a rep's rank reflects their true standing among all reps, so hiding
+  zero-balance reps beneath them doesn't inflate anyone else's position (e.g. the real #1 stays #1
+  whether or not zero-value reps are shown below).
+- Reuses the existing `.sm-carrefour-toggle` button styling as-is (generic red/green pill toggle,
+  despite the class name) rather than adding a near-duplicate CSS block.
+
+Verified: `npm run build` clean. Deployed via the new self-hosted-runner pipeline (see above) —
+first real feature to ship through the fully automated path end to end.
+
 ## Ongoing Rules
 - Always update this CLAUDE.md when adding new pages, routes, migrations, or significant business logic changes.
 - After any local code change: `docker compose build && docker compose up -d`

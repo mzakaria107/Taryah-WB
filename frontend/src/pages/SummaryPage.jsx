@@ -1110,6 +1110,17 @@ export default function SummaryPage() {
                 </tr>
               ))}
             </tbody>
+            {sortedDebtReps.length > 0 && (
+              <tfoot>
+                <tr className="sm-tf-row">
+                  <td></td>
+                  <td>الإجمالي ({sortedDebtReps.length} مندوب)</td>
+                  <td>{fmtCurrency(sortedDebtReps.reduce((s, r) => s + Number(r.total_balance || 0), 0))}</td>
+                  <td>{(+sortedDebtReps.reduce((s, r) => s + Number(r.pct_of_total || 0), 0).toFixed(1))}%</td>
+                  <td>{fmtCurrency(sortedDebtReps.reduce((s, r) => s + Number(r.total_invoiced || 0), 0))}</td>
+                </tr>
+              </tfoot>
+            )}
           </table>
 
           {debtDetailByRep.map(({ rep, invoices }) => (
@@ -1140,6 +1151,19 @@ export default function SummaryPage() {
                     <tr><td colSpan={7} className="sm-empty">لا توجد فواتير</td></tr>
                   )}
                 </tbody>
+                {invoices.length > 0 && (
+                  <tfoot>
+                    <tr className="sm-tf-row">
+                      <td>الإجمالي ({invoices.length} فاتورة)</td>
+                      <td></td>
+                      <td></td>
+                      <td>{fmtCurrency(invoices.reduce((s, inv) => s + Number(inv.original_amount || 0), 0))}</td>
+                      <td>{fmtCurrency(invoices.reduce((s, inv) => s + Number(inv.paid_amount || 0), 0))}</td>
+                      <td>{fmtCurrency(invoices.reduce((s, inv) => s + Number(inv.balance || 0), 0))}</td>
+                      <td></td>
+                    </tr>
+                  </tfoot>
+                )}
               </table>
             </div>
           ))}

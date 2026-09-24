@@ -1,0 +1,219 @@
+.cfr-page { padding: 20px; }
+.cfr-header h1 { font-size: 1.3rem; margin: 0 0 4px; color: var(--color-text, #1e293b); }
+.cfr-subtitle { margin: 0 0 16px; font-size: 0.85rem; color: var(--color-text-muted, #64748b); }
+
+.cfr-tabs { display: flex; gap: 8px; margin-bottom: 16px; }
+.cfr-tab {
+  border: 1px solid var(--color-border, #e2e8f0);
+  background: var(--color-surface, #fff);
+  color: var(--color-text-muted, #64748b);
+  border-radius: 8px;
+  padding: 8px 16px;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+.cfr-tab:hover { background: #f8fafc; }
+.cfr-tab--active {
+  background: #2563eb;
+  border-color: #2563eb;
+  color: #fff;
+  font-weight: 600;
+}
+
+.cfr-card {
+  background: var(--color-surface, #fff);
+  border: 1px solid var(--color-border, #e2e8f0);
+  border-radius: 10px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+.cfr-card__title { font-weight: 600; font-size: 0.95rem; margin-bottom: 12px; }
+
+.cfr-filters { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-end; }
+.cfr-field { display: flex; flex-direction: column; gap: 4px; min-width: 160px; }
+.cfr-field label { font-size: 0.78rem; color: var(--color-text-muted, #64748b); }
+.cfr-input {
+  padding: 8px 10px;
+  border: 1px solid var(--color-border, #e2e8f0);
+  border-radius: 8px;
+  font-size: 0.85rem;
+  background: var(--color-surface, #fff);
+  color: var(--color-text, #1e293b);
+}
+.cfr-input--sm { padding: 5px 8px; font-size: 0.8rem; }
+
+.cfr-error {
+  background: #fef2f2; color: #dc2626; border: 1px solid #fecaca;
+  border-radius: 8px; padding: 10px 12px; margin-bottom: 16px; font-size: 0.85rem;
+}
+
+.cfr-tiles { display: flex; flex-wrap: wrap; gap: 14px; margin-bottom: 16px; }
+.cfr-tile {
+  flex: 1; min-width: 160px;
+  background: var(--color-surface, #fff);
+  border: 1px solid var(--color-border, #e2e8f0);
+  border-radius: 10px;
+  padding: 14px 16px;
+}
+.cfr-tile__label { font-size: 0.78rem; color: var(--color-text-muted, #64748b); margin-bottom: 6px; }
+.cfr-tile__value { font-size: 1.4rem; font-weight: 700; color: var(--color-text, #1e293b); }
+
+.cfr-alert { background: #fffbeb; border-color: #fde68a; }
+.cfr-alert__list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+
+.cfr-chip {
+  display: inline-flex; align-items: center; gap: 4px;
+  background: #f1f5f9; color: #334155;
+  padding: 3px 9px; border-radius: 999px; font-size: 0.78rem;
+}
+.cfr-chip--removable button {
+  border: none; background: none; color: #94a3b8; cursor: pointer; font-size: 0.8rem; padding: 0;
+}
+.cfr-chip--removable button:hover { color: #dc2626; }
+
+.cfr-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+@media (max-width: 900px) { .cfr-grid { grid-template-columns: 1fr; } }
+
+.cfr-table-wrap { overflow-x: auto; }
+.cfr-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+.cfr-table th, .cfr-table td {
+  padding: 8px; border-bottom: 1px solid var(--color-border, #e2e8f0); text-align: right;
+}
+.cfr-table thead th { color: var(--color-text-muted, #64748b); font-weight: 600; font-size: 0.78rem; }
+
+.cfr-empty { text-align: center; padding: 20px; color: var(--color-text-muted, #64748b); font-size: 0.85rem; }
+.cfr-muted { color: var(--color-text-muted, #64748b); font-size: 0.8rem; }
+
+/* ── Admin settings panel ── */
+.cfr-settings { margin-top: 24px; border-top: 2px dashed var(--color-border, #e2e8f0); padding-top: 20px; }
+.cfr-settings__title { font-size: 1.05rem; margin: 0 0 14px; }
+.cfr-add-row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.cfr-add-row .cfr-input { flex: 1; min-width: 140px; }
+
+.cfr-table--settings td { vertical-align: top; }
+.cfr-row-inactive { opacity: 0.55; }
+
+.cfr-assign-row { display: flex; gap: 6px; align-items: center; }
+
+.cfr-btn {
+  border: 1px solid var(--color-border, #e2e8f0);
+  background: var(--color-surface, #fff);
+  border-radius: 6px;
+  padding: 7px 12px;
+  font-size: 0.82rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.cfr-btn:hover { background: #f8fafc; }
+.cfr-btn:disabled { opacity: 0.5; cursor: default; }
+.cfr-btn--sm { padding: 4px 8px; font-size: 0.76rem; margin-inline-start: 4px; }
+.cfr-btn--danger { color: #dc2626; border-color: #fecaca; }
+.cfr-btn--danger:hover { background: #fef2f2; }
+
+.cfr-export-field { justify-content: flex-end; }
+.cfr-btn--export {
+  background: #16a34a;
+  border-color: #16a34a;
+  color: #fff;
+  font-weight: 600;
+  padding: 8px 14px;
+}
+.cfr-btn--export:hover { background: #15803d; }
+.cfr-btn--export:disabled { background: #cbd5e1; border-color: #cbd5e1; color: #64748b; cursor: default; }
+
+.cfr-hint { font-size: 0.76rem; color: var(--color-text-muted, #64748b); margin: 8px 0 0; }
+
+/* ── KPI summary + branch chart ── */
+.cfr-kpi-row { display: flex; flex-wrap: wrap; gap: 14px; margin-bottom: 18px; }
+.cfr-kpi {
+  flex: 1; min-width: 140px;
+  background: var(--color-bg, #f8fafc);
+  border: 1px solid var(--color-border, #e2e8f0);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+.cfr-kpi__label { font-size: 0.72rem; color: var(--color-text-muted, #64748b); margin-bottom: 4px; }
+.cfr-kpi__value { font-size: 1.15rem; font-weight: 700; color: var(--color-text, #1e293b); }
+.cfr-kpi__value--sm { font-size: 0.9rem; }
+.cfr-kpi__sub { font-size: 0.72rem; color: var(--color-text-muted, #64748b); margin-top: 2px; }
+
+.cfr-branch-chart { margin-top: 4px; }
+.cfr-branch-chart__title { font-size: 0.8rem; font-weight: 600; color: var(--color-text-muted, #64748b); margin-bottom: 10px; }
+.cfr-branch-bar-row {
+  display: grid;
+  grid-template-columns: 140px 1fr 70px;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.cfr-branch-bar-label { font-size: 0.78rem; color: var(--color-text, #1e293b); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cfr-branch-bar-track {
+  height: 14px;
+  background: var(--color-bg, #f1f5f9);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.cfr-branch-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #2563eb, #60a5fa);
+  border-radius: 999px;
+  transition: width 0.4s ease;
+}
+.cfr-branch-bar-value { font-size: 0.76rem; color: var(--color-text-muted, #64748b); text-align: end; }
+
+/* ── Photo album ── */
+.cfr-album { display: flex; flex-direction: column; gap: 16px; }
+.cfr-album-group__title { font-size: 0.82rem; font-weight: 600; margin-bottom: 8px; }
+.cfr-album-group__grid { display: flex; flex-wrap: wrap; gap: 8px; }
+.cfr-album-thumb {
+  display: block;
+  width: 90px;
+  height: 90px;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid var(--color-border, #e2e8f0);
+}
+.cfr-album-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+/* ── Report log (expand-per-report) ── */
+.cfr-report-row { cursor: pointer; }
+.cfr-report-row:hover { background: #f8fafc; }
+.cfr-report-toggle { width: 20px; color: var(--color-text-muted, #64748b); }
+.cfr-report-detail-row td { background: var(--color-bg, #f8fafc); padding: 12px; }
+.cfr-report-detail-notes { font-size: 0.8rem; color: var(--color-text-muted, #64748b); margin-bottom: 8px; }
+.cfr-table--nested { background: var(--color-surface, #fff); border-radius: 6px; overflow: hidden; }
+
+/* ── "الأسعار Survey" cross-branch report matrix ─────────────── */
+.cfr-price-table { font-size: 0.82rem; }
+.cfr-price-table th, .cfr-price-table td { text-align: center; }
+/* Frozen "الصنف" column + frozen header row — same reasoning as
+   .cfe-price-item-col in CarrefourDamageEntryPage.css (the two matrices
+   share the same shape). */
+.cfr-price-item-col {
+  position: sticky; right: 0; z-index: 2;
+  background: var(--color-surface, #fff);
+  text-align: right !important; white-space: normal !important; min-width: 140px;
+  box-shadow: -2px 0 4px -2px rgba(0,0,0,0.08);
+}
+.cfr-price-table thead th {
+  position: sticky; top: 0; z-index: 3;
+  background: var(--color-surface, #fff);
+}
+.cfr-price-table thead th.cfr-price-item-col { z-index: 4; }
+.cfr-price-own-col { background: #eff6ff; }
+.cfr-price-cat-row td { background: #dc2626; padding: 0; }
+.cfr-price-cat-label {
+  display: inline-block; position: sticky; right: 10px;
+  color: #fff; font-weight: 700; padding: 6px 0;
+}
+.cfr-price-cell { padding: 6px 4px !important; }
+.cfr-price-cell--min { background: #dcfce7; }
+/* A cell where branches disagree — visually distinct from a settled "lowest
+   price" match (both can't be true of the same cell: a conflicting cell is
+   never counted into the min/avg calculation in the first place). */
+.cfr-price-cell--conflict { background: #fef3c7; }
+.cfr-price-conflict { font-size: 0.76rem; font-weight: 600; color: #92400e; cursor: help; }
+.cfr-price-avg-col { font-weight: 600; }
+.cfr-price-dev { font-size: 0.68rem; font-weight: 600; }
+.cfr-price-dev--good { color: #16a34a; }
+.cfr-price-dev--bad { color: #dc2626; }

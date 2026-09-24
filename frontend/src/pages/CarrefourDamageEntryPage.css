@@ -1,0 +1,268 @@
+.cfe-page { padding: 20px; max-width: 760px; margin: 0 auto; }
+.cfe-header h1 { font-size: 1.3rem; margin: 0 0 4px; color: var(--color-text, #1e293b); }
+.cfe-subtitle { margin: 0 0 16px; font-size: 0.85rem; color: var(--color-text-muted, #64748b); }
+
+.cfe-tabs { display: flex; gap: 8px; margin-bottom: 16px; }
+.cfe-tab {
+  border: 1px solid var(--color-border, #e2e8f0);
+  background: var(--color-surface, #fff);
+  color: var(--color-text-muted, #64748b);
+  border-radius: 8px;
+  padding: 8px 16px;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+.cfe-tab:hover { background: #f8fafc; }
+.cfe-tab--active {
+  background: #2563eb;
+  border-color: #2563eb;
+  color: #fff;
+  font-weight: 600;
+}
+
+.cfe-card {
+  background: var(--color-surface, #fff);
+  border: 1px solid var(--color-border, #e2e8f0);
+  border-radius: 10px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+.cfe-card__title {
+  font-weight: 600;
+  font-size: 0.95rem;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.cfe-badge {
+  font-size: 0.72rem;
+  font-weight: 500;
+  background: #fef3c7;
+  color: #92400e;
+  padding: 3px 8px;
+  border-radius: 6px;
+}
+
+.cfe-filters { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-end; }
+.cfe-field { display: flex; flex-direction: column; gap: 4px; min-width: 180px; }
+.cfe-field label { font-size: 0.78rem; color: var(--color-text-muted, #64748b); }
+.cfe-select, .cfe-input {
+  padding: 8px 10px;
+  border: 1px solid var(--color-border, #e2e8f0);
+  border-radius: 8px;
+  font-size: 0.88rem;
+  background: var(--color-surface, #fff);
+  color: var(--color-text, #1e293b);
+}
+.cfe-admin-note { font-size: 0.78rem; color: #7c3aed; }
+
+.cfe-empty {
+  text-align: center;
+  padding: 24px;
+  color: var(--color-text-muted, #64748b);
+  font-size: 0.88rem;
+}
+
+.cfe-table-wrap { overflow-x: auto; }
+.cfe-table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+.cfe-table th, .cfe-table td {
+  padding: 10px 8px;
+  border-bottom: 1px solid var(--color-border, #e2e8f0);
+  text-align: right;
+}
+.cfe-table thead th { color: var(--color-text-muted, #64748b); font-weight: 600; font-size: 0.8rem; }
+.cfe-table tfoot td { font-weight: 600; border-top: 2px solid var(--color-border, #e2e8f0); border-bottom: none; }
+
+.cfe-qty-input {
+  width: 100px;
+  padding: 6px 8px;
+  border: 1px solid var(--color-border, #e2e8f0);
+  border-radius: 6px;
+  text-align: center;
+  font-size: 0.9rem;
+}
+.cfe-date-input {
+  width: 150px;
+  padding: 6px 8px;
+  border: 1px solid var(--color-border, #e2e8f0);
+  border-radius: 6px;
+  font-size: 0.85rem;
+  color: var(--color-text, #1e293b);
+  background: var(--color-surface, #fff);
+}
+.cfe-note-input {
+  width: 100%;
+  min-width: 160px;
+  padding: 6px 8px;
+  border: 1px solid var(--color-border, #e2e8f0);
+  border-radius: 6px;
+  font-size: 0.85rem;
+  color: var(--color-text, #1e293b);
+  background: var(--color-surface, #fff);
+}
+
+.cfe-notes-field { margin-top: 16px; }
+.cfe-textarea {
+  padding: 8px 10px;
+  border: 1px solid var(--color-border, #e2e8f0);
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 0.85rem;
+  resize: vertical;
+  color: var(--color-text, #1e293b);
+  background: var(--color-surface, #fff);
+}
+
+.cfe-actions { display: flex; align-items: center; gap: 12px; margin-top: 16px; }
+.cfe-btn {
+  border: none;
+  border-radius: 8px;
+  padding: 10px 18px;
+  font-size: 0.88rem;
+  cursor: pointer;
+}
+.cfe-btn--primary { background: #2563eb; color: #fff; }
+.cfe-btn--primary:hover { background: #1d4ed8; }
+.cfe-btn--primary:disabled { opacity: 0.5; cursor: default; }
+.cfe-save-ok { color: #16a34a; font-size: 0.85rem; font-weight: 500; }
+.cfe-save-err { color: #dc2626; font-size: 0.85rem; }
+
+.cfe-save-log {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px dashed var(--color-border, #e2e8f0);
+}
+.cfe-save-log__title {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--color-text-muted, #64748b);
+  margin-bottom: 6px;
+}
+.cfe-save-log__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.78rem;
+  color: var(--color-text-muted, #64748b);
+  max-height: 140px;
+  overflow-y: auto;
+}
+.cfe-save-log__list strong { color: var(--color-text, #1e293b); }
+
+.cfe-photos-field { margin-top: 16px; }
+.cfe-photo-upload-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: fit-content;
+  padding: 8px 14px;
+  border: 1px solid var(--color-border, #e2e8f0);
+  border-radius: 8px;
+  background: var(--color-surface, #fff);
+  color: var(--color-text, #1e293b);
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+.cfe-photo-upload-btn:hover { background: #f8fafc; }
+.cfe-photo-uploading { margin-inline-start: 8px; font-size: 0.8rem; color: var(--color-text-muted, #64748b); }
+
+.cfe-photo-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 10px;
+}
+.cfe-photo-thumb {
+  position: relative;
+  width: 90px;
+  height: 90px;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid var(--color-border, #e2e8f0);
+}
+.cfe-photo-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.cfe-photo-remove {
+  position: absolute;
+  top: 2px;
+  inset-inline-end: 2px;
+  width: 20px;
+  height: 20px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(0,0,0,0.6);
+  color: #fff;
+  font-size: 0.7rem;
+  cursor: pointer;
+  line-height: 1;
+}
+.cfe-photo-remove:hover { background: #dc2626; }
+
+@media (max-width: 640px) {
+  .cfe-page { padding: 12px; }
+  .cfe-filters { flex-direction: column; align-items: stretch; }
+}
+
+/* ── "الأسعار Survey" matrix ──────────────────────────────────
+   .cfe-page is capped at 760px for the flat item-list tabs above — far too
+   narrow for an item×brand matrix (9+ columns), so this tab's wrapper
+   opts out of that cap specifically. */
+.cfe-page--wide { max-width: 1200px; }
+
+.cfe-hint { margin: 10px 2px 0; font-size: 0.78rem; color: var(--color-text-muted, #64748b); }
+
+.cfe-price-table { font-size: 0.82rem; }
+.cfe-price-table th, .cfe-price-table td { text-align: center; white-space: nowrap; }
+/* Frozen "الصنف" column (pinned to the RTL layout's right edge — the first
+   DOM column renders there) while the rest of the matrix scrolls under it
+   horizontally, plus a frozen header row for vertical scroll (page-level
+   or within the table's own scroll box, whichever applies — .cfe-table-wrap
+   only sets overflow-x, so `top: 0` tracks the page scroll here). Needs an
+   OPAQUE background (not transparent) or cells scrolling underneath would
+   show through the "frozen" one. The header's own item-name cell is both
+   the row-header AND column-header at once, so it needs the highest
+   z-index to stay above the other frozen edges. */
+.cfe-price-item-col {
+  position: sticky; right: 0; z-index: 2;
+  background: var(--color-surface, #fff);
+  text-align: right !important; white-space: normal !important; min-width: 140px;
+  box-shadow: -2px 0 4px -2px rgba(0,0,0,0.08);
+}
+.cfe-price-table thead th {
+  position: sticky; top: 0; z-index: 3;
+  background: var(--color-surface, #fff);
+}
+.cfe-price-table thead th.cfe-price-item-col { z-index: 4; }
+.cfe-price-own-col { background: #eff6ff; }
+.cfe-price-cat-row td { background: #dc2626; padding: 0; }
+/* The category bar is one colSpan cell — pinning the TD itself would just
+   pin the whole red bar in place while scrolling, hiding the columns
+   behind it; pinning the LABEL inside it instead keeps the bar scrolling
+   normally while its text stays readable at the frozen edge. */
+.cfe-price-cat-label {
+  display: inline-block; position: sticky; right: 10px;
+  color: #fff; font-weight: 700; padding: 6px 0;
+}
+
+.cfe-price-cell { position: relative; padding: 4px !important; }
+.cfe-price-cell--min { background: #dcfce7; }
+.cfe-price-input {
+  width: 64px; text-align: center; padding: 5px 4px;
+  border: 1px solid var(--color-border, #e2e8f0); border-radius: 6px; font-size: 0.82rem;
+}
+.cfe-price-input:focus { outline: none; border-color: #2563eb; }
+.cfe-price-initials {
+  display: block; font-size: 0.62rem; color: var(--color-text-muted, #64748b);
+  margin-top: 1px; cursor: help;
+}
+.cfe-price-status { position: absolute; top: 2px; left: 2px; font-size: 0.65rem; }
+.cfe-price-status--err { color: #dc2626; }
+
+.cfe-price-avg-col { font-weight: 600; }
+.cfe-price-dev { font-size: 0.68rem; font-weight: 600; }
+.cfe-price-dev--good { color: #16a34a; }
+.cfe-price-dev--bad { color: #dc2626; }

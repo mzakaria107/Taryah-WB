@@ -3,12 +3,26 @@ import axios from 'axios';
 
 const AuthContext = createContext(null);
 
+// A corrupted or legacy localStorage['user'] value (e.g. the literal string
+// "undefined", written by `JSON.stringify(undefined)` if a login response
+// ever omitted `user`) must not crash the whole app on mount — there is no
+// error boundary, so an uncaught exception here blanks the entire page with
+// no navbar/error message at all. Treat any unparsable value as logged-out.
+function readStoredUser() {
+  const raw = localStorage.getItem('user');
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    localStorage.removeItem('user');
+    localStorage.removeItem('token');
+    return null;
+  }
+}
+
 export function AuthProvider({ children }) {
   const [token, setToken] = useState(() => localStorage.getItem('token'));
-  const [user, setUser] = useState(() => {
-    const u = localStorage.getItem('user');
-    return u ? JSON.parse(u) : null;
-  });
+  const [user, setUser] = useState(readStoredUser);
   const [loading, setLoading] = useState(false);
   const heartbeatRef = useRef(null);
 
@@ -30,6 +44,9 @@ export function AuthProvider({ children }) {
     setLoading(true);
     try {
       const { data } = await axios.post('/api/auth/login', { email, password });
+      if (!data?.token || !data?.user) {
+        return { success: false, error: 'استجابة غير صالحة من الخادم، حاول مجدداً' };
+      }
       localStorage.setItem('token', data.token);
       localStorage.setItem('user', JSON.stringify(data.user));
       axios.defaults.headers.common['Authorization'] = `Bearer ${data.token}`;

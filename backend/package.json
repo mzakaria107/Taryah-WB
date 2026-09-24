@@ -25,6 +25,7 @@
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
+    "node-ssh": "^13.2.1",
     "nodemon": "^3.1.4"
   }
 }

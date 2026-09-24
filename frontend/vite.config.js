@@ -24,6 +24,13 @@ export default defineConfig({
         ],
       },
       workbox: {
+        // Activate a new service worker (and its updated precache/asset list)
+        // immediately instead of waiting for all tabs to close. Without this,
+        // deployed changes can silently fail to appear until a hard refresh
+        // because the old SW keeps serving its stale cached bundle.
+        skipWaiting: true,
+        clientsClaim: true,
+        cleanupOutdatedCaches: true,
         runtimeCaching: [
           {
             // Never cache ANY API call — all data is dynamic and requires fresh responses

@@ -10,19 +10,20 @@ import Filters, { EMPTY_FILTERS } from '../components/Dashboard/Filters';
 import CustomerSummaryTable from '../components/Dashboard/CustomerSummaryTable';
 import StatusRow            from '../components/Dashboard/StatusRow';
 import { useAuth }          from '../context/AuthContext';
+import { useLanguage }      from '../context/LanguageContext';
 import client               from '../api/client';
 
 /* ── Last-uploads bar ───────────────────────────── */
 const REPORTS = [
-  { key: 'customer_balance', label: 'أرصدة العملاء',       icon: '📄' },
-  { key: 'payments',         label: 'المدفوعات',            icon: '💳' },
-  { key: 'sales_activity',   label: 'تقرير العملاء المتعاملة', icon: '📊' },
+  { key: 'customer_balance', label: 'أرصدة العملاء',       labelEn: 'Customer Balances',  icon: '📄' },
+  { key: 'payments',         label: 'المدفوعات',            labelEn: 'Payments',           icon: '💳' },
+  { key: 'sales_activity',   label: 'تقرير العملاء المتعاملة', labelEn: 'Customer Activity Report', icon: '📊' },
 ];
 
-function fmtTs(ts) {
+function fmtTs(ts, lang) {
   if (!ts) return null;
   const d = new Date(ts);
-  return d.toLocaleString('ar-SA', {
+  return d.toLocaleString(lang === 'en' ? 'en-US' : 'ar-SA', {
     year: 'numeric', month: 'short', day: 'numeric',
     hour: '2-digit', minute: '2-digit',
   });
@@ -37,6 +38,7 @@ function ageColor(ts) {
 }
 
 function LastUploadsBar({ data }) {
+  const { lang } = useLanguage();
   if (!data) return null;
   return (
     <div style={{
@@ -46,11 +48,11 @@ function LastUploadsBar({ data }) {
       marginBottom: 20, alignItems: 'center',
     }}>
       <span style={{ fontSize: 12, fontWeight: 700, color: '#6b7280', marginLeft: 4, flexShrink: 0 }}>
-        🕐 آخر تحديث للبيانات:
+        🕐 {lang === 'en' ? 'Last data update:' : 'آخر تحديث للبيانات:'}
       </span>
       {REPORTS.map(r => {
         const ts  = data[r.key];
-        const fmt = fmtTs(ts);
+        const fmt = fmtTs(ts, lang);
         const col = ageColor(ts);
         return (
           <div key={r.key} style={{
@@ -59,9 +61,9 @@ function LastUploadsBar({ data }) {
             borderRadius: 8, padding: '5px 12px', fontSize: 12,
           }}>
             <span>{r.icon}</span>
-            <span style={{ color: '#374151', fontWeight: 600 }}>{r.label}:</span>
+            <span style={{ color: '#374151', fontWeight: 600 }}>{lang === 'en' ? r.labelEn : r.label}:</span>
             <span style={{ color: col, fontWeight: 700, fontFamily: 'var(--font-en)' }}>
-              {fmt ?? 'لم يُحدَّث بعد'}
+              {fmt ?? (lang === 'en' ? 'Not updated yet' : 'لم يُحدَّث بعد')}
             </span>
             <span style={{
               width: 8, height: 8, borderRadius: '50%',
@@ -87,11 +89,19 @@ function buildParams(filters) {
   if (filters.activeMonths && filters.activeMonths.size > 0)
     p.months = [...filters.activeMonths].sort((a, b) => a - b).join(',');
   if (filters.includeDirect === false) p.customer_type = 'route';
+  if (filters.excludeCarrefour) p.exclude_carrefour = 'true';
+  if (filters.catFilter) {
+    const inc = Object.entries(filters.catFilter).filter(([,v]) => v === 'include').map(([k]) => k);
+    const exc = Object.entries(filters.catFilter).filter(([,v]) => v === 'exclude').map(([k]) => k);
+    if (inc.length) p.include_cats = inc.join(',');
+    if (exc.length) p.exclude_cats = exc.join(',');
+  }
   return p;
 }
 
 export default function Dashboard() {
   const { user } = useAuth();
+  const { lang, t } = useLanguage();
   // includeDirect always starts as false — direct sales excluded by default for all users.
   // Clear any stale sessionStorage value from old versions so it doesn't affect new sessions.
   sessionStorage.removeItem('includeDirect');
@@ -205,9 +215,10 @@ export default function Dashboard() {
 
   const customers   = custData?.data  ?? [];
   const custTotal   = custData?.total ?? 0;
-  const metaRegions = meta?.regions   ?? [];
-  const metaReps    = meta?.reps      ?? [];
-  const metaRoutes  = meta?.routes    ?? [];
+  const metaRegions = meta?.regions            ?? [];
+  const metaReps    = meta?.reps               ?? [];
+  const metaRoutes  = meta?.routes             ?? [];
+  const metaCats    = meta?.customerCategories ?? [];
 
   const availableYears = useMemo(
     () => years.map(y => y.year).sort((a, b) => a - b),
@@ -234,10 +245,10 @@ export default function Dashboard() {
 
   const handlePrint = useCallback(() => {
     const prev = document.title;
-    document.title = `لوحة التحكم — ${new Date().toLocaleDateString('ar-SA', { year:'numeric', month:'long', day:'numeric' })}`;
+    document.title = `${t('dashTitle')} — ${new Date().toLocaleDateString(lang === 'en' ? 'en-US' : 'ar-SA', { year:'numeric', month:'long', day:'numeric' })}`;
     window.print();
     window.onafterprint = () => { document.title = prev; window.onafterprint = null; };
-  }, []);
+  }, [lang, t]);
 
   /* Last-upload timestamps */
   const { data: lastUploads } = useQuery({
@@ -252,12 +263,12 @@ export default function Dashboard() {
       {/* Print header */}
       <div className="db-print-header">
         <span className="db-print-logo">📊</span>
-        <span className="db-print-title">لوحة التحكم — Dashboard</span>
-        <span className="db-print-date">{new Date().toLocaleDateString('ar-SA',{year:'numeric',month:'long',day:'numeric',weekday:'long'})}</span>
+        <span className="db-print-title">{t('dashTitle')} — Dashboard</span>
+        <span className="db-print-date">{new Date().toLocaleDateString(lang === 'en' ? 'en-US' : 'ar-SA',{year:'numeric',month:'long',day:'numeric',weekday:'long'})}</span>
       </div>
 
       {/* PDF button */}
-      <button className="db-pdf-btn db-no-print" onClick={handlePrint} title="تصدير PDF / طباعة">
+      <button className="db-pdf-btn db-no-print" onClick={handlePrint} title={t('dashPrint')}>
         <Printer size={14} /> PDF
       </button>
 
@@ -308,20 +319,21 @@ export default function Dashboard() {
         directStats={null}
         metaReps={metaReps}
         metaRoutes={metaRoutes}
+        customerCategories={metaCats}
       />
 
       {/* Result info + active filter badges */}
       {!custLoading && (
         <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:12, paddingRight:2, flexWrap:'wrap' }}>
           <span style={{ fontSize:13, color:'var(--color-text-secondary)' }}>
-            عرض{' '}
+            {lang === 'en' ? 'Showing' : 'عرض'}{' '}
             <strong style={{ color:'var(--color-text-primary)' }}>
               {customers.length.toLocaleString('en-SA')}
             </strong>{' '}
-            عميل
+            {lang === 'en' ? 'customers' : 'عميل'}
             {custTotal > customers.length && (
               <span style={{ color:'var(--color-text-muted)', fontSize:11 }}>
-                {' '}(من أصل {custTotal.toLocaleString('en-SA')})
+                {' '}{lang === 'en' ? `(of ${custTotal.toLocaleString('en-SA')})` : `(من أصل ${custTotal.toLocaleString('en-SA')})`}
               </span>
             )}
           </span>
@@ -330,7 +342,7 @@ export default function Dashboard() {
             <span style={{ fontSize:11, padding:'2px 10px', borderRadius:999,
               background:'var(--color-brand-green-pale)', color:'var(--color-brand-green)',
               border:'1px solid rgba(46,125,50,0.2)', fontWeight:600 }}>
-              المبيعات المباشرة مُدرجة
+              {lang === 'en' ? 'Direct sales included' : 'المبيعات المباشرة مُدرجة'}
             </span>
           )}
           {filters.region_id && (
@@ -338,7 +350,7 @@ export default function Dashboard() {
               background:'var(--color-brand-green-pale)', color:'var(--color-brand-green)',
               border:'1px solid rgba(46,125,50,0.2)', fontWeight:600,
               display:'flex', alignItems:'center', gap:4 }}>
-              المنطقة: {metaRegions.find(r => String(r.id) === String(filters.region_id))?.name_ar || filters.region_id}
+              {lang === 'en' ? 'Region' : 'المنطقة'}: {metaRegions.find(r => String(r.id) === String(filters.region_id))?.name_ar || filters.region_id}
               <button onClick={() => setFilters(f => ({ ...f, region_id:'' }))}
                 style={{ background:'none', border:0, cursor:'pointer', color:'inherit', padding:0, fontSize:12 }}>✕</button>
             </span>
@@ -348,7 +360,7 @@ export default function Dashboard() {
               background:'var(--color-brand-green-pale)', color:'var(--color-brand-green)',
               border:'1px solid rgba(46,125,50,0.2)', fontWeight:600,
               display:'flex', alignItems:'center', gap:4 }}>
-              المندوب: {filters.sales_rep_name}
+              {lang === 'en' ? 'Rep' : 'المندوب'}: {filters.sales_rep_name}
               <button onClick={() => setFilters(f => ({ ...f, sales_rep_name:'' }))}
                 style={{ background:'none', border:0, cursor:'pointer', color:'inherit', padding:0, fontSize:12 }}>✕</button>
             </span>
@@ -358,7 +370,7 @@ export default function Dashboard() {
               background:'var(--color-brand-green-pale)', color:'var(--color-brand-green)',
               border:'1px solid rgba(46,125,50,0.2)', fontWeight:600,
               display:'flex', alignItems:'center', gap:4, fontFamily:'var(--font-en)' }}>
-              خط: {filters.route_id}
+              {lang === 'en' ? 'Route' : 'خط'}: {filters.route_id}
               <button onClick={() => setFilters(f => ({ ...f, route_id:'' }))}
                 style={{ background:'none', border:0, cursor:'pointer', color:'inherit', padding:0, fontSize:12 }}>✕</button>
             </span>

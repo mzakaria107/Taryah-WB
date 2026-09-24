@@ -60,6 +60,67 @@
   white-space: nowrap;
 }
 
+/* ── Category toggle pills ──────────────────── */
+.sap-cat-pills {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 14px;
+  background: var(--color-bg-alt, #f5f7fa);
+  border: 1px solid var(--color-border, #e0e0e0);
+  border-radius: var(--radius-md, 8px);
+  direction: rtl;
+}
+
+.sap-cat-pills-label {
+  font-size: 12px;
+  color: var(--color-text-secondary, #666);
+  font-weight: 600;
+  white-space: nowrap;
+  margin-left: 4px;
+}
+
+.sap-cat-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  border: 1.5px solid var(--color-border, #ccc);
+  background: #fff;
+  color: var(--color-text-primary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.sap-cat-pill:hover {
+  border-color: var(--color-brand-green, #22c55e);
+  background: #f0fdf4;
+}
+
+.sap-cat-pill--include {
+  background: #dcfce7;
+  border-color: #16a34a;
+  color: #15803d;
+  font-weight: 700;
+}
+
+.sap-cat-pill--exclude {
+  background: #fee2e2;
+  border-color: #dc2626;
+  color: #b91c1c;
+  font-weight: 700;
+}
+
+.sap-pill-icon {
+  font-size: 11px;
+  font-weight: 900;
+}
+
 .sap-select {
   border: 1px solid var(--color-border, #e0e0e0);
   border-radius: 6px;
@@ -168,6 +229,37 @@
   z-index: 4;
 }
 
+/* ── Pinned first 5 columns (تقرير الحضور الشهري only) ──
+   The month columns (يناير..سبتمبر) make this table much wider than the
+   viewport, so the identifying columns (#، اسم العميل، الكود، المنطقة،
+   المندوب) stay pinned to the right (RTL) while only the month/totals
+   columns scroll — same `position: sticky` mechanism the shared
+   `:first-child` rule above already uses for every .sap-table, just
+   extended to 5 columns and scoped to this table only via
+   `.sap-table--report` so the shorter tables (العملاء الجدد/المتوقفون)
+   are unaffected. Each column needs an explicit width so the cumulative
+   `right` offsets below (0 / 40 / 220 / 310 / 400) line up exactly —
+   without a fixed width, differing content lengths per row would make
+   the columns jitter/misalign as sticky offsets are computed once, not
+   per-row. */
+.sap-table--report th:nth-child(-n+5),
+.sap-table--report td:nth-child(-n+5) {
+  position: sticky;
+  z-index: 2;
+  background: inherit;
+}
+.sap-table--report thead th:nth-child(-n+5) {
+  z-index: 4;
+}
+.sap-table--report th:nth-child(1),  .sap-table--report td:nth-child(1)  { right: 0;   width: 40px;  min-width: 40px;  }
+.sap-table--report th:nth-child(2),  .sap-table--report td:nth-child(2)  { right: 40px; width: 180px; min-width: 180px; }
+.sap-table--report th:nth-child(3),  .sap-table--report td:nth-child(3)  { right: 220px; width: 90px; min-width: 90px; }
+.sap-table--report th:nth-child(4),  .sap-table--report td:nth-child(4)  { right: 310px; width: 90px; min-width: 90px; }
+.sap-table--report th:nth-child(5),  .sap-table--report td:nth-child(5)  {
+  right: 400px; width: 130px; min-width: 130px;
+  box-shadow: -3px 0 4px -2px rgba(0,0,0,.12); /* separates pinned area from the scrolling columns */
+}
+
 /* ── Rows ───────────────────────────── */
 .sap-table tbody tr {
   background: #fff;
@@ -218,6 +310,15 @@
 .sap-month-dash {
   color: #cbd5e1;
   font-size: 14px;
+}
+
+.sap-month-qty {
+  display: block;
+  margin-top: 2px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--color-text-muted, #64748b);
+  font-family: var(--font-en, monospace);
 }
 
 /* ── Status badge ───────────────────── */
@@ -799,6 +900,7 @@
 
   .sap-no-print,
   .sap-filters,
+  .sap-cat-pills,
   .sap-tabs,
   .sap-btn-export,
   .sap-btn-pdf { display: none !important; }
@@ -825,3 +927,23 @@
   [class*="table-wrap"],
   [class*="table-container"] { overflow: visible !important; }
 }
+
+/* ── Last-invoice-date cell ─────────────────────────────────── */
+.sap-last-inv {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  line-height: 1.25;
+  cursor: help;
+  white-space: nowrap;
+}
+.sap-last-inv bdi {
+  font-family: var(--font-en, monospace);
+  font-size: 12px;
+  font-weight: 700;
+}
+.sap-last-inv__ago { font-size: 10px; opacity: .8; }
+.sap-last-inv--fresh bdi { color: var(--color-brand-green, #0E6B4F); }
+.sap-last-inv--warn  bdi { color: #B45309; }
+.sap-last-inv--stale bdi { color: #B3261E; }

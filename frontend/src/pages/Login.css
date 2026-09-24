@@ -1,5 +1,6 @@
 /* ── Background ─────────────────────────────────── */
 .login-bg {
+  position: relative;
   min-height: 100vh;
   display: flex;
   align-items: center;
@@ -16,6 +17,26 @@
     radial-gradient(circle, rgba(255,255,255,0.03) 1px, transparent 1px);
   background-size: 100% 100%, 100% 100%, 22px 22px;
 }
+
+/* ── Language toggle ────────────────────────────── */
+.login-lang-btn {
+  position: absolute;
+  top: 20px;
+  left: 20px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.2);
+  background: rgba(255,255,255,0.08);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  z-index: 1;
+}
+.login-lang-btn:hover { background: rgba(255,255,255,0.16); }
 
 /* ── Card ───────────────────────────────────────── */
 .login-card {

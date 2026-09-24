@@ -7,6 +7,7 @@ import { AuthProvider } from './context/AuthContext';
 import { PermissionsProvider } from './context/PermissionsContext';
 import { DashboardSettingsProvider } from './context/DashboardSettingsContext';
 import { SidebarOrderProvider } from './context/SidebarOrderContext';
+import { LanguageProvider } from './context/LanguageContext';
 import { ToastProvider } from './components/UI/Toast';
 import './index.css';
 
@@ -24,17 +25,19 @@ ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <BrowserRouter>
       <QueryClientProvider client={queryClient}>
-        <AuthProvider>
-          <PermissionsProvider>
-            <SidebarOrderProvider>
-              <DashboardSettingsProvider>
-                <ToastProvider>
-                  <App />
-                </ToastProvider>
-              </DashboardSettingsProvider>
-            </SidebarOrderProvider>
-          </PermissionsProvider>
-        </AuthProvider>
+        <LanguageProvider>
+          <AuthProvider>
+            <PermissionsProvider>
+              <SidebarOrderProvider>
+                <DashboardSettingsProvider>
+                  <ToastProvider>
+                    <App />
+                  </ToastProvider>
+                </DashboardSettingsProvider>
+              </SidebarOrderProvider>
+            </PermissionsProvider>
+          </AuthProvider>
+        </LanguageProvider>
       </QueryClientProvider>
     </BrowserRouter>
   </React.StrictMode>

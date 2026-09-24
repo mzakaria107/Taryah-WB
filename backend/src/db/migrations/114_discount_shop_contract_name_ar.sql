@@ -1,0 +1,11 @@
+-- Customer contracts are printed with the customer's English name only
+-- (discount_shop_contracts.customer_name, and discount_shop_customers'
+-- own single customer_name column, both sourced from the "Customer List -
+-- CM" English column). Requested: show BOTH the Arabic and English name
+-- on the printed contract. The real Arabic name already exists — it's
+-- customers.customer_name_ar (081_customers_name_ar.sql) — so no new
+-- upload/data-entry is needed, just resolving it live (customer-list,
+-- incentive-baseline) and freezing it at print time (this column), same
+-- "frozen snapshot, not a live re-join" rule the rest of this table
+-- follows for avg_monthly_value/growth_pct/target_value/tiers.
+ALTER TABLE discount_shop_contracts ADD COLUMN IF NOT EXISTS customer_name_ar VARCHAR(300);

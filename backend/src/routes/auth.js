@@ -14,7 +14,7 @@ router.post('/register', verifyToken, async (req, res) => {
     return res.status(403).json({ error: 'إنشاء المستخدمين متاح للمدير العام فقط' });
   }
 
-  const { name, email, password, role, region_id } = req.body;
+  const { name, email, password, role, region_id, region_ids } = req.body;
 
   if (!name || !email || !password) {
     return res.status(400).json({ error: 'الاسم والبريد الإلكتروني وكلمة المرور مطلوبة' });
@@ -23,10 +23,14 @@ router.post('/register', verifyToken, async (req, res) => {
     return res.status(400).json({ error: 'كلمة المرور يجب أن تكون 6 أحرف على الأقل' });
   }
 
-  const allowed = ['super_admin','it_admin','sales_manager','top_management','supervisor','region_manager','sales_rep','fridge_admin','accounts','viewer'];
+  const allowed = ['super_admin','it_admin','sales_manager','top_management','supervisor','region_manager','sales_rep','fridge_admin','accounts','viewer','carrefour_rep','quality_returns_monitor','fleet_supervisor'];
   if (role && !allowed.includes(role)) {
     return res.status(400).json({ error: 'الدور غير صالح' });
   }
+
+  const ids = Array.isArray(region_ids) && region_ids.length
+    ? [...new Set(region_ids.map(Number))]
+    : (region_id ? [Number(region_id)] : []);
 
   try {
     const existing = await pool.query('SELECT id FROM users WHERE email = $1', [email]);
@@ -41,10 +45,18 @@ router.post('/register', verifyToken, async (req, res) => {
       `INSERT INTO users (id, name, email, password_hash, role, region_id, is_active)
        VALUES ($1, $2, $3, $4, $5, $6, TRUE)
        RETURNING id, name, email, role, region_id, is_active, created_at`,
-      [id, name, email, password_hash, role || 'viewer', region_id || null]
+      [id, name, email, password_hash, role || 'viewer', ids[0] || null]
     );
 
-    res.status(201).json({ user: rows[0] });
+    if (ids.length) {
+      const placeholders = ids.map((_, i) => `($1, $${i + 2})`).join(', ');
+      await pool.query(
+        `INSERT INTO user_regions (user_id, region_id) VALUES ${placeholders}`,
+        [id, ...ids]
+      );
+    }
+
+    res.status(201).json({ user: { ...rows[0], region_ids: ids } });
   } catch (err) {
     console.error('Register error:', err);
     res.status(500).json({ error: 'خطأ في الخادم' });
@@ -81,12 +93,16 @@ router.post('/login', async (req, res) => {
     // Track last login time
     await pool.query('UPDATE users SET last_seen_at = NOW() WHERE id = $1', [user.id]);
 
+    const regionsRes = await pool.query('SELECT region_id FROM user_regions WHERE user_id = $1', [user.id]);
+    const region_ids = regionsRes.rows.map(r => r.region_id);
+
     const payload = {
       id: user.id,
       name: user.name,
       email: user.email,
       role: user.role,
-      region_id: user.region_id,
+      region_id: region_ids[0] ?? user.region_id ?? null,
+      region_ids: region_ids.length ? region_ids : (user.region_id ? [user.region_id] : []),
     };
 
     const token = jwt.sign(payload, process.env.JWT_SECRET, {
@@ -114,15 +130,21 @@ router.post('/heartbeat', verifyToken, async (req, res) => {
 router.get('/me', verifyToken, async (req, res) => {
   try {
     const { rows } = await pool.query(
-      `SELECT u.id, u.name, u.email, u.role, u.region_id, u.created_at,
-              r.name_ar AS region_name_ar, r.name_en AS region_name_en
+      `SELECT u.id, u.name, u.email, u.role, u.region_id, u.created_at
        FROM users u
-       LEFT JOIN regions r ON r.id = u.region_id
        WHERE u.id = $1`,
       [req.user.id]
     );
     if (rows.length === 0) return res.status(404).json({ error: 'المستخدم غير موجود' });
-    res.json(rows[0]);
+
+    const regionsRes = await pool.query(
+      `SELECT r.id, r.name_ar, r.name_en
+       FROM user_regions ur JOIN regions r ON r.id = ur.region_id
+       WHERE ur.user_id = $1 ORDER BY r.name_ar`,
+      [req.user.id]
+    );
+
+    res.json({ ...rows[0], regions: regionsRes.rows });
   } catch (err) {
     console.error('Me error:', err);
     res.status(500).json({ error: 'خطأ في الخادم' });

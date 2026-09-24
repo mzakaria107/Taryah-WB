@@ -4,6 +4,18 @@ const { verifyToken, applyRegionFilter } = require('../middleware/auth');
 
 const router = express.Router();
 
+/* ── Rep on the customer's MOST RECENT invoice ───
+   NEVER use MAX(sales_rep_name) for this. MAX() returns the alphabetically
+   largest name across the customer's entire history, and Arabic sorts after
+   Latin, so any customer once served by an Arabic-named rep kept showing that
+   rep forever — 388 of the 1,012 multi-rep customers were displaying someone
+   who no longer serves them. Requires an ungrouped `invoice_date` and `id`,
+   i.e. only valid inside a GROUP BY customer_id over `invoices`.
+   ─────────────────────────────────────────────── */
+const LATEST_REP_SQL = `(ARRAY_AGG(NULLIF(TRIM(COALESCE(sales_rep_name,'')),'')
+           ORDER BY invoice_date DESC NULLS LAST, id DESC)
+           FILTER (WHERE NULLIF(TRIM(COALESCE(sales_rep_name,'')),'') IS NOT NULL))[1]`;
+
 /* ── Shared param builder ────────────────────────
    Builds WHERE conditions + params array from query.
    Supports:
@@ -22,6 +34,8 @@ function buildConditions(q, req) {
     status, customer_type,
     region_id, route_id, search, customer_id,
     sales_rep_name,
+    include_cats, exclude_cats,
+    exclude_carrefour,
   } = q;
 
   const conditions = [];
@@ -29,8 +43,8 @@ function buildConditions(q, req) {
   let   p          = 1;
 
   // Region — RBAC first, then query param
-  if (req.regionFilter) {
-    conditions.push(`region_id = $${p++}`);
+  if (req.regionFilter && req.regionFilter.length) {
+    conditions.push(`region_id = ANY($${p++}::int[])`);
     params.push(req.regionFilter);
   } else if (region_id) {
     conditions.push(`region_id = $${p++}`);
@@ -77,11 +91,35 @@ function buildConditions(q, req) {
   // Customer
   if (customer_id) { conditions.push(`customer_id = $${p++}`); params.push(String(customer_id)); }
 
-  // Search
+  // Search — name (ar/en) or customer_id
   if (search) {
-    conditions.push(`(customer_name ILIKE $${p} OR customer_name_en ILIKE $${p})`);
+    conditions.push(`(customer_name ILIKE $${p} OR customer_name_en ILIKE $${p} OR customer_id::text ILIKE $${p})`);
     params.push(`%${search}%`);
     p++;
+  }
+
+  // Customer category — filter via sales_activity (include)
+  if (include_cats) {
+    const arr = include_cats.split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+    if (arr.length) {
+      conditions.push(`customer_id = ANY(SELECT DISTINCT customer_code FROM sales_activity WHERE LOWER(TRIM(COALESCE(category_name,''))) = ANY($${p++}::text[]))`);
+      params.push(arr);
+    }
+  }
+  // Customer category — filter via sales_activity (exclude)
+  if (exclude_cats) {
+    const arr = exclude_cats.split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+    if (arr.length) {
+      conditions.push(`customer_id NOT IN (SELECT DISTINCT customer_code FROM sales_activity WHERE LOWER(TRIM(COALESCE(category_name,''))) = ANY($${p++}::text[]))`);
+      params.push(arr);
+    }
+  }
+
+  // Carrefour exclusion — Carrefour stores are identified only by the
+  // Arabic customer_name pattern (e.g. "كارفور الرياض بارك"); there is no
+  // branch/category value literally equal to "Carrefour".
+  if (exclude_carrefour === 'true' || exclude_carrefour === '1') {
+    conditions.push(`customer_name NOT ILIKE '%كارفور%'`);
   }
 
   return { conditions, params, p };
@@ -99,8 +137,8 @@ router.get('/meta', verifyToken, applyRegionFilter, async (req, res) => {
   let   p          = 1;
 
   // RBAC region takes priority; super_admin can pass region_id from the query
-  if (req.regionFilter) {
-    conditions.push(`i.region_id = $${p++}`);
+  if (req.regionFilter && req.regionFilter.length) {
+    conditions.push(`i.region_id = ANY($${p++}::int[])`);
     params.push(req.regionFilter);
   } else if (region_id) {
     conditions.push(`i.region_id = $${p++}`);
@@ -123,7 +161,7 @@ router.get('/meta', verifyToken, applyRegionFilter, async (req, res) => {
     : `WHERE i.route_id IS NOT NULL`;
 
   try {
-    const [regRes, repRes, routeRes] = await Promise.all([
+    const [regRes, repRes, routeRes, custCatRes] = await Promise.all([
       // Distinct regions that actually have invoices
       pool.query(
         `SELECT DISTINCT r.id, r.name_ar, r.name_en
@@ -149,12 +187,20 @@ router.get('/meta', verifyToken, applyRegionFilter, async (req, res) => {
          ORDER BY i.route_id`,
         params
       ),
+      // Distinct customer categories from sales_activity
+      pool.query(
+        `SELECT DISTINCT NULLIF(TRIM(category_name),'') AS val
+         FROM sales_activity
+         WHERE category_name IS NOT NULL
+         ORDER BY val`
+      ),
     ]);
 
     res.json({
-      regions: regRes.rows,
-      reps:    repRes.rows.map(r => r.sales_rep_name),
-      routes:  routeRes.rows.map(r => r.route_id),
+      regions:            regRes.rows,
+      reps:               repRes.rows.map(r => r.sales_rep_name),
+      routes:             routeRes.rows.map(r => r.route_id),
+      customerCategories: custCatRes.rows.map(r => r.val).filter(Boolean),
     });
   } catch (err) {
     console.error('Meta error:', err);
@@ -228,9 +274,10 @@ router.get('/monthly-summary', verifyToken, applyRegionFilter, async (req, res) 
     const params     = [year];
     let   p          = 2;
 
-    const effectiveRegion = req.regionFilter
-      || (req.query.region_id ? parseInt(req.query.region_id, 10) : null);
-    if (effectiveRegion) { conditions.push(`i.region_id = $${p++}`); params.push(effectiveRegion); }
+    const effectiveRegions = (req.regionFilter && req.regionFilter.length)
+      ? req.regionFilter
+      : (req.query.region_id ? [parseInt(req.query.region_id, 10)] : null);
+    if (effectiveRegions) { conditions.push(`i.region_id = ANY($${p++}::int[])`); params.push(effectiveRegions); }
     if (req.query.customer_type) { conditions.push(`i.customer_type = $${p++}`); params.push(req.query.customer_type); }
 
     const where = 'WHERE ' + conditions.join(' AND ');
@@ -239,7 +286,7 @@ router.get('/monthly-summary', verifyToken, applyRegionFilter, async (req, res) 
     const monthRes = await pool.query(
       `SELECT
          EXTRACT(MONTH FROM i.invoice_date)::int                                        AS month,
-         ROUND(SUM(i.balance)::numeric, 2)                                              AS total_balance,
+         ROUND(SUM(i.balance)::numeric, 2) AS total_balance,
          COUNT(*) FILTER (WHERE i.status IN ('unpaid','partial') AND i.balance > 0)::int AS unpaid_count,
          COUNT(*)::int                                                                   AS invoice_count
        FROM invoices i
@@ -264,7 +311,7 @@ router.get('/monthly-summary', verifyToken, applyRegionFilter, async (req, res) 
       `SELECT
          COALESCE(r.name_ar, 'غير محدد')                                                AS region_name,
          COUNT(*) FILTER (WHERE i.status IN ('unpaid','partial') AND i.balance > 0)::int AS unpaid_count,
-         ROUND(SUM(i.balance)::numeric, 2)                                              AS total_balance,
+         ROUND(SUM(i.balance)::numeric, 2) AS total_balance,
          COUNT(*)::int                                                                   AS invoice_count
        FROM invoices i
        LEFT JOIN regions r ON r.id = i.region_id
@@ -395,7 +442,7 @@ router.get('/kpi', verifyToken, applyRegionFilter, async (req, res) => {
          COUNT(DISTINCT customer_id)                      AS customer_count,
          COALESCE(SUM(original_amount), 0)                AS total_amount,
          COALESCE(SUM(paid_amount),     0)                AS total_paid,
-         COALESCE(SUM(balance),         0)                AS total_balance,
+         COALESCE(SUM(balance), 0) AS total_balance,
          CASE WHEN SUM(original_amount) > 0
               THEN ROUND(SUM(paid_amount) / SUM(original_amount) * 100, 2)
               ELSE 0 END                                  AS collection_rate,
@@ -423,8 +470,8 @@ router.get('/years', verifyToken, applyRegionFilter, async (req, res) => {
   const params     = [];
   let   p          = 1;
 
-  if (req.regionFilter) {
-    conditions.push(`region_id = $${p++}`);
+  if (req.regionFilter && req.regionFilter.length) {
+    conditions.push(`region_id = ANY($${p++}::int[])`);
     params.push(req.regionFilter);
   } else if (region_id) {
     conditions.push(`region_id = $${p++}`);
@@ -445,7 +492,7 @@ router.get('/years', verifyToken, applyRegionFilter, async (req, res) => {
          COUNT(*)                           AS invoice_count,
          COALESCE(SUM(original_amount), 0) AS total_amount,
          COALESCE(SUM(paid_amount),     0) AS total_paid,
-         COALESCE(SUM(balance),         0) AS total_balance,
+         COALESCE(SUM(balance), 0) AS total_balance,
          CASE WHEN SUM(original_amount) > 0
               THEN ROUND(SUM(paid_amount) / SUM(original_amount) * 100, 2)
               ELSE 0 END                   AS collection_rate
@@ -479,11 +526,12 @@ router.get('/customers', verifyToken, applyRegionFilter, async (req, res) => {
     customer_name:   'MAX(customer_name)',
     customer_id:     'customer_id',
     route_id:        'MAX(route_id)',
-    sales_rep_name:  'MAX(sales_rep_name)',
+    // Must match the displayed value, or the column sorts by a name the user cannot see.
+    sales_rep_name:  LATEST_REP_SQL,
     invoice_count:   'COUNT(*)',
     total_amount:    'COALESCE(SUM(original_amount),0)',
     total_paid:      'COALESCE(SUM(paid_amount),0)',
-    total_balance:   'COALESCE(SUM(balance),0)',
+    total_balance:   "COALESCE(SUM(balance),0)",
     collection_rate: 'CASE WHEN SUM(original_amount)>0 THEN ROUND(SUM(paid_amount)/SUM(original_amount)*100,2) ELSE 0 END',
     unpaid_count:    'COUNT(*) FILTER (WHERE status=\'unpaid\')',
     partial_count:   'COUNT(*) FILTER (WHERE status=\'partial\')',
@@ -503,14 +551,14 @@ router.get('/customers', verifyToken, applyRegionFilter, async (req, res) => {
          customer_id,
          MAX(customer_name)                           AS customer_name,
          MAX(customer_name_en)                        AS customer_name_en,
-         MAX(sales_rep_name)                          AS sales_rep_name,
+         ${LATEST_REP_SQL}                            AS sales_rep_name,
          MAX(route_id)                                AS route_id,
          MAX(region_id)                               AS region_id,
          MAX(customer_type)                           AS customer_type,
          COUNT(*)                                     AS invoice_count,
          COALESCE(SUM(original_amount), 0)            AS total_amount,
          COALESCE(SUM(paid_amount),     0)            AS total_paid,
-         COALESCE(SUM(balance),         0)            AS total_balance,
+         COALESCE(SUM(balance), 0) AS total_balance,
          CASE WHEN SUM(original_amount) > 0
               THEN ROUND(SUM(paid_amount)/SUM(original_amount)*100,2)
               ELSE 0 END                              AS collection_rate,
@@ -590,12 +638,18 @@ router.get('/customer/:customerId', verifyToken, applyRegionFilter, async (req, 
          customer_id,
          MAX(customer_name)                           AS customer_name,
          MAX(customer_name_en)                        AS customer_name_en,
-         MAX(sales_rep_name)                          AS sales_rep_name,
+         ${LATEST_REP_SQL}                            AS sales_rep_name,
+         -- ::text, not a Date — node-postgres turns a DATE into local midnight
+         -- and JSON serialises that as UTC, shifting the day back by one.
+         (MAX(invoice_date) FILTER (WHERE NULLIF(TRIM(COALESCE(sales_rep_name,'')),'') IS NOT NULL))::text
+                                                      AS sales_rep_last_date,
+         COUNT(DISTINCT NULLIF(TRIM(COALESCE(sales_rep_name,'')),''))
+                                                      AS sales_rep_count,
          MAX(route_id)                                AS route_id,
          COUNT(*)                                     AS invoice_count,
          COALESCE(SUM(original_amount), 0)            AS total_amount,
          COALESCE(SUM(paid_amount),     0)            AS total_paid,
-         COALESCE(SUM(balance),         0)            AS total_balance,
+         COALESCE(SUM(balance), 0) AS total_balance,
          CASE WHEN SUM(original_amount) > 0
               THEN ROUND(SUM(paid_amount)/SUM(original_amount)*100, 2)
               ELSE 0 END                              AS collection_rate,
@@ -648,6 +702,8 @@ router.get('/customer/:customerId', verifyToken, applyRegionFilter, async (req, 
         customer_name:        summary.customer_name,
         customer_name_en:     summary.customer_name_en,
         sales_rep_name:       summary.sales_rep_name,
+        sales_rep_last_date:  summary.sales_rep_last_date,
+        sales_rep_count:      Number(summary.sales_rep_count || 0),
         route_id:             summary.route_id,
         region_id:            summary.region_id,
         region_name_ar,
@@ -672,6 +728,102 @@ router.get('/customer/:customerId', verifyToken, applyRegionFilter, async (req, 
 });
 
 // ─────────────────────────────────────────────────
+// GET /api/invoices/rep/:repName
+// Sales rep debt detail: net outstanding balance + every
+// unpaid/partially-paid invoice for that rep (region-scoped).
+// ─────────────────────────────────────────────────
+router.get('/rep/:repName', verifyToken, applyRegionFilter, async (req, res) => {
+  const repName = req.params.repName;
+
+  // True net balance across ALL of this rep's invoices (any status) — a
+  // paid invoice's leftover balance (e.g. returns/credit notes netted
+  // against it) is a real negative amount and must net into this figure.
+  const netMerged = { ...req.query, sales_rep_name: repName };
+  const { conditions: netConditions, params: netParams } = buildConditions(netMerged, req);
+  const netWhere = netConditions.length ? 'WHERE ' + netConditions.join(' AND ') : '';
+
+  // The invoice table lists every invoice with a nonzero balance — including
+  // a "paid" invoice with leftover balance from a return/credit note — NOT
+  // just status IN (unpaid, partial). Filtering by status alone silently
+  // dropped those negative-balance rows, so the visible rows' sum never
+  // matched the true net total above (same unconditional SUM(balance) rule).
+  const merged = { ...req.query, sales_rep_name: repName };
+  const { conditions, params } = buildConditions(merged, req);
+  conditions.push('balance <> 0');
+  const where = conditions.length ? 'WHERE ' + conditions.join(' AND ') : '';
+
+  try {
+    const [netRes, sumRes, custNetRes] = await Promise.all([
+      pool.query(`SELECT COALESCE(SUM(balance), 0) AS total_balance FROM invoices ${netWhere}`, netParams),
+      pool.query(
+        `SELECT
+           COUNT(*)                                     AS invoice_count,
+           COALESCE(SUM(original_amount), 0)            AS total_amount,
+           COALESCE(SUM(paid_amount),     0)            AS total_paid,
+           COUNT(*) FILTER (WHERE status = 'partial')   AS partial_count,
+           COUNT(*) FILTER (WHERE status = 'unpaid')    AS unpaid_count
+         FROM invoices
+         ${where}`,
+        params
+      ),
+      // Per-customer TRUE net balance — same unconditional SUM(balance)
+      // rule as the summary total above (netWhere/netParams, no status
+      // filter), just grouped by customer instead of summed overall, so
+      // the "صافي مديونية العملاء" tab's rows always foot to the same
+      // total shown in the summary card/table footer.
+      pool.query(
+        `SELECT i.customer_id, MAX(i.customer_name) AS customer_name, MAX(r.name_ar) AS region_name_ar,
+                COUNT(*)                          AS invoice_count,
+                COALESCE(SUM(i.original_amount),0) AS total_amount,
+                COALESCE(SUM(i.paid_amount),0)     AS total_paid,
+                COALESCE(SUM(i.balance),0)         AS total_balance
+         FROM invoices i
+         LEFT JOIN regions r ON r.id = i.region_id
+         ${netWhere}
+         GROUP BY i.customer_id
+         ORDER BY total_balance DESC`,
+        netParams
+      ),
+    ]);
+    const summary = sumRes.rows[0];
+
+    const { rows: invoices } = await pool.query(
+      `SELECT i.*, r.name_ar AS region_name_ar
+       FROM invoices i
+       LEFT JOIN regions r ON r.id = i.region_id
+       ${where}
+       ORDER BY i.balance DESC, i.invoice_date DESC`,
+      params
+    );
+
+    res.json({
+      rep_name: repName,
+      summary: {
+        invoice_count: Number(summary.invoice_count),
+        total_amount:  Number(summary.total_amount),
+        total_paid:    Number(summary.total_paid),
+        total_balance: Number(netRes.rows[0].total_balance),
+        partial_count: Number(summary.partial_count),
+        unpaid_count:  Number(summary.unpaid_count),
+      },
+      invoices,
+      customers_net: custNetRes.rows.map(r => ({
+        customer_id:     r.customer_id,
+        customer_name:   r.customer_name,
+        region_name_ar:  r.region_name_ar,
+        invoice_count:   Number(r.invoice_count),
+        total_amount:    Number(r.total_amount),
+        total_paid:      Number(r.total_paid),
+        total_balance:   Number(r.total_balance),
+      })),
+    });
+  } catch (err) {
+    console.error('Rep debt detail error:', err);
+    res.status(500).json({ error: 'خطأ في الخادم' });
+  }
+});
+
+// ─────────────────────────────────────────────────
 // GET /api/invoices/balance-by-region
 // Total balance per region, broken down by year.
 // Respects all active filters (years, months, status, customer_type, region).
@@ -685,7 +837,7 @@ router.get('/balance-by-region', verifyToken, applyRegionFilter, async (req, res
       `SELECT
          COALESCE(r.name_ar, 'غير محدد')       AS region_name,
          i.year,
-         COALESCE(SUM(i.balance),          0)   AS total_balance,
+         COALESCE(SUM(i.balance), 0) AS total_balance,
          COALESCE(SUM(i.original_amount),  0)   AS total_amount,
          COALESCE(SUM(i.paid_amount),      0)   AS total_paid,
          COUNT(*)                               AS invoice_count
@@ -753,7 +905,7 @@ router.get('/region-month-matrix', verifyToken, applyRegionFilter, async (req, r
          COUNT(*) FILTER (WHERE i.status='unpaid')    AS unpaid_count,
          COUNT(*) FILTER (WHERE i.status='partial')   AS partial_count,
          COUNT(*) FILTER (WHERE i.status='paid')      AS paid_count,
-         COALESCE(SUM(i.balance),         0)          AS total_balance,
+         COALESCE(SUM(i.balance), 0) AS total_balance,
          COALESCE(SUM(i.original_amount), 0)          AS total_amount,
          COALESCE(SUM(i.paid_amount),     0)          AS total_paid
        FROM invoices i
@@ -837,8 +989,16 @@ router.get('/region-month-customers', verifyToken, applyRegionFilter, async (req
     return res.status(400).json({ error: 'region_id و month و year مطلوبة' });
   }
 
+  // No status filter: net debt is always plain unconditional SUM(balance)
+  // over EVERY status, same rule as everywhere else in this codebase (see
+  // "Debt Balance — the ONE rule" in CLAUDE.md). A 'paid' invoice can carry
+  // a negative leftover balance (a return/credit note netted against it),
+  // and that negative must net into the customer's total or this endpoint
+  // overstates their debt — verified live: Dammam July 2026 read 23,105.81
+  // here (unpaid+partial only) vs the correct 9,950.83 once the 206 paid
+  // invoices' -13,154.98 net was included, matching /region-month-matrix
+  // (which already summed all statuses) exactly.
   const conditions = [
-    `status IN ('unpaid', 'partial')`,
     `region_id = $1`,
     `EXTRACT(MONTH FROM invoice_date) = $2`,
     `EXTRACT(YEAR  FROM invoice_date) = $3`,
@@ -860,7 +1020,7 @@ router.get('/region-month-customers', verifyToken, applyRegionFilter, async (req
          MAX(customer_name)                             AS customer_name,
          MAX(customer_name_en)                          AS customer_name_en,
          MAX(route_id)                                  AS route_id,
-         MAX(sales_rep_name)                            AS sales_rep_name,
+         ${LATEST_REP_SQL}                              AS sales_rep_name,
          COUNT(*)                                       AS invoice_count,
          COUNT(*) FILTER (WHERE status='unpaid')        AS unpaid_count,
          COUNT(*) FILTER (WHERE status='partial')       AS partial_count,
@@ -870,6 +1030,7 @@ router.get('/region-month-customers', verifyToken, applyRegionFilter, async (req
        FROM invoices
        ${where}
        GROUP BY customer_id
+       HAVING SUM(balance) <> 0
        ORDER BY total_balance DESC`,
       params
     );
@@ -905,7 +1066,7 @@ router.get('/:id', verifyToken, applyRegionFilter, async (req, res) => {
     if (rows.length === 0) return res.status(404).json({ error: 'الفاتورة غير موجودة' });
 
     const invoice = rows[0];
-    if (req.regionFilter && invoice.region_id !== req.regionFilter) {
+    if (req.regionFilter && req.regionFilter.length && !req.regionFilter.includes(invoice.region_id)) {
       return res.status(403).json({ error: 'غير مصرح' });
     }
 

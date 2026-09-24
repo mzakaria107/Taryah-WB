@@ -3,45 +3,46 @@
    ============================================================ */
 
 :root {
-  /* Brand */
-  --color-brand-green:       #2E7D32;
-  --color-brand-green-dark:  #1B5E20;
-  --color-brand-green-light: #4CAF50;
-  --color-brand-green-pale:  #E8F5E9;
-  --color-brand-red:         #C62828;
-  --color-brand-red-light:   #FFEBEE;
-  --color-brand-gold:        #F5C518;
-  --color-brand-gold-light:  #FFF8E1;
+  /* Brand — royal emerald & champagne gold */
+  --color-brand-green:       #0E6B4F;
+  --color-brand-green-dark:  #0A4D39;
+  --color-brand-green-light: #17936F;
+  --color-brand-green-pale:  #E9F5F0;
+  --color-brand-red:         #B3261E;
+  --color-brand-red-light:   #FDECEA;
+  --color-brand-gold:        #C9A227;
+  --color-brand-gold-dark:   #A88418;
+  --color-brand-gold-light:  #FBF6E8;
 
   /* Semantic */
-  --color-success:    #2E7D32;
-  --color-success-bg: #E8F5E9;
-  --color-danger:     #C62828;
-  --color-danger-bg:  #FFEBEE;
-  --color-warning:    #B45309;
-  --color-warning-bg: #FEF3C7;
-  --color-info:       #1565C0;
-  --color-info-bg:    #E3F2FD;
+  --color-success:    #0E6B4F;
+  --color-success-bg: #E9F5F0;
+  --color-danger:     #B3261E;
+  --color-danger-bg:  #FDECEA;
+  --color-warning:    #A16207;
+  --color-warning-bg: #FDF6E3;
+  --color-info:       #155E93;
+  --color-info-bg:    #EAF3FA;
 
-  /* Backgrounds */
-  --color-bg-page:   #F4F6F8;
-  --color-bg-alt:    #F8FAFC;
-  --color-bg-header: #1B2B1E;
+  /* Backgrounds — warm ivory, not cold gray */
+  --color-bg-page:   #F5F4F0;
+  --color-bg-alt:    #FAF9F6;
+  --color-bg-header: #0C1F17;
 
   /* Aliases — used by AgingPage, CollectionsPerformancePage, etc. */
   --color-surface:   #ffffff;
-  --color-bg:        #F4F6F8;
-  --color-text:      #1A202C;
-  --color-primary:   #0ea5e9;
+  --color-bg:        #F5F4F0;
+  --color-text:      #1C2320;
+  --color-primary:   #0E6B4F;
 
   /* Borders */
-  --color-border:       #E2E8F0;
-  --color-border-hover: #B2C5B5;
+  --color-border:       #E6E3DA;
+  --color-border-hover: #C9C2AE;
 
   /* Text */
-  --color-text-primary:   #1A202C;
-  --color-text-secondary: #4A5568;
-  --color-text-muted:     #94A3B8;
+  --color-text-primary:   #1C2320;
+  --color-text-secondary: #4A544F;
+  --color-text-muted:     #93998F;
 
   /* Fonts */
   --font-ar: 'IBM Plex Arabic', 'Tajawal', sans-serif;
@@ -55,11 +56,17 @@
   --radius-xl:   20px;
   --radius-full: 9999px;
 
-  /* Shadows */
-  --shadow-card:       0 1px 3px rgba(0,0,0,0.07), 0 1px 2px rgba(0,0,0,0.05);
-  --shadow-card-hover: 0 8px 24px rgba(46,125,50,0.12), 0 2px 6px rgba(0,0,0,0.06);
-  --shadow-modal:      0 20px 60px rgba(0,0,0,0.15), 0 4px 12px rgba(0,0,0,0.08);
-  --shadow-toast:      0 8px 24px rgba(0,0,0,0.10), 0 2px 6px rgba(0,0,0,0.06);
+  /* Shadows — layered, tinted with emerald for depth */
+  --shadow-card:       0 1px 2px rgba(16,42,32,0.05), 0 4px 16px rgba(16,42,32,0.05);
+  --shadow-card-hover: 0 12px 32px rgba(14,107,79,0.14), 0 4px 12px rgba(0,0,0,0.06);
+  --shadow-modal:      0 24px 70px rgba(12,31,23,0.22), 0 6px 18px rgba(0,0,0,0.08);
+  --shadow-toast:      0 10px 30px rgba(12,31,23,0.12), 0 2px 8px rgba(0,0,0,0.06);
+  --shadow-gold:       0 4px 18px rgba(201,162,39,0.25);
+
+  /* Luxe gradients (reusable) */
+  --grad-header: linear-gradient(135deg, #0C1F17 0%, #123B29 55%, #0C1F17 100%);
+  --grad-gold:   linear-gradient(90deg, #A88418 0%, #E3C24E 50%, #A88418 100%);
+  --grad-card:   linear-gradient(180deg, #FFFFFF 0%, #FBFAF7 100%);
 
   /* Transitions */
   --transition-fast:   all 150ms cubic-bezier(0.4, 0, 0.2, 1);

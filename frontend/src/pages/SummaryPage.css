@@ -349,6 +349,8 @@
   text-overflow: ellipsis;
   text-align: right;
 }
+.sm-barchart__label--link { cursor: pointer; }
+.sm-barchart__label--link:hover { color: var(--color-brand-green, #2e7d32); text-decoration: underline; }
 .sm-barchart__track {
   height: 18px;
   background: var(--color-bg, #f1f5f9);
@@ -406,7 +408,35 @@
 .sm-table tbody tr:hover { background: var(--color-bg-hover, #f8fafc); }
 .sm-table td { padding: 9px 12px; }
 
+.sm-tf-row td {
+  padding: 10px 12px;
+  background: var(--color-bg, #f8fafc);
+  border-top: 2px solid var(--color-border, #e2e8f0);
+  font-weight: 700;
+}
+.sm-tf-row .sm-td-name { color: var(--color-text, #1e293b); }
+
 .sm-td-name   { font-weight: 600; color: var(--color-text, #1e293b); }
+.sm-td-name--link { cursor: pointer; }
+.sm-td-name--link:hover { color: var(--color-brand-green, #2e7d32); text-decoration: underline; }
+
+.sm-detail-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  border: 1px solid var(--color-border, #e2e8f0);
+  background: var(--color-surface, #fff);
+  color: var(--color-text-secondary, #475569);
+  cursor: pointer;
+}
+.sm-detail-btn:hover {
+  background: var(--color-brand-green, #2e7d32);
+  border-color: var(--color-brand-green, #2e7d32);
+  color: #fff;
+}
 .sm-td-num    { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .sm-td-bold   { font-weight: 700; color: var(--color-text, #1e293b); }
 .sm-td-muted  { color: #94a3b8; }
@@ -449,11 +479,37 @@
   font-weight: 600;
   color: #991b1b;
 }
+.sm-debt-summary__period {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: #b45309;
+}
 .sm-debt-summary__value {
   font-size: 1.7rem;
   font-weight: 900;
   color: #dc2626;
 }
+.sm-debt-summary__total { flex: 1; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+
+.sm-carrefour-toggle {
+  flex-shrink: 0;
+  padding: 9px 16px;
+  border-radius: 10px;
+  border: 1px solid #fecaca;
+  background: #fff;
+  color: #991b1b;
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.sm-carrefour-toggle:hover { background: #fef2f2; }
+.sm-carrefour-toggle--active {
+  background: #16a34a;
+  border-color: #16a34a;
+  color: #fff;
+}
+.sm-carrefour-toggle--active:hover { background: #15803d; }
 
 /* Debt %  in-line bar */
 .sm-debt-pct-wrap {

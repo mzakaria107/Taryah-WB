@@ -38,14 +38,14 @@ router.get('/areas', verifyToken, applyRegionFilter, async (req, res) => {
   try {
     let query = 'SELECT * FROM stock_areas WHERE is_active = true ORDER BY sort_order, area_name';
     let params = [];
-    if (req.regionFilter) {
-      const regRes = await pool.query('SELECT name_en FROM regions WHERE id = $1', [req.regionFilter]);
-      const nameEn = (regRes.rows[0]?.name_en || '').trim();
-      if (nameEn) {
+    if (req.regionFilter && req.regionFilter.length) {
+      const regRes = await pool.query('SELECT name_en FROM regions WHERE id = ANY($1::int[])', [req.regionFilter]);
+      const namesEn = regRes.rows.map(r => (r.name_en || '').trim()).filter(Boolean);
+      if (namesEn.length) {
         query  = `SELECT * FROM stock_areas WHERE is_active = true
-                  AND (LOWER(area_name) = LOWER($1) OR area_name ILIKE '%' || $1 || '%')
+                  AND (LOWER(area_name) = ANY($1) OR area_name ILIKE ANY($2))
                   ORDER BY sort_order`;
-        params = [nameEn];
+        params = [namesEn.map(n => n.toLowerCase()), namesEn.map(n => `%${n}%`)];
       }
     }
     const { rows } = await pool.query(query, params);
@@ -62,27 +62,27 @@ router.get('/combined', verifyToken, applyRegionFilter, async (req, res) => {
   try {
     // Resolve user's area if region-restricted
     let userAreaIds = null;  // null = show all areas
-    if (req.regionFilter) {
+    if (req.regionFilter && req.regionFilter.length) {
       const regRes = await pool.query(
-        'SELECT name_en, name_ar FROM regions WHERE id = $1',
+        'SELECT name_en, name_ar FROM regions WHERE id = ANY($1::int[])',
         [req.regionFilter]
       );
-      const reg = regRes.rows[0];
-      if (reg) {
-        // Match stock_areas by area_name OR area_code (case-insensitive, partial)
-        const nameEn = (reg.name_en || '').trim();
+      const namesEn = regRes.rows.map(r => (r.name_en || '').trim()).filter(Boolean);
+      if (namesEn.length) {
+        // Match stock_areas by area_name OR area_code (case-insensitive, partial) for ANY assigned region
         const areaRes = await pool.query(
-          `SELECT id FROM stock_areas WHERE is_active = true
-           AND (
-             LOWER(area_name) = LOWER($1)
-             OR LOWER(area_code) = LOWER(REPLACE($1,' ','_'))
-             OR area_name ILIKE '%' || $1 || '%'
-             OR $1 ILIKE '%' || area_name || '%'
+          `SELECT DISTINCT id FROM stock_areas WHERE is_active = true
+           AND EXISTS (
+             SELECT 1 FROM unnest($1::text[]) AS nameEn WHERE
+                LOWER(area_name) = LOWER(nameEn)
+             OR LOWER(area_code) = LOWER(REPLACE(nameEn,' ','_'))
+             OR area_name ILIKE '%' || nameEn || '%'
+             OR nameEn ILIKE '%' || area_name || '%'
            )`,
-          [nameEn]
+          [namesEn]
         );
         userAreaIds = areaRes.rows.map(r => r.id);
-        console.log(`[Stock] region filter for "${nameEn}": area IDs = [${userAreaIds.join(',')}]`);
+        console.log(`[Stock] region filter for "${namesEn.join(', ')}": area IDs = [${userAreaIds.join(',')}]`);
       }
     }
 

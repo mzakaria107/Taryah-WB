@@ -10,7 +10,7 @@ import './Reports.css';
 function fmtDateTime(dt) {
   if (!dt) return '—';
   const d = new Date(dt);
-  const date = d.toLocaleDateString('ar-SA', { year:'numeric', month:'2-digit', day:'2-digit' });
+  const date = d.toLocaleDateString('ar-SA-u-nu-latn', { year:'numeric', month:'2-digit', day:'2-digit' });
   const time = d.toLocaleTimeString('ar-SA', { hour:'2-digit', minute:'2-digit' });
   return `${date} ${time}`;
 }

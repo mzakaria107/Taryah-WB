@@ -21,7 +21,7 @@ function MiniHistory({ fileType }) {
         <div key={b.id} className="upload-row__batch">
           <span className="batch-name">{b.file_name}</span>
           <span style={{ fontSize: 11, color: 'var(--color-text-muted)', fontFamily: 'var(--font-en)' }}>
-            {b.created_at ? new Date(b.created_at).toLocaleString('ar-SA', { dateStyle: 'short', timeStyle: 'short' }) : ''}
+            {b.created_at ? new Date(b.created_at).toLocaleString('ar-SA-u-nu-latn', { dateStyle: 'short', timeStyle: 'short' }) : ''}
           </span>
           <span className={`batch-status batch-status--${b.status}`}>
             {b.status === 'success'
@@ -31,6 +31,113 @@ function MiniHistory({ fileType }) {
           </span>
         </div>
       ))}
+    </div>
+  );
+}
+
+
+/* ══════════════════════════════════════════════════════════════
+   سلامة ربط البيانات — do the four files actually link up?
+
+   All four key on the customer code. This panel exists because a region can
+   be fully set up (customers, routes, salesmen, sales, collections) and still
+   show ZERO debt simply because the balance file contains none of its rows —
+   which is exactly what happened to Jeddah, invisibly, on the main dashboard.
+══════════════════════════════════════════════════════════════ */
+function DataIntegrityPanel() {
+  const [open, setOpen] = useState(false);
+  const { data, isLoading, isError } = useQuery({
+    queryKey: ['data-integrity'],
+    queryFn:  () => client.get('/upload/data-integrity').then(r => r.data),
+    staleTime: 60_000,
+  });
+
+  const alerts = data?.alerts || [];
+  const orphanTotal = (data?.orphans || []).reduce((s, o) => s + o.count, 0);
+
+  return (
+    <div className="upload-panel" style={{ marginTop: 16 }}>
+      <div className="upload-panel__header">
+        <h2 className="upload-panel__title">سلامة ربط البيانات</h2>
+        <button className="clear-btn" onClick={() => setOpen(v => !v)}>
+          {open ? 'إخفاء التفاصيل' : 'عرض التفاصيل'}
+        </button>
+      </div>
+
+      {isLoading && <div style={{ padding: 12, fontSize: 13, color: 'var(--color-text-muted)' }}>جارٍ الفحص…</div>}
+      {isError && <div style={{ padding: 12, fontSize: 13, color: 'var(--color-danger)' }}>تعذّر إجراء الفحص</div>}
+
+      {data && (
+        <>
+          {alerts.length > 0 ? alerts.map(a => (
+            <div key={a.region} className="di-alert">⚠ {a.message}</div>
+          )) : (
+            <div className="di-ok">✓ كل منطقة بها عملاء لها صفوف في ملف الأرصدة</div>
+          )}
+
+          {orphanTotal > 0 && (
+            <div className="di-warn">
+              {orphanTotal} رقم عميل موجود بملفات الحركة وغير موجود في قائمة العملاء —
+              هؤلاء لا يمكن ربطهم بخط سير أو مندوب حتى يُضافوا للقائمة.
+            </div>
+          )}
+          {data.salesmen?.not_seen_in_sales > 0 && (
+            <div className="di-warn">
+              {data.salesmen.not_seen_in_sales} مندوب من أصل {data.salesmen.master_salesmen} في قائمة
+              العملاء لم تظهر له أي حركة بيع.
+            </div>
+          )}
+          {data.routes?.missing_from_routes > 0 && (
+            <div className="di-warn">
+              {data.routes.missing_from_routes} خط سير في قائمة العملاء غير معرّف في دليل المسارات.
+            </div>
+          )}
+
+          {open && (
+            <div className="di-table-wrap">
+              <table className="di-table">
+                <thead>
+                  <tr>
+                    <th>المنطقة</th><th>عملاء</th><th>لهم أرصدة</th><th>لهم تحصيل</th>
+                    <th>لهم مبيعات</th><th>بلا خط</th><th>بلا مندوب</th><th>الدين</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.regions.map(r => (
+                    <tr key={r.region_id} className={r.missing_from_debt_file ? 'di-row-bad' : undefined}>
+                      <td><bdi>{r.region}</bdi></td>
+                      <td>{r.customers}</td>
+                      <td>{r.with_invoices}</td>
+                      <td>{r.with_payments}</td>
+                      <td>{r.with_sales}</td>
+                      <td>{r.no_route}</td>
+                      <td>{r.no_salesman}</td>
+                      <td>{Number(r.debt).toLocaleString('en-SA', { maximumFractionDigits: 0 })}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+
+              {(data.orphans || []).map(o => (
+                <div key={o.source} className="di-orphans">
+                  <strong>{o.source}</strong>: {o.count} رقم غير معروف —{' '}
+                  {o.sample.map(x => x.customer_code).join(' · ')}
+                  {o.count > o.sample.length && ' …'}
+                </div>
+              ))}
+
+              <div className="di-fresh">
+                {(data.freshness || []).map(f => (
+                  <span key={f.source}>
+                    {f.source}: {f.newest ? new Date(f.newest).toLocaleString('ar-SA-u-nu-latn',
+                      { dateStyle: 'short', timeStyle: 'short' }) : '—'}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }
@@ -138,8 +245,24 @@ function UploadCard({ title, hint, endpoint, fileType, accept, icon, invalidateK
                 · <strong>{Number(result.invoicesRelinked).toLocaleString('en-SA')}</strong> فاتورة تم ربطها
               </>
             )}
+            {/* customer_list — checked BEFORE sales_activity: both responses
+                carry `inserted`, so the generic branch would otherwise claim
+                this one and render "إجمالي: undefined صف" */}
+            {result.customers_in_file !== undefined && (
+              <>
+                عملاء بالملف: <strong>{Number(result.customers_in_file).toLocaleString('en-SA')}</strong>
+                · جديد: <strong>{Number(result.inserted).toLocaleString('en-SA')}</strong>
+                · محدَّث: <strong>{Number(result.updated).toLocaleString('en-SA')}</strong>
+                {result.with_arabic_name > 0 && (
+                  <span>· بأسماء عربية: <strong>{Number(result.with_arabic_name).toLocaleString('en-SA')}</strong></span>
+                )}
+                {result.skipped > 0 && (
+                  <span style={{ color: 'var(--color-warning)' }}>· بلا كود: {result.skipped}</span>
+                )}
+              </>
+            )}
             {/* sales_activity */}
-            {result.inserted !== undefined && (
+            {result.inserted !== undefined && result.customers_in_file === undefined && (
               <>
                 إجمالي: <strong>{Number(result.total).toLocaleString('en-SA')}</strong> صف
                 {result.inserted > 0 && <span>· جديد: <strong>{Number(result.inserted).toLocaleString('en-SA')}</strong></span>}
@@ -148,6 +271,36 @@ function UploadCard({ title, hint, endpoint, fileType, accept, icon, invalidateK
           </span>
           <button className="clear-btn" onClick={reset} style={{ marginRight: 'auto' }}>رفع آخر</button>
         </div>
+      )}
+
+      {/* Branches in the file that match no region — those customers load with
+          no region_id, which silently breaks any region-scoped view later. */}
+      {phase === 'success' && result?.unmatched_branches?.length > 0 && (
+        <details style={{ marginTop: 6 }}>
+          <summary style={{ fontSize: 11, color: 'var(--color-warning)', cursor: 'pointer' }}>
+            {result.unmatched_branches.length} فرع بالملف بلا منطقة مطابقة — العملاء التابعون له بلا منطقة ▾
+          </summary>
+          <div style={{ maxHeight: 100, overflowY: 'auto', marginTop: 4, fontSize: 11, lineHeight: 1.7 }}>
+            {result.unmatched_branches.join(' · ')}
+          </div>
+        </details>
+      )}
+
+      {/* Which column of the file fed which field — the header row of this
+          export is truncated, so the mapping is worth showing. */}
+      {phase === 'success' && result?.matched_columns && (
+        <details style={{ marginTop: 6 }}>
+          <summary style={{ fontSize: 11, color: 'var(--color-text-muted)', cursor: 'pointer' }}>
+            الأعمدة التي تم التعرّف عليها ▾
+          </summary>
+          <div style={{ maxHeight: 140, overflowY: 'auto', marginTop: 4, fontSize: 11, lineHeight: 1.8 }}>
+            {Object.entries(result.matched_columns).map(([field, col]) => (
+              <div key={field} style={{ color: col ? 'var(--color-text-secondary)' : 'var(--color-warning)' }}>
+                {field}: {col || '— لم يُعثر عليه'}
+              </div>
+            ))}
+          </div>
+        </details>
       )}
 
       {/* Errors detail */}
@@ -225,7 +378,26 @@ export default function UploadPanel() {
           icon="👥"
           invalidateKeys={['sales-report', 'sales-new-customers', 'sales-meta']}
         />
+        <UploadCard
+          title="تحديث بيانات العملاء"
+          hint="Customer List - CM.xlsx — أو ملف أبسط بأعمدة Customer Code / Customer Name English / Customer Name Arabic لتحديث الأسماء فقط"
+          endpoint="/upload/customer-list"
+          fileType="customer_list"
+          accept=".xlsx,.xls"
+          icon="🧾"
+          invalidateKeys={['invoices', 'customers-summary', 'sales-meta']}
+        />
+        <UploadCard
+          title="توالف الجودة (كمية وتكلفة)"
+          hint="QualityIssuesQuantityandCost.xls"
+          endpoint="/quality-issues/upload"
+          fileType="quality_issues"
+          accept=".xlsx,.xls"
+          icon="🛡️"
+          invalidateKeys={['quality-issues-summary', 'quality-issues-filters']}
+        />
       </div>
+      <DataIntegrityPanel />
     </div>
   );
 }

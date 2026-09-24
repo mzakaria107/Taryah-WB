@@ -54,6 +54,8 @@
   color: var(--color-text, #1e293b);
 }
 .hm-btn--outline:hover { background: var(--color-bg-hover, #f1f5f9); }
+.hm-btn--outline:disabled { opacity: 0.5; cursor: not-allowed; }
+.hm-header__actions { display: flex; align-items: center; gap: 8px; }
 .hm-btn--ghost {
   background: transparent;
   border: none;
@@ -101,6 +103,78 @@
   outline: none;
   border-color: var(--color-primary, #3b82f6);
 }
+.hm-filter-group input[type="date"] {
+  padding: 7px 10px;
+  border: 1.5px solid var(--color-border, #e2e8f0);
+  border-radius: 8px;
+  font-size: 0.83rem;
+  background: var(--color-bg, #f8fafc);
+  color: var(--color-text, #1e293b);
+}
+.hm-filter-group input[type="date"]:focus {
+  outline: none;
+  border-color: var(--color-primary, #3b82f6);
+}
+
+/* ── Calendar date-range toggle ──────────────────────────── */
+.hm-range-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.83rem;
+  font-weight: 600;
+  color: var(--color-text, #1e293b);
+  cursor: pointer;
+  padding-bottom: 7px;
+}
+.hm-range-toggle input { cursor: pointer; }
+
+/* ── Year multi-select ────────────────────────────────────── */
+.hm-year-ms { position: relative; }
+.hm-year-ms__btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 10px;
+  border: 1.5px solid var(--color-border, #e2e8f0);
+  border-radius: 8px;
+  font-size: 0.83rem;
+  background: var(--color-bg, #f8fafc);
+  color: var(--color-text, #1e293b);
+  min-width: 100px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.hm-year-ms__btn:hover { border-color: var(--color-primary, #3b82f6); }
+.hm-year-ms__caret { font-size: 0.65rem; opacity: 0.6; margin-inline-start: auto; }
+.hm-year-ms__panel {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 20;
+  background: var(--color-surface, #fff);
+  border: 1px solid var(--color-border, #e2e8f0);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+  padding: 6px;
+  min-width: 110px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.hm-year-ms__opt {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 8px;
+  border-radius: 6px;
+  font-size: 0.82rem;
+  color: var(--color-text, #1e293b);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.hm-year-ms__opt:hover { background: var(--color-bg, #f8fafc); }
+.hm-year-ms__opt input { cursor: pointer; }
 
 /* ── Period badge ─────────────────────────────────────────── */
 .hm-period {
@@ -129,6 +203,20 @@
 .hm-period__vs  { color: #cbd5e1; }
 .hm-period__wd  { color: #94a3b8; }
 
+/* ── Branch expenses upload ───────────────────────────────── */
+.hm-expense-upload {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-inline-start: auto;
+}
+.hm-expense-upload .hm-btn { padding: 5px 12px; font-size: 0.78rem; }
+.hm-expense-upload__msg {
+  font-size: 0.76rem;
+  color: var(--color-text-muted, #64748b);
+  white-space: nowrap;
+}
+
 /* ── Section title ────────────────────────────────────────── */
 .hm-section-title {
   font-size: 0.72rem;
@@ -145,6 +233,17 @@
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
   gap: 14px;
   margin-bottom: 6px;
+}
+
+/* "نظرة عامة" tab — 7 cards forced onto a single row instead of wrapping */
+.hm-kpi-row--overview {
+  grid-template-columns: repeat(7, 1fr);
+}
+@media (max-width: 1400px) {
+  .hm-kpi-row--overview { grid-template-columns: repeat(4, 1fr); }
+}
+@media (max-width: 900px) {
+  .hm-kpi-row--overview { grid-template-columns: repeat(2, 1fr); }
 }
 
 /* ── KPI Card ─────────────────────────────────────────────── */
@@ -209,6 +308,72 @@
 .hm-dev--down { background: #fee2e2; color: #dc2626; }
 .hm-dev--flat { background: #f1f5f9; color: #64748b; }
 
+/* ── Best branch highlight ─────────────────────────────────── */
+.hm-best-branch {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: linear-gradient(90deg, #fffbeb 0%, #fff 60%);
+  border: 1px solid #fde68a;
+  border-radius: 14px;
+  padding: 14px 18px;
+  flex-wrap: wrap;
+}
+.hm-best-branch__crown { font-size: 1.8rem; line-height: 1; flex-shrink: 0; }
+.hm-best-branch__body  { flex-shrink: 0; }
+.hm-best-branch__lbl   { font-size: 0.72rem; color: var(--color-text-muted, #64748b); font-weight: 600; }
+.hm-best-branch__name  { font-size: 1.05rem; font-weight: 800; color: #92400e; }
+.hm-best-branch__stats {
+  display: flex; gap: 16px; flex-wrap: wrap;
+  margin-inline-start: auto;
+  font-size: 0.82rem;
+  color: var(--color-text-muted, #64748b);
+}
+.hm-best-branch__stats strong { color: var(--color-text, #1e293b); font-weight: 800; }
+
+/* ── Insight card ──────────────────────────────────────────── */
+.hm-insight-card { display: flex; flex-direction: column; gap: 16px; }
+.hm-insight-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+@media (max-width: 900px) { .hm-insight-grid { grid-template-columns: repeat(2, 1fr); } }
+.hm-insight-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  border-radius: 12px;
+  padding: 12px 14px;
+  border: 1px solid #e2e8f0;
+}
+.hm-insight-item--pos { background: #f0fdf4; border-color: #bbf7d0; }
+.hm-insight-item--neg { background: #fef2f2; border-color: #fecaca; }
+.hm-insight-icon { font-size: 1.4rem; line-height: 1; flex-shrink: 0; }
+.hm-insight-lbl { font-size: 0.72rem; color: var(--color-text-muted, #64748b); font-weight: 600; }
+.hm-insight-val { font-size: 0.95rem; font-weight: 800; color: var(--color-text, #1e293b); }
+.hm-insight-sub { font-size: 0.76rem; color: var(--color-text-muted, #64748b); }
+
+.hm-insight-note { border-top: 1px dashed #e2e8f0; padding-top: 14px; }
+.hm-insight-note__lbl { font-size: 0.78rem; font-weight: 700; color: var(--color-text-muted, #64748b); margin-bottom: 6px; }
+.hm-insight-note__input {
+  width: 100%;
+  resize: vertical;
+  font-family: inherit;
+  font-size: 0.88rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  padding: 10px 12px;
+  box-sizing: border-box;
+}
+.hm-insight-note__actions { display: flex; gap: 8px; margin-top: 8px; }
+.hm-insight-note__readonly {
+  font-size: 0.88rem;
+  color: var(--color-text, #1e293b);
+  white-space: pre-wrap;
+  line-height: 1.6;
+}
+
 /* ── Twin grid (two-column cards) ─────────────────────────── */
 .hm-twin-grid {
   display: grid;
@@ -235,6 +400,52 @@
   padding-bottom: 10px;
   border-bottom: 1px solid var(--color-border, #f1f5f9);
 }
+.hm-card__title--with-filters {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+/* ── Metric visibility toggle buttons ─────────────────────── */
+.hm-metric-toggle {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.hm-metric-btn {
+  padding: 4px 12px;
+  border-radius: 14px;
+  border: 1.5px solid var(--color-border, #e2e8f0);
+  background: var(--color-surface, #fff);
+  color: var(--color-text-muted, #64748b);
+  font-size: 0.74rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.12s;
+}
+.hm-metric-btn:hover { border-color: var(--color-primary, #3b82f6); }
+.hm-metric-btn--active.hm-metric-btn--qty     { background: #eff6ff; border-color: #3b82f6; color: #1d4ed8; }
+.hm-metric-btn--active.hm-metric-btn--revenue { background: #f0fdf4; border-color: #22c55e; color: #15803d; }
+.hm-metric-btn--active.hm-metric-btn--returns { background: #fef2f2; border-color: #ef4444; color: #dc2626; }
+
+/* ── Marketing-fee exclude toggle (expense matrix) ────────── */
+.hm-fee-toggle-group { display: flex; gap: 6px; flex-wrap: wrap; }
+.hm-fee-toggle {
+  padding: 5px 14px;
+  border-radius: 14px;
+  border: 1.5px solid var(--color-border, #e2e8f0);
+  background: var(--color-surface, #fff);
+  color: var(--color-text-muted, #64748b);
+  font-size: 0.76rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.12s;
+}
+.hm-fee-toggle:hover { border-color: #f59e0b; }
+.hm-fee-toggle--active { background: #fffbeb; border-color: #f59e0b; color: #b45309; }
 
 /* ── Vertical trend bar chart ─────────────────────────────── */
 .hm-trend {
@@ -494,6 +705,13 @@
 .hm-table tbody tr:hover      { background: var(--color-bg-hover, #f8fafc); }
 .hm-table td { padding: 9px 12px; }
 
+/* ── Totals row ───────────────────────────────────────────── */
+.hm-tfoot-row td {
+  background: var(--color-bg, #f8fafc);
+  border-top: 2px solid var(--color-border, #e2e8f0);
+  padding: 10px 12px;
+}
+
 /* ── Table cell variants ──────────────────────────────────── */
 .hm-td-name {
   font-weight: 600;
@@ -658,6 +876,131 @@
   .hm-tab-content { display: flex !important; }
 }
 
+/* ── Item performance matrix (monthly qty/returns heatmap) ──── */
+.hm-matrix-wrap {
+  overflow-x: auto;
+  border-radius: 12px;
+  border: 1px solid var(--color-border, #e2e8f0);
+}
+.hm-matrix-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.76rem;
+  direction: rtl;
+}
+.hm-matrix-th-item,
+.hm-matrix-th-month,
+.hm-matrix-th-total {
+  position: sticky;
+  top: 0;
+  background: var(--color-bg, #f8fafc);
+  padding: 8px 8px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--color-text-muted, #64748b);
+  text-align: center;
+  border-bottom: 2px solid var(--color-border, #e2e8f0);
+  white-space: nowrap;
+  z-index: 2;
+}
+.hm-matrix-th-item {
+  text-align: right;
+  position: sticky;
+  right: 0;
+  z-index: 3;
+  min-width: 160px;
+  max-width: 220px;
+  box-shadow: -2px 0 6px rgba(0,0,0,0.04);
+}
+.hm-matrix-th-total { background: #eef2f7; }
+
+.hm-matrix-td-item {
+  position: sticky;
+  right: 0;
+  background: var(--color-surface, #fff);
+  z-index: 1;
+  padding: 8px 10px;
+  font-weight: 600;
+  font-size: 0.78rem;
+  color: var(--color-text, #1e293b);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 220px;
+  border-bottom: 1px solid var(--color-border, #f1f5f9);
+  border-left: 1px solid var(--color-border, #e2e8f0);
+  box-shadow: -2px 0 6px rgba(0,0,0,0.03);
+}
+.hm-matrix-td-cell {
+  text-align: center;
+  padding: 6px 6px;
+  min-width: 62px;
+  border-bottom: 1px solid var(--color-border, #f1f5f9);
+  transition: filter 0.12s;
+}
+.hm-matrix-td-cell:hover { filter: brightness(0.93); }
+.hm-matrix-td-total {
+  text-align: center;
+  padding: 6px 8px;
+  min-width: 76px;
+  background: #f8fafc;
+  border-bottom: 1px solid var(--color-border, #f1f5f9);
+  border-right: 2px solid var(--color-border, #e2e8f0);
+}
+.hm-matrix-qty {
+  display: block;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text, #1e293b);
+  line-height: 1.2;
+}
+.hm-matrix-qty--neg { color: #dc2626 !important; }
+.hm-matrix-ret {
+  display: block;
+  font-size: 0.68rem;
+  color: #dc2626;
+  font-weight: 600;
+  margin-top: 1px;
+}
+.hm-matrix-ret--excluded { color: #94a3b8; text-decoration: line-through; }
+.hm-matrix-rev {
+  display: block;
+  font-size: 0.66rem;
+  color: #15803d;
+  font-weight: 600;
+  margin-top: 1px;
+  white-space: nowrap;
+}
+.hm-matrix-dash { color: #cbd5e1; }
+.hm-matrix-td-branch {
+  font-size: 0.72rem;
+  color: var(--color-text-muted, #64748b);
+  font-weight: 500;
+  white-space: nowrap;
+  min-width: 90px;
+}
+
+/* ── Matrix totals row/column ─────────────────────────────── */
+.hm-matrix-tf-row td { background: #eef2f7; border-top: 2px solid var(--color-border, #e2e8f0); }
+.hm-matrix-td-item--tf {
+  position: sticky;
+  right: 0;
+  z-index: 1;
+  font-weight: 800;
+  background: #eef2f7 !important;
+  border-left: 1px solid var(--color-border, #e2e8f0);
+}
+.hm-matrix-td-grand { background: #e2e8f0 !important; }
+
+/* Revenue reconciliation rows appended below the expense matrix totals */
+.hm-matrix-tf-row--revenue td { background: #eff6ff; }
+.hm-matrix-tf-row--revenue .hm-matrix-td-item--tf { background: #eff6ff !important; color: #1d4ed8; }
+.hm-matrix-tf-row--revenue .hm-matrix-qty { color: #1d4ed8; }
+.hm-matrix-tf-row--net td { background: #f0fdf4; }
+.hm-matrix-tf-row--net .hm-matrix-td-item--tf { background: #f0fdf4 !important; color: #15803d; }
+.hm-matrix-tf-row--net .hm-matrix-qty { color: #15803d; }
+.hm-matrix-tf-row .hm-matrix-qty { font-weight: 800; }
+
 /* ── Responsive ───────────────────────────────────────────── */
 @media (max-width: 768px) {
   .hm-page         { padding: 12px 14px 48px; }
@@ -677,3 +1020,49 @@
   .hm-cmp-head,
   .hm-cmp-row   { grid-template-columns: 1fr 64px 64px 58px; font-size: 0.72rem; }
 }
+
+/* ── Region multi-select (RegionMultiSelect) ─────────────────
+   Panel reuses .hm-year-ms__panel/.hm-year-ms__opt sizing; these add the
+   "الكل" reset row and the per-region "فقط" button. */
+.hm-region-ms__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 2px 4px 6px;
+  border-bottom: 1px solid var(--color-border, #e2e8f0);
+  margin-bottom: 4px;
+}
+.hm-region-ms__mini {
+  padding: 3px 10px;
+  font-size: 0.74rem;
+  font-weight: 600;
+  cursor: pointer;
+  color: var(--color-primary, #1d4ed8);
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 999px;
+}
+.hm-region-ms__count { font-size: 0.72rem; color: #94a3b8; }
+.hm-region-ms__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border-radius: 6px;
+}
+.hm-region-ms__row:hover { background: var(--color-bg, #f8fafc); }
+.hm-region-ms__row--on .hm-year-ms__opt { font-weight: 600; }
+.hm-region-ms__row .hm-year-ms__opt { flex: 1; padding: 5px 4px; }
+.hm-region-ms__only {
+  flex: none;
+  padding: 2px 8px;
+  font-size: 0.7rem;
+  cursor: pointer;
+  color: #64748b;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  border-radius: 999px;
+  margin-inline-end: 6px;
+}
+.hm-region-ms__only:hover { color: #1d4ed8; background: #e0e7ff; border-color: #c7d2fe; }
+.hm-region-ms__empty { padding: 10px; font-size: 0.78rem; color: #94a3b8; text-align: center; }

@@ -601,6 +601,10 @@
   font-size:       12.5px;
   white-space:     nowrap;
   direction:       rtl;
+  /* Width of the frozen label column — the frozen الإجمالي column pins at
+     `right: var(--mx-label-w)` right beside it, so this must be a FIXED
+     width (min = max), not the old 200–280px range. */
+  --mx-label-w:    200px;
 }
 
 /* ── Header cells ── */
@@ -629,8 +633,10 @@
 
 /* Label column — fixed wide */
 .csp-mx-th-label {
-  min-width:   200px;
-  max-width:   280px;
+  box-sizing:  border-box;
+  width:       var(--mx-label-w);
+  min-width:   var(--mx-label-w);
+  max-width:   var(--mx-label-w);
   text-align:  right !important;
   cursor:      default !important;
   position:    sticky !important;
@@ -640,7 +646,21 @@
   border-left: 1px solid var(--color-border);
 }
 
-/* Total column */
+/* Total column — frozen right beside the label column (both stay visible
+   while the region columns scroll under them horizontally). Needs an
+   opaque background on every variant or scrolled cells show through. */
+.csp-mx-th-total,
+.csp-mx-td-type-total,
+.csp-mx-td-item-total,
+.csp-mx-grand-total {
+  position:   sticky;
+  right:      var(--mx-label-w);
+  z-index:    2;
+  box-shadow: 2px 0 4px -2px rgba(0,0,0,0.12);
+}
+.csp-matrix-table thead th.csp-mx-th-total,
+.csp-matrix-table thead th.csp-mx-th-total.sorted { z-index: 4; background: #f3f4f6; }
+.csp-matrix-table thead th.csp-mx-th-total.sorted { background: #e5eee5; }
 .csp-mx-th-total {
   min-width: 90px;
   text-align: left !important;
@@ -684,18 +704,36 @@
   background: var(--color-brand-green-pale) !important;
 }
 
-/* Label cell (first column) — sticky */
-.csp-mx-td-label {
+/* Inner wrapper carries the flex layout + the FIXED width. It has to live
+   inside a real table-cell (not `display:flex` on the <td> itself): a flex
+   <td> gets wrapped in an anonymous cell whose width ignores max-width, so
+   long item names stretched the column wider than --mx-label-w and left a
+   gap between the frozen label and the frozen الإجمالي column (seen on
+   mobile). A fixed-width, overflow-hidden inner box pins the column width. */
+.csp-mx-lbl {
   display:     flex;
   align-items: center;
   gap:         6px;
+  box-sizing:  border-box;
+  width:       var(--mx-label-w);
   padding:     9px 12px;
+  overflow:    hidden;
+}
+.csp-mx-lbl--item { padding: 7px 12px 7px 16px; }
+.csp-mx-type-name, .csp-mx-item-name { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Label cell (first column) — sticky */
+.csp-mx-td-label {
+  padding:     0;
+  box-sizing:  border-box;
+  overflow:    hidden;
   position:    sticky;
   right:       0;
   background:  inherit;
   border-left: 1px solid var(--color-border);
-  min-width:   200px;
-  max-width:   280px;
+  width:       var(--mx-label-w);
+  min-width:   var(--mx-label-w);
+  max-width:   var(--mx-label-w);
+  z-index:     2;
 }
 
 .csp-mx-toggle {
@@ -756,16 +794,17 @@
 
 /* Item label cell — sticky */
 .csp-mx-td-item {
-  display:     flex;
-  align-items: center;
-  gap:         6px;
-  padding:     7px 12px 7px 16px;
+  padding:     0;
+  box-sizing:  border-box;
+  overflow:    hidden;
   position:    sticky;
   right:       0;
   background:  inherit;
   border-left: 1px solid var(--color-border);
-  min-width:   200px;
-  max-width:   280px;
+  width:       var(--mx-label-w);
+  min-width:   var(--mx-label-w);
+  max-width:   var(--mx-label-w);
+  z-index:     2;
 }
 
 .csp-mx-item-tree {
@@ -815,10 +854,14 @@
   right:       0;
   background:  #f3f4f6 !important;
   border-left: 1px solid var(--color-border);
-  min-width:   200px;
+  width:       var(--mx-label-w);
+  min-width:   var(--mx-label-w);
+  max-width:   var(--mx-label-w);
+  z-index:     2;
 }
 
 .csp-mx-grand-total {
+  background:  #f3f4f6;
   padding:     10px 12px;
   font-weight: 800;
   font-family: var(--font-en);
@@ -1105,7 +1148,8 @@
   .csp-mx-th-label,
   .csp-mx-td-label,
   .csp-mx-td-item,
-  .csp-mx-grand-label { min-width: 140px; max-width: 180px; }
+  .csp-mx-grand-label { min-width: 140px; max-width: 140px; width: 140px; }
+  .csp-matrix-table { --mx-label-w: 140px; }
   .csp-view-toggle { width: 100%; }
   .csp-view-btn    { flex: 1; justify-content: center; }
   .csp-mx-type-filter { padding: 8px 12px; gap: 5px; }

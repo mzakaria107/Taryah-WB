@@ -3,11 +3,16 @@ import { useQuery } from '@tanstack/react-query';
 import { ChevronRight, ChevronLeft } from 'lucide-react';
 import client from '../../api/client';
 import RegionMonthDrawer from './RegionMonthDrawer';
+import { useLanguage } from '../../context/LanguageContext';
 import './RegionMonthMatrix.css';
 
 const MONTH_AR = [
   'يناير','فبراير','مارس','أبريل','مايو','يونيو',
   'يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر',
+];
+const MONTH_EN = [
+  'Jan','Feb','Mar','Apr','May','Jun',
+  'Jul','Aug','Sep','Oct','Nov','Dec',
 ];
 
 function fmtBal(n) {
@@ -65,6 +70,9 @@ function SkeletonMatrix() {
 }
 
 export default function RegionMonthMatrix({ defaultYear, matrixParams, availableYears = [] }) {
+  const { lang } = useLanguage();
+  const en = lang === 'en';
+  const MONTHS = en ? MONTH_EN : MONTH_AR;
   const [year,         setYear]         = useState(defaultYear);
   const [selectedCell, setSelectedCell] = useState(null);
 
@@ -115,7 +123,7 @@ export default function RegionMonthMatrix({ defaultYear, matrixParams, available
       {/* ── Header bar ── */}
       <div className="rmm-header-bar">
         <span className="rmm-title">
-          📊 مصفوفة المناطق والشهور — الفواتير غير المسددة
+          📊 {en ? 'Region × Month Matrix — Unpaid Invoices' : 'مصفوفة المناطق والشهور — الفواتير غير المسددة'}
         </span>
 
         {/* Year picker */}
@@ -124,7 +132,7 @@ export default function RegionMonthMatrix({ defaultYear, matrixParams, available
             className="rmm-yr-btn"
             onClick={() => setYear(y => y - 1)}
             disabled={availableYears.length > 0 && year <= Math.min(...availableYears)}
-            title={availableYears.length > 0 && year <= Math.min(...availableYears) ? 'لا توجد سنة سابقة' : 'السنة السابقة'}
+            title={availableYears.length > 0 && year <= Math.min(...availableYears) ? (en ? 'No earlier year' : 'لا توجد سنة سابقة') : (en ? 'Previous year' : 'السنة السابقة')}
           >
             <ChevronRight size={14} />
           </button>
@@ -133,18 +141,18 @@ export default function RegionMonthMatrix({ defaultYear, matrixParams, available
             className="rmm-yr-btn"
             onClick={() => setYear(y => y + 1)}
             disabled={year >= new Date().getFullYear()}
-            title={year >= new Date().getFullYear() ? 'لا توجد سنة تالية' : 'السنة التالية'}
+            title={year >= new Date().getFullYear() ? (en ? 'No later year' : 'لا توجد سنة تالية') : (en ? 'Next year' : 'السنة التالية')}
           >
             <ChevronLeft size={14} />
           </button>
         </div>
 
         <span className="rmm-grand">
-          رصيد متبقٍ: <strong>{fmtBal(grandBalance)}</strong> ر.س
+          {en ? 'Outstanding balance:' : 'رصيد متبقٍ:'} <strong>{fmtBal(grandBalance)}</strong> {en ? 'SAR' : 'ر.س'}
           &nbsp;·&nbsp;
-          <strong>{grandCount.toLocaleString('en-SA')}</strong> فاتورة
+          <strong>{grandCount.toLocaleString('en-SA')}</strong> {en ? 'invoices' : 'فاتورة'}
           &nbsp;·&nbsp;
-          <span className="rmm-grand-paid">✓ {regions.reduce((s,r)=>s+r.total.paid,0).toLocaleString('en-SA')} مسددة</span>
+          <span className="rmm-grand-paid">✓ {regions.reduce((s,r)=>s+r.total.paid,0).toLocaleString('en-SA')} {en ? 'paid' : 'مسددة'}</span>
         </span>
       </div>
 
@@ -153,11 +161,11 @@ export default function RegionMonthMatrix({ defaultYear, matrixParams, available
         <table className="rmm-table">
           <thead>
             <tr>
-              <th className="rmm-th-region rmm-sticky-col">المنطقة</th>
+              <th className="rmm-th-region rmm-sticky-col">{en ? 'Region' : 'المنطقة'}</th>
               {months.map(m => (
-                <th key={m} className="rmm-th-month">{MONTH_AR[m - 1]}</th>
+                <th key={m} className="rmm-th-month">{MONTHS[m - 1]}</th>
               ))}
-              <th className="rmm-th-total">الإجمالي</th>
+              <th className="rmm-th-total">{en ? 'Total' : 'الإجمالي'}</th>
             </tr>
           </thead>
 
@@ -185,7 +193,9 @@ export default function RegionMonthMatrix({ defaultYear, matrixParams, available
                         month: m,
                         year,
                       })}
-                      title={`${region.name} ← ${MONTH_AR[m-1]} ${year}\n✗ ${cell.unpaid} غير مسدد  •  ◑ ${cell.partial} جزئي  •  ✓ ${cell.paid} مسدد\nرصيد: ${fmtBal(cell.balance)} ر.س`}
+                      title={en
+                        ? `${region.name} ← ${MONTHS[m-1]} ${year}\n✗ ${cell.unpaid} unpaid  •  ◑ ${cell.partial} partial  •  ✓ ${cell.paid} paid\nBalance: ${fmtBal(cell.balance)} SAR`
+                        : `${region.name} ← ${MONTHS[m-1]} ${year}\n✗ ${cell.unpaid} غير مسدد  •  ◑ ${cell.partial} جزئي  •  ✓ ${cell.paid} مسدد\nرصيد: ${fmtBal(cell.balance)} ر.س`}
                     >
                       {hasDue
                         ? <span className="rmm-cell-bal">{fmtBal(cell.balance)}</span>
@@ -215,7 +225,7 @@ export default function RegionMonthMatrix({ defaultYear, matrixParams, available
 
           <tfoot>
             <tr className="rmm-tf-row">
-              <td className="rmm-tf-label rmm-sticky-col">الإجمالي</td>
+              <td className="rmm-tf-label rmm-sticky-col">{en ? 'Total' : 'الإجمالي'}</td>
               {months.map(m => {
                 const ct = colTotals[m] || { count: 0, unpaid: 0, partial: 0, paid: 0, balance: 0 };
                 return (

@@ -1,0 +1,45 @@
+.tam-overlay {
+  position: fixed; inset: 0; background: rgba(12,31,23,.5);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 1100; padding: 20px;
+}
+.tam-modal {
+  background: var(--color-surface, #fff); border-radius: 14px;
+  width: 100%; max-width: 760px; max-height: 85vh; overflow-y: auto;
+  box-shadow: 0 20px 60px rgba(0,0,0,.3);
+}
+.tam-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 16px 20px; border-bottom: 1px solid var(--color-border);
+  font-weight: 700; font-size: .95rem;
+}
+.tam-close { background: none; border: none; cursor: pointer; color: var(--color-text-muted); }
+.tam-body { padding: 18px 20px; }
+.tam-loading { padding: 30px; text-align: center; color: var(--color-text-muted); }
+
+.tam-meta { display: flex; gap: 20px; flex-wrap: wrap; font-size: .85rem; margin-bottom: 16px; color: var(--color-text); }
+
+.tam-table-wrap { overflow-x: auto; border: 1px solid var(--color-border); border-radius: 10px; margin-bottom: 18px; }
+.tam-table { width: 100%; border-collapse: collapse; font-size: .8rem; }
+.tam-table th { background: var(--grad-header, #0C1F17); color: #fff; padding: 8px 10px; text-align: center; white-space: nowrap; }
+.tam-table th:first-child { text-align: right; }
+.tam-table td { padding: 7px 10px; border-bottom: 1px solid var(--color-border); text-align: center; }
+.tam-table td:first-child { text-align: right; font-weight: 500; }
+.tam-total-cell { font-weight: 700; color: var(--color-primary, #0ea5e9); }
+.tam-empty { color: var(--color-text-muted); padding: 16px; }
+
+.tam-approvals { margin-bottom: 18px; }
+.tam-approvals-title { font-weight: 700; font-size: .85rem; margin-bottom: 8px; }
+.tam-approvals-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.tam-approvals-list li { display: flex; align-items: center; gap: 6px; font-size: .82rem; }
+.tam-approved-at { color: var(--color-text-muted); font-size: .76rem; }
+.tam-no-approvals { color: var(--color-text-muted); font-size: .82rem; }
+
+.tam-actions { display: flex; justify-content: flex-end; }
+.tam-approve-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: #059669; color: #fff; border: none; border-radius: 8px;
+  padding: 9px 18px; font-size: .85rem; font-weight: 700; cursor: pointer;
+}
+.tam-approve-btn:disabled { opacity: .6; cursor: not-allowed; }
+.tam-already-approved { display: inline-flex; align-items: center; gap: 6px; color: #059669; font-weight: 700; font-size: .85rem; }

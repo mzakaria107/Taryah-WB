@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { ArrowUp, ArrowDown, Download, GitMerge } from 'lucide-react';
 import CustomerNoteCell from './CustomerNoteCell';
+import { useLanguage } from '../../context/LanguageContext';
 import './CustomerSummaryTable.css';
 
 /* ── Formatters ──────────────────────────────────── */
@@ -27,11 +28,13 @@ function RateBar({ rate }) {
 
 /* ── Status breakdown ────────────────────────────── */
 function StatusBreakdown({ paid, partial, unpaid }) {
+  const { lang } = useLanguage();
+  const en = lang === 'en';
   return (
     <div className="status-breakdown">
-      {Number(unpaid)  > 0 && <span className="sb sb--unpaid">{unpaid} غير مسدد</span>}
-      {Number(partial) > 0 && <span className="sb sb--partial">{partial} جزئي</span>}
-      {Number(paid)    > 0 && <span className="sb sb--paid">{paid} مسدد</span>}
+      {Number(unpaid)  > 0 && <span className="sb sb--unpaid">{unpaid} {en ? 'unpaid' : 'غير مسدد'}</span>}
+      {Number(partial) > 0 && <span className="sb sb--partial">{partial} {en ? 'partial' : 'جزئي'}</span>}
+      {Number(paid)    > 0 && <span className="sb sb--paid">{paid} {en ? 'paid' : 'مسدد'}</span>}
     </div>
   );
 }
@@ -65,29 +68,31 @@ function rowClass(row) {
 }
 
 /* ── Column definitions ──────────────────────────── */
+/* `w` feeds the <colgroup>; the table is table-layout:fixed so these are the
+   real column widths (they scale up proportionally on a wider screen). */
 const COLS = [
-  { key: 'customer_name',   label: 'اسم العميل'         },
-  { key: 'customer_id',     label: 'كود العميل'          },
-  { key: 'region_name_ar',  label: 'المنطقة',  noSort: true },
-  { key: 'route_id',        label: 'خط السير'            },
-  { key: 'sales_rep_name',  label: 'المندوب'             },
-  { key: 'invoice_count',   label: 'عدد الفواتير'        },
-  { key: 'total_amount',    label: 'إجمالي المعاملات'    },
-  { key: 'total_paid',      label: 'إجمالي المدفوع'      },
-  { key: 'total_balance',   label: 'إجمالي الرصيد'       },
-  { key: 'collection_rate', label: 'نسبة التحصيل'        },
-  { key: 'unpaid_count',    label: 'تفاصيل الحالة'       },
-  { key: 'customer_note',        label: 'ملاحظات',  noSort: true },
-  { key: 'reconciliation_count', label: 'مطابقة',   noSort: true },
+  { key: 'customer_name',   label: 'اسم العميل',         labelEn: 'Customer Name',   w: 200 },
+  { key: 'customer_id',     label: 'كود العميل',          labelEn: 'Customer Code',   w:  86 },
+  { key: 'region_name_ar',  label: 'المنطقة',  labelEn: 'Region',  noSort: true,      w:  78 },
+  { key: 'route_id',        label: 'خط السير',            labelEn: 'Route',           w:  64 },
+  { key: 'sales_rep_name',  label: 'المندوب',             labelEn: 'Rep',             w: 132 },
+  { key: 'invoice_count',   label: 'عدد الفواتير',        labelEn: 'Invoice Count',   w:  66 },
+  { key: 'total_amount',    label: 'إجمالي المعاملات',    labelEn: 'Total Amount',    w: 104 },
+  { key: 'total_paid',      label: 'إجمالي المدفوع',      labelEn: 'Total Paid',      w: 104 },
+  { key: 'total_balance',   label: 'إجمالي الرصيد',       labelEn: 'Total Balance',   w: 104 },
+  { key: 'collection_rate', label: 'نسبة التحصيل',        labelEn: 'Collection Rate', w: 112 },
+  { key: 'unpaid_count',    label: 'تفاصيل الحالة',       labelEn: 'Status Detail',   w: 100 },
+  { key: 'customer_note',        label: 'ملاحظات',  labelEn: 'Notes',       noSort: true, w: 132 },
+  { key: 'reconciliation_count', label: 'مطابقة',   labelEn: 'Reconciliation', noSort: true, w:  66 },
 ];
 
 /* ── Export helper (fetch → blob → anchor) ───────── */
-async function triggerDownload(url, filename) {
+async function triggerDownload(url, filename, en) {
   try {
     const res = await fetch(url);
     if (!res.ok) {
       const txt = await res.text().catch(() => '');
-      throw new Error(`خطأ ${res.status}${txt ? ': ' + txt.slice(0, 120) : ''}`);
+      throw new Error(`${en ? 'Error' : 'خطأ'} ${res.status}${txt ? ': ' + txt.slice(0, 120) : ''}`);
     }
     const blob   = await res.blob();
     const objUrl = URL.createObjectURL(blob);
@@ -100,7 +105,7 @@ async function triggerDownload(url, filename) {
     URL.revokeObjectURL(objUrl);
   } catch (err) {
     console.error('Download failed:', err);
-    alert('فشل التحميل: ' + err.message);
+    alert((en ? 'Download failed: ' : 'فشل التحميل: ') + err.message);
   }
 }
 
@@ -112,6 +117,8 @@ export default function CustomerSummaryTable({
 }) {
   const navigate     = useNavigate();
   const queryClient  = useQueryClient();
+  const { lang }      = useLanguage();
+  const en            = lang === 'en';
 
   const onNoteSaved = () => {
     queryClient.invalidateQueries({ queryKey: ['customers-summary'] });
@@ -131,7 +138,7 @@ export default function CustomerSummaryTable({
     return (
       <div className="cs-table-card" style={{ display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', minHeight:200, gap:12 }}>
         <div className="spinner" style={{ width:32, height:32 }} />
-        <span style={{ fontSize:13, color:'var(--color-text-muted)' }}>جاري تحميل بيانات العملاء…</span>
+        <span style={{ fontSize:13, color:'var(--color-text-muted)' }}>{en ? 'Loading customer data…' : 'جاري تحميل بيانات العملاء…'}</span>
       </div>
     );
   }
@@ -141,7 +148,7 @@ export default function CustomerSummaryTable({
     return (
       <div className="cs-table-card" style={{ display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', minHeight:200, gap:8 }}>
         <span style={{ fontSize:40 }}>📭</span>
-        <span style={{ fontSize:14, fontWeight:600, color:'var(--color-text-secondary)' }}>لا توجد بيانات مطابقة للفلاتر المحددة</span>
+        <span style={{ fontSize:14, fontWeight:600, color:'var(--color-text-secondary)' }}>{en ? 'No data matches the selected filters' : 'لا توجد بيانات مطابقة للفلاتر المحددة'}</span>
       </div>
     );
   }
@@ -151,19 +158,19 @@ export default function CustomerSummaryTable({
       {/* Toolbar */}
       <div className="cs-toolbar">
         <span style={{ fontSize:13, color:'var(--color-text-secondary)' }}>
-          <strong style={{ color:'var(--color-text-primary)' }}>{data.length.toLocaleString('en-SA')}</strong> عميل
+          <strong style={{ color:'var(--color-text-primary)' }}>{data.length.toLocaleString('en-SA')}</strong> {en ? 'customers' : 'عميل'}
           {total > data.length && (
-            <span style={{ color:'var(--color-text-muted)', fontSize:11 }}> (من أصل {total.toLocaleString('en-SA')})</span>
+            <span style={{ color:'var(--color-text-muted)', fontSize:11 }}> {en ? `(of ${total.toLocaleString('en-SA')})` : `(من أصل ${total.toLocaleString('en-SA')})`}</span>
           )}
         </span>
         <div className="cs-toolbar-actions">
           <button className="chip-btn"
-            onClick={() => triggerDownload(buildExportUrl('csv'), `تقرير_${new Date().toISOString().slice(0,10)}.csv`)}>
+            onClick={() => triggerDownload(buildExportUrl('csv'), `${en ? 'report' : 'تقرير'}_${new Date().toISOString().slice(0,10)}.csv`, en)}>
             <Download size={13} /> CSV
           </button>
           <button className="chip-btn gold"
-            onClick={() => triggerDownload(buildExportUrl('excel'), `تقرير_الارصدة_${new Date().toISOString().slice(0,10)}.xlsx`)}>
-            <Download size={13} /> تصدير Excel
+            onClick={() => triggerDownload(buildExportUrl('excel'), `${en ? 'balances_report' : 'تقرير_الارصدة'}_${new Date().toISOString().slice(0,10)}.xlsx`, en)}>
+            <Download size={13} /> {en ? 'Export Excel' : 'تصدير Excel'}
           </button>
         </div>
       </div>
@@ -171,13 +178,18 @@ export default function CustomerSummaryTable({
       {/* Table — data arrives pre-sorted from server */}
       <div className="cs-table-wrap">
         <table className="cs-table">
+          {/* one <col> per COLS entry — built from the same array as the
+              headers so the two can never desync */}
+          <colgroup>
+            {COLS.map(c => <col key={c.key} style={{ width: c.w }} />)}
+          </colgroup>
           <thead>
             <tr>
               {COLS.map(c =>
                 c.noSort ? (
-                  <th key={c.key}>{c.label}</th>
+                  <th key={c.key}>{en ? c.labelEn : c.label}</th>
                 ) : (
-                  <Th key={c.key} label={c.label} k={c.key}
+                  <Th key={c.key} label={en ? c.labelEn : c.label} k={c.key}
                       sortBy={sortBy} dir={sortDir} onSort={onSort} />
                 )
               )}
@@ -195,8 +207,8 @@ export default function CustomerSummaryTable({
                 }
               >
                 {/* Customer name */}
-                <td style={{ minWidth:200 }}>
-                  <div style={{ fontWeight:600, fontSize:13, lineHeight:1.3 }}>{row.customer_name}</div>
+                <td className="cs-c-name">
+                  <div style={{ fontWeight:600, fontSize:12.5, lineHeight:1.3 }}>{row.customer_name}</div>
                   {row.customer_name_en && row.customer_name_en !== row.customer_name && (
                     <div style={{ fontSize:11, color:'var(--color-text-muted)', fontFamily:'var(--font-en)' }}>
                       {row.customer_name_en}
@@ -208,11 +220,11 @@ export default function CustomerSummaryTable({
                   {row.customer_id}
                 </td>
 
-                <td style={{ whiteSpace:'nowrap' }}>{row.region_name_ar || '—'}</td>
+                <td className="cs-c-region">{row.region_name_ar || '—'}</td>
 
                 <td className="num" style={{ fontSize:12 }}>{row.route_id || '—'}</td>
 
-                <td style={{ fontSize:12, whiteSpace:'nowrap' }}>{row.sales_rep_name || '—'}</td>
+                <td className="cs-c-rep" style={{ fontSize:11.5 }}>{row.sales_rep_name || '—'}</td>
 
                 <td className="num" style={{ textAlign:'center', fontWeight:700, color:'var(--color-text-primary)' }}>
                   {Number(row.invoice_count).toLocaleString('en-SA')}
@@ -247,12 +259,12 @@ export default function CustomerSummaryTable({
                 {/* Reconciliation badge */}
                 <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
                   {Number(row.reconciliation_count) > 0 ? (
-                    <span className="recon-badge" title={`${row.reconciliation_count} ملف مطابقة`}>
+                    <span className="recon-badge" title={en ? `${row.reconciliation_count} reconciliation file(s)` : `${row.reconciliation_count} ملف مطابقة`}>
                       <GitMerge size={10} />
                       {row.reconciliation_count}
                     </span>
                   ) : (
-                    <span className="recon-badge recon-badge--missing" title="لا يوجد ملف مطابقة">
+                    <span className="recon-badge recon-badge--missing" title={en ? 'No reconciliation file' : 'لا يوجد ملف مطابقة'}>
                       —
                     </span>
                   )}
@@ -269,7 +281,9 @@ export default function CustomerSummaryTable({
           fontSize:12, color:'var(--color-text-muted)', background:'var(--color-warning-bg)',
           textAlign:'center',
         }}>
-          يتم عرض أول {data.length.toLocaleString('en-SA')} عميل من {total.toLocaleString('en-SA')} — استخدم الفلاتر لتضييق النتائج
+          {en
+            ? `Showing the first ${data.length.toLocaleString('en-SA')} of ${total.toLocaleString('en-SA')} customers — use the filters to narrow the results`
+            : `يتم عرض أول ${data.length.toLocaleString('en-SA')} عميل من ${total.toLocaleString('en-SA')} — استخدم الفلاتر لتضييق النتائج`}
         </div>
       )}
     </div>

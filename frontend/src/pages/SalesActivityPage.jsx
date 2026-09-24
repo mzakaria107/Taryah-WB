@@ -113,7 +113,7 @@ function NoteHistoryPopover({ customerCode, anchorRect, anchorEl, onClose }) {
 
   function fmt(dateStr) {
     const d = new Date(dateStr);
-    return d.toLocaleDateString('ar-SA', { day: '2-digit', month: 'short', year: 'numeric' })
+    return d.toLocaleDateString('ar-SA-u-nu-latn', { day: '2-digit', month: 'short', year: 'numeric' })
       + ' ' + d.toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit' });
   }
 
@@ -300,6 +300,26 @@ function TableSkeleton({ rows = 8, cols = 10 }) {
   );
 }
 
+/* ── Last-invoice cell: date + how long ago ──────── */
+function LastInvoiceCell({ date }) {
+  if (!date) return <span className="sap-month-dash">—</span>;
+  const d = new Date(`${date}T00:00:00`);
+  if (Number.isNaN(d.getTime())) return <span className="sap-month-dash">—</span>;
+  const days = Math.floor((Date.now() - d.getTime()) / 86400000);
+  // Colour by staleness so a long-dormant customer stands out at a glance.
+  const cls = days <= 30 ? 'sap-last-inv--fresh'
+            : days <= 90 ? 'sap-last-inv--warn'
+            : 'sap-last-inv--stale';
+  return (
+    <span className={`sap-last-inv ${cls}`} title={`منذ ${days} يوم`}>
+      <bdi>{date}</bdi>
+      <span className="sap-last-inv__ago">
+        {days <= 0 ? 'اليوم' : days === 1 ? 'أمس' : `منذ ${days} يوم`}
+      </span>
+    </span>
+  );
+}
+
 /* ── Tab 1: Monthly report ───────────────────────── */
 function ReportTab({ filters }) {
   const { data, isLoading, isError } = useQuery({
@@ -317,11 +337,14 @@ function ReportTab({ filters }) {
     </div>;
   }
 
-  const { months, customers, maxMonth } = data;
+  /* Month columns are {key, year, month} — the year matters because a date
+     range can cross a year boundary. The label carries the year only then,
+     to avoid cluttering the normal single-year view. */
+  const { months, customers, multiYear } = data;
 
   return (
     <div className="sap-table-wrap">
-      <table className="sap-table">
+      <table className="sap-table sap-table--report">
         <thead>
           <tr>
             <th>#</th>
@@ -330,9 +353,13 @@ function ReportTab({ filters }) {
             <th>المنطقة</th>
             <th>المندوب</th>
             <th>التصنيف</th>
-            {months.map(m => <th key={m}>{MONTH_AR[m] || m}</th>)}
-            <th>الإجمالي</th>
+            {months.map(m => (
+              <th key={m.key}>{MONTH_AR[m.month] || m.month}{multiYear ? ` ${m.year}` : ''}</th>
+            ))}
+            <th>إجمالي الفواتير</th>
+            <th>إجمالي صافي الكميات</th>
             <th>صافي المرتجعات</th>
+            <th>آخر فاتورة</th>
             <th>الحالة</th>
             <th>ملاحظات</th>
           </tr>
@@ -347,19 +374,26 @@ function ReportTab({ filters }) {
               <td>{c.salesrep_name || '—'}</td>
               <td>{c.category_name || '—'}</td>
               {months.map(m => (
-                <td key={m} style={{ textAlign: 'center' }}>
-                  {c.months[m] > 0
-                    ? <span className="sap-month-badge">{c.months[m]}</span>
+                <td key={m.key} style={{ textAlign: 'center' }}>
+                  {c.months[m.key]?.invoice_count > 0
+                    ? <>
+                        <span className="sap-month-badge">{c.months[m.key].invoice_count}</span>
+                        <span className="sap-month-qty">{c.months[m.key].qty.toLocaleString('en-SA')}</span>
+                      </>
                     : <span className="sap-month-dash">—</span>
                   }
                 </td>
               ))}
               <td className="sap-total-cell" style={{ textAlign: 'center' }}>{c.total}</td>
+              <td className="sap-total-cell" style={{ textAlign: 'center' }}>{(c.total_qty || 0).toLocaleString('en-SA')}</td>
               <td className="sap-return-cell" style={{ textAlign: 'center' }}>
                 {c.total_bad_return_qty > 0
                   ? <span className="sap-return-badge">{c.total_bad_return_qty.toLocaleString('en-SA')}</span>
                   : <span className="sap-month-dash">—</span>
                 }
+              </td>
+              <td style={{ textAlign: 'center' }}>
+                <LastInvoiceCell date={c.last_invoice_date} />
               </td>
               <td>
                 {c.active_current
@@ -386,7 +420,7 @@ function NewCustomersTab({ filters }) {
     staleTime: 60_000,
   });
 
-  if (isLoading) return <TableSkeleton rows={6} cols={6} />;
+  if (isLoading) return <TableSkeleton rows={6} cols={7} />;
   if (isError)   return <div className="sap-empty">حدث خطأ في تحميل البيانات</div>;
 
   const currentMonth = data?.currentMonth || 0;
@@ -428,6 +462,7 @@ function NewCustomersTab({ filters }) {
             <th>المنطقة</th>
             <th>المندوب</th>
             <th>عدد الفواتير</th>
+            <th>صافي الكميات المباعة</th>
             <th>الحالة</th>
           </tr>
         </thead>
@@ -440,6 +475,7 @@ function NewCustomersTab({ filters }) {
               <td>{c.branch_name   || '—'}</td>
               <td>{c.salesrep_name || '—'}</td>
               <td className="sap-total-cell" style={{ textAlign: 'center' }}>{c.invoice_count}</td>
+              <td className="sap-total-cell" style={{ textAlign: 'center' }}>{(c.total_qty || 0).toLocaleString('en-SA')}</td>
               <td>
                 {c.is_returning
                   ? <span className="sap-status-returning">🔄 عائد من عام سابق</span>
@@ -586,7 +622,11 @@ export default function SalesActivityPage() {
   const [activeTab,  setActiveTab]  = useState(0);
   const [branch,     setBranch]     = useState('');
   const [rep,        setRep]        = useState('');
+  const [dateFrom,   setDateFrom]   = useState('');
+  const [dateTo,     setDateTo]     = useState('');
   const [exporting,  setExporting]  = useState(false);
+  // catFilter: { [catName]: 'include' | 'exclude' }
+  const [catFilter, setCatFilter]   = useState({});
   const layout = usePageLayout();
 
   /* Section drag refs */
@@ -595,6 +635,14 @@ export default function SalesActivityPage() {
   const [secDragState, setSecDragState] = useState({ dragging: null, over: null });
 
   const year = 2026;
+
+  // Derived category params from catFilter state
+  const includeCats = Object.entries(catFilter).filter(([,v]) => v === 'include').map(([k]) => k).join(',');
+  const excludeCats = Object.entries(catFilter).filter(([,v]) => v === 'exclude').map(([k]) => k).join(',');
+  const catParams   = {
+    ...(includeCats ? { include_cats: includeCats } : {}),
+    ...(excludeCats ? { exclude_cats: excludeCats } : {}),
+  };
 
   // Meta (branches + reps filtered by selected branch)
   const { data: meta } = useQuery({
@@ -605,44 +653,48 @@ export default function SalesActivityPage() {
 
   // New customers data (needed for badge count on tab label)
   const { data: newData } = useQuery({
-    queryKey:  ['sales-new-customers', { branch, rep, year }],
-    queryFn:   () => fetchNewCustomers({ branch, rep, year }),
+    queryKey:  ['sales-new-customers', { branch, rep, year, includeCats, excludeCats }],
+    queryFn:   () => fetchNewCustomers({ branch, rep, year, ...catParams }),
     staleTime: 60_000,
   });
 
   // Stopped customers (needed for badge count on tab label)
   const { data: stoppedData } = useQuery({
-    queryKey:  ['sales-stopped-customers', { branch, rep, year }],
-    queryFn:   () => fetchStoppedCustomers({ branch: branch || undefined, rep: rep || undefined, year }),
+    queryKey:  ['sales-stopped-customers', { branch, rep, year, includeCats, excludeCats }],
+    queryFn:   () => fetchStoppedCustomers({ branch: branch || undefined, rep: rep || undefined, year, ...catParams }),
     staleTime: 60_000,
   });
 
   // KPI summary — keep previous data visible while refetching (no flicker)
   const { data: kpiData, isLoading: kpiLoading, isFetching: kpiFetching } = useQuery({
-    queryKey:     ['sales-kpi', { branch, rep, year }],
-    queryFn:      () => fetchKPI({ branch: branch || undefined, rep: rep || undefined, year }),
+    queryKey:     ['sales-kpi', { branch, rep, year, includeCats, excludeCats }],
+    queryFn:      () => fetchKPI({ branch: branch || undefined, rep: rep || undefined, year, ...catParams }),
     staleTime:    60_000,
     placeholderData: keepPreviousData,
   });
 
   // Region stats (for pie charts) — same treatment
   const { data: regionStats, isLoading: regionLoading, isFetching: regionFetching } = useQuery({
-    queryKey:     ['sales-region-stats', { branch, rep, year }],
-    queryFn:      () => fetchRegionStats({ branch: branch || undefined, rep: rep || undefined, year }),
+    queryKey:     ['sales-region-stats', { branch, rep, year, includeCats, excludeCats }],
+    queryFn:      () => fetchRegionStats({ branch: branch || undefined, rep: rep || undefined, year, ...catParams }),
     staleTime:    60_000,
     placeholderData: keepPreviousData,
   });
 
   // Category stats (for category KPI strip below pies)
   const { data: categoryStats, isLoading: categoryLoading, isFetching: categoryFetching } = useQuery({
-    queryKey:     ['sales-category-stats', { branch, rep, year }],
-    queryFn:      () => fetchCategoryStats({ branch: branch || undefined, rep: rep || undefined, year }),
+    queryKey:     ['sales-category-stats', { branch, rep, year, includeCats, excludeCats }],
+    queryFn:      () => fetchCategoryStats({ branch: branch || undefined, rep: rep || undefined, year, ...catParams }),
     staleTime:    60_000,
     placeholderData: keepPreviousData,
   });
 
   // All hooks above — no conditional returns before this line
-  const filters = { branch: branch || undefined, rep: rep || undefined, year };
+  const filters = {
+    branch: branch || undefined, rep: rep || undefined, year,
+    from: dateFrom || undefined, to: dateTo || undefined,
+    ...catParams,
+  };
 
   /* Map activeTab index → tab key sent to backend */
   const TAB_KEY  = ['report', 'new', 'stopped'];
@@ -693,7 +745,7 @@ export default function SalesActivityPage() {
 
   const handlePrint = () => {
     const prev = document.title;
-    document.title = `تقرير العملاء العام ${year} — ${new Date().toLocaleDateString('ar-SA', { year:'numeric', month:'long', day:'numeric' })}`;
+    document.title = `تقرير العملاء العام ${year} — ${new Date().toLocaleDateString('ar-SA-u-nu-latn', { year:'numeric', month:'long', day:'numeric' })}`;
     window.print();
     window.onafterprint = () => { document.title = prev; window.onafterprint = null; };
   };
@@ -746,7 +798,7 @@ export default function SalesActivityPage() {
       <div className="sap-print-header">
         <span>📊</span>
         <span className="sap-print-title">تقرير العملاء العام — {year}</span>
-        <span className="sap-print-date">{new Date().toLocaleDateString('ar-SA',{year:'numeric',month:'long',day:'numeric',weekday:'long'})}</span>
+        <span className="sap-print-date">{new Date().toLocaleDateString('ar-SA-u-nu-latn',{year:'numeric',month:'long',day:'numeric',weekday:'long'})}</span>
       </div>
 
       {/* Filters */}
@@ -775,15 +827,62 @@ export default function SalesActivityPage() {
           ))}
         </select>
 
-        {(branch || rep) && (
+        <span className="sap-filter-label" style={{ marginInlineStart: 8 }}>من</span>
+        <input
+          type="date"
+          className="sap-select"
+          value={dateFrom}
+          max={dateTo || undefined}
+          onChange={e => setDateFrom(e.target.value)}
+          title="أقدم تاريخ فاتورة يُحتسب في التقرير الشهري"
+        />
+        <span className="sap-filter-label">إلى</span>
+        <input
+          type="date"
+          className="sap-select"
+          value={dateTo}
+          min={dateFrom || undefined}
+          onChange={e => setDateTo(e.target.value)}
+          title="أحدث تاريخ فاتورة يُحتسب في التقرير الشهري"
+        />
+
+        {(branch || rep || dateFrom || dateTo || Object.keys(catFilter).length > 0) && (
           <button
             style={{ fontSize: 12, color: 'var(--color-danger)', background: 'none', border: 'none', cursor: 'pointer', padding: '4px 8px' }}
-            onClick={() => { setBranch(''); setRep(''); }}
+            onClick={() => { setBranch(''); setRep(''); setCatFilter({}); setDateFrom(''); setDateTo(''); }}
           >
             × مسح الفلاتر
           </button>
         )}
       </div>
+
+      {/* Customer category toggle pills */}
+      {(meta?.customerCategories || []).length > 0 && (
+        <div className="sap-cat-pills">
+          <span className="sap-cat-pills-label">فئة العملاء:</span>
+          {(meta.customerCategories).map(cat => {
+            const state = catFilter[cat]; // undefined | 'include' | 'exclude'
+            return (
+              <button
+                key={cat}
+                className={`sap-cat-pill${state === 'include' ? ' sap-cat-pill--include' : state === 'exclude' ? ' sap-cat-pill--exclude' : ''}`}
+                onClick={() => setCatFilter(prev => {
+                  const next = { ...prev };
+                  if (!state)             next[cat] = 'include';
+                  else if (state === 'include') next[cat] = 'exclude';
+                  else                    delete next[cat];
+                  return next;
+                })}
+                title={!state ? 'انقر للتضمين' : state === 'include' ? 'انقر للاستبعاد' : 'انقر لإلغاء الفلتر'}
+              >
+                {state === 'include' && <span className="sap-pill-icon">✓</span>}
+                {state === 'exclude' && <span className="sap-pill-icon">✕</span>}
+                {cat}
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {/* ── Dynamic sections — ordered by layout, per-card config ── */}
       {layout.sections.map((sec, si) => {

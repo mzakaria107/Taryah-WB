@@ -26,7 +26,14 @@ html, body, #root {
   background: var(--color-bg-page);
   -webkit-font-smoothing: antialiased;
 }
-body { direction: rtl; }
+body {
+  direction: rtl;
+  /* Soft ambient wash — barely-there emerald & gold glow at the top corners */
+  background-image:
+    radial-gradient(1100px 480px at 88% -8%, rgba(14,107,79,0.055), transparent 60%),
+    radial-gradient(900px 420px at 8% -6%, rgba(201,162,39,0.05), transparent 55%);
+  background-attachment: fixed;
+}
 
 button { font: inherit; cursor: pointer; border: 0; background: none; color: inherit; }
 input, textarea, select { font: inherit; color: inherit; }
@@ -36,14 +43,14 @@ a { color: inherit; text-decoration: none; }
 .num { font-family: var(--font-en); font-variant-numeric: tabular-nums; }
 .mono { font-family: var(--font-mono); }
 
-/* Focus ring */
+/* Focus ring — emerald with a gold whisper */
 :focus-visible {
   outline: none;
-  box-shadow: 0 0 0 3px rgba(46,125,50,0.25);
+  box-shadow: 0 0 0 3px rgba(14,107,79,0.22), 0 0 0 5px rgba(201,162,39,0.12);
 }
 
 /* Scrollbar */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: var(--color-border-hover); }
+::-webkit-scrollbar-thumb { background: #D6D2C4; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--color-brand-gold); }

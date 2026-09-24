@@ -241,8 +241,21 @@ export default function CustomerDetailPage() {
             <span className="cd-meta-val">{customer?.region_name_ar || '—'}</span>
           </div>
           <div className="cd-meta-item">
-            <span className="cd-meta-lbl">المندوب</span>
-            <span className="cd-meta-val">{customer?.sales_rep_name || '—'}</span>
+            <span className="cd-meta-lbl">
+              المندوب
+              {customer?.sales_rep_count > 1 && (
+                <span className="cd-meta-hint"
+                      title={`تعامل مع هذا العميل ${customer.sales_rep_count} مناديب — المعروض هو مندوب آخر فاتورة`}>
+                  {' '}({customer.sales_rep_count} مناديب)
+                </span>
+              )}
+            </span>
+            <span className="cd-meta-val"
+                  title={customer?.sales_rep_last_date
+                    ? `مندوب آخر فاتورة بتاريخ ${fmtDate(customer.sales_rep_last_date)}`
+                    : undefined}>
+              {customer?.sales_rep_name || '—'}
+            </span>
           </div>
           <div className="cd-meta-item">
             <span className="cd-meta-lbl">كود المسار</span>
@@ -965,7 +978,7 @@ function ReconciliationTab({ customerId }) {
 
   const fmtDT = (dt) => {
     if (!dt) return '—';
-    return new Date(dt).toLocaleString('ar-SA', {
+    return new Date(dt).toLocaleString('ar-SA-u-nu-latn', {
       year: 'numeric', month: 'short', day: 'numeric',
       hour: '2-digit', minute: '2-digit',
     });
@@ -1072,15 +1085,27 @@ function ReconciliationTab({ customerId }) {
               </div>
 
               <div className="recon-file-actions">
-                <a
+                <button
                   className="recon-dl-btn"
-                  href={`/api/reconciliations/download/${f.id}`}
-                  target="_blank"
-                  rel="noreferrer"
                   title="تنزيل"
+                  onClick={async () => {
+                    try {
+                      const resp = await client.get(`/reconciliations/download/${f.id}`, { responseType: 'blob' });
+                      const url = URL.createObjectURL(resp.data);
+                      const a = document.createElement('a');
+                      a.href = url;
+                      a.download = f.file_name;
+                      document.body.appendChild(a);
+                      a.click();
+                      document.body.removeChild(a);
+                      URL.revokeObjectURL(url);
+                    } catch {
+                      alert('فشل التنزيل');
+                    }
+                  }}
                 >
                   <Download size={14} />
-                </a>
+                </button>
                 {isAdmin && (
                   delId === f.id ? (
                     <span className="recon-del-confirm">
@@ -1109,7 +1134,7 @@ const TYPE_CLS_H   = { customer: 'nh-badge-customer', invoice: 'nh-badge-invoice
 function fmtDT(dt) {
   if (!dt) return '—';
   const d = new Date(dt);
-  return d.toLocaleDateString('ar-SA', { year:'numeric', month:'2-digit', day:'2-digit' })
+  return d.toLocaleDateString('ar-SA-u-nu-latn', { year:'numeric', month:'2-digit', day:'2-digit' })
     + ' ' + d.toLocaleTimeString('ar-SA', { hour:'2-digit', minute:'2-digit' });
 }
 

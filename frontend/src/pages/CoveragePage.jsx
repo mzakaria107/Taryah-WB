@@ -1,11 +1,224 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   RefreshCw, AlertCircle, BarChart2, UserCheck,
-  FileSpreadsheet, Printer,
+  FileSpreadsheet, Printer, ChevronDown, Check, Activity,
 } from 'lucide-react';
 import client from '../api/client';
 import './CoveragePage.css';
+
+/* ── Custom branch/region dropdown ──────────────────────────────
+   Renders its own option list (instead of a native <select> popup)
+   so it isn't at the mercy of the OS-level select-popup renderer,
+   and shows the Arabic region name while filtering on the raw
+   English branch_name value stored in sales_activity. ── */
+function BranchDropdown({ branches, value, onChange, labelMap, loading }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDocClick = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', onDocClick);
+    return () => document.removeEventListener('mousedown', onDocClick);
+  }, [open]);
+
+  const displayLabel = loading ? 'جارٍ التحميل…' : (value ? (labelMap[value] || value) : 'الكل');
+
+  return (
+    <div className="cov-dd" ref={ref}>
+      <button
+        type="button"
+        className="cov-select cov-dd-btn"
+        disabled={loading}
+        onClick={() => setOpen(o => !o)}
+      >
+        <span>{displayLabel}</span>
+        <ChevronDown size={14} className={`cov-dd-caret${open ? ' cov-dd-caret--open' : ''}`}/>
+      </button>
+      {open && (
+        <div className="cov-dd-panel">
+          <button
+            type="button"
+            className={`cov-dd-item${!value ? ' cov-dd-item--active' : ''}`}
+            onClick={() => { onChange(''); setOpen(false); }}
+          >
+            {!value && <Check size={13}/>} الكل
+          </button>
+          {branches.map(b => (
+            <button
+              key={b}
+              type="button"
+              className={`cov-dd-item${value === b ? ' cov-dd-item--active' : ''}`}
+              onClick={() => { onChange(b); setOpen(false); }}
+            >
+              {value === b && <Check size={13}/>} {labelMap[b] || b}
+            </button>
+          ))}
+          {!branches.length && <div className="cov-dd-empty">لا توجد مناطق متاحة</div>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── Multi-region dropdown — same self-rendered panel as BranchDropdown
+   above, but toggled with checkboxes so several regions can be combined
+   (or all-but-a-few excluded) for "متابعة الزيارات اليومية". `value` is
+   null for "الكل" or a Set of the picked branch_name values; an explicitly
+   empty Set ("لا شيء") is a real, distinct state from "كل المناطق" — the
+   caller decides what to render for it rather than this component silently
+   falling back to "all". ── */
+function BranchMultiDropdown({ branches, value, onChange, labelMap, loading }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDocClick = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', onDocClick);
+    return () => document.removeEventListener('mousedown', onDocClick);
+  }, [open]);
+
+  const isAll = value === null;
+  const count = isAll ? branches.length : value.size;
+  const displayLabel = loading ? 'جارٍ التحميل…'
+    : isAll ? 'الكل'
+    : count === 0 ? 'لا شيء'
+    : count === 1 ? (labelMap[[...value][0]] || [...value][0])
+    : `${count} مناطق محددة`;
+
+  const toggle = b => onChange(prev => {
+    const cur = prev === null ? new Set(branches) : new Set(prev);
+    cur.has(b) ? cur.delete(b) : cur.add(b);
+    return cur.size === branches.length ? null : cur;
+  });
+
+  return (
+    <div className="cov-dd" ref={ref}>
+      <button
+        type="button"
+        className="cov-select cov-dd-btn"
+        disabled={loading}
+        onClick={() => setOpen(o => !o)}
+      >
+        <span>{displayLabel}</span>
+        <ChevronDown size={14} className={`cov-dd-caret${open ? ' cov-dd-caret--open' : ''}`}/>
+      </button>
+      {open && (
+        <div className="cov-dd-panel cov-dd-panel--multi">
+          <div className="cov-dd-multi-actions">
+            <button type="button" className="cov-dd-multi-action" onClick={() => onChange(null)}>الكل</button>
+            <button type="button" className="cov-dd-multi-action" onClick={() => onChange(new Set())}>لا شيء</button>
+          </div>
+          {branches.map(b => {
+            const checked = isAll || value.has(b);
+            return (
+              <button
+                type="button"
+                key={b}
+                className={`cov-dd-item cov-dd-item--checkbox${checked ? ' cov-dd-item--active' : ''}`}
+                onClick={() => toggle(b)}
+              >
+                <span className={`cov-dd-checkbox${checked ? ' cov-dd-checkbox--checked' : ''}`}>
+                  {checked && <Check size={11}/>}
+                </span>
+                {labelMap[b] || b}
+              </button>
+            );
+          })}
+          {!branches.length && <div className="cov-dd-empty">لا توجد مناطق متاحة</div>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── Custom rep dropdown — same self-rendered pattern as BranchDropdown
+   above (not a native <select> popup), plus a search box since the rep
+   list can be long. Native <select> popups are rendered by the OS/browser
+   chrome and occasionally render blank/glitched on some Windows+Chrome
+   combinations — this sidesteps that entirely. ── */
+function RepDropdown({ reps, value, onChange, showBranch, loading }) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const ref = useRef(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDocClick = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', onDocClick);
+    return () => document.removeEventListener('mousedown', onDocClick);
+  }, [open]);
+
+  useEffect(() => { if (!open) setSearch(''); }, [open]);
+
+  const filtered = useMemo(() => {
+    if (!search.trim()) return reps;
+    const q = search.trim().toLowerCase();
+    return reps.filter(r => r.name.toLowerCase().includes(q));
+  }, [reps, search]);
+
+  const displayLabel = loading ? 'جارٍ التحميل…' : (value || '-- اختر مندوباً --');
+
+  return (
+    <div className="cov-dd" ref={ref}>
+      <button
+        type="button"
+        className="cov-select cov-dd-btn cov-select--rep"
+        disabled={loading}
+        onClick={() => setOpen(o => !o)}
+      >
+        <span>{displayLabel}</span>
+        <ChevronDown size={14} className={`cov-dd-caret${open ? ' cov-dd-caret--open' : ''}`}/>
+      </button>
+      {open && (
+        <div className="cov-dd-panel">
+          {reps.length > 6 && (
+            <input
+              type="text"
+              className="cov-dd-search"
+              placeholder="ابحث عن مندوب…"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              autoFocus
+            />
+          )}
+          {filtered.map(r => (
+            <button
+              key={r.name}
+              type="button"
+              className={`cov-dd-item${value === r.name ? ' cov-dd-item--active' : ''}`}
+              onClick={() => { onChange(r.name); setOpen(false); }}
+            >
+              {value === r.name && <Check size={13}/>} {r.name}{r.branch && showBranch ? ` (${branchAr(r.branch)})` : ''}
+            </button>
+          ))}
+          {!filtered.length && <div className="cov-dd-empty">لا توجد نتائج</div>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── branch_name (English, stored in sales_activity) → Arabic region
+   name, for display everywhere on this page. Also used as a fallback
+   before /users/regions loads. ── */
+const REGION_NAME_AR = {
+  'Riyadh': 'الرياض',
+  'Al-Qassem': 'القصيم',
+  'Shaqraa': 'شقراء',
+  'Al Duwadmi': 'الدوادمي',
+  'Hael': 'حائل',
+  'Arar': 'عرعر',
+  'Madinah': 'المدينة المنورة',
+  'Hafir El Batin': 'حفر الباطن',
+  'Dammam': 'الدمام',
+  'Jeddah': 'جدة',
+};
+function branchAr(name) {
+  return name ? (REGION_NAME_AR[name] || name) : name;
+}
 
 /* ── Public holidays (Eid Al-Adha 2026, etc.) ───────────────── */
 const HOLIDAYS = [
@@ -28,6 +241,20 @@ function calcWorkingDays(year, month) {
     }
   }
   return Math.max(count, 1);
+}
+
+/* First day of the month → today (if current month) or the month's last
+   day — the default range shown when a user opens the visits-tracking
+   date pickers, so they start on something meaningful, not blank. */
+function monthBounds(year, month) {
+  const today   = new Date();
+  const isCur   = today.getFullYear() === year && today.getMonth() + 1 === month;
+  const lastDay = isCur ? today.getDate() : new Date(year, month, 0).getDate();
+  const pad = n => String(n).padStart(2, '0');
+  return {
+    from: `${year}-${pad(month)}-01`,
+    to:   `${year}-${pad(month)}-${pad(lastDay)}`,
+  };
 }
 
 /* Build 7-day week arrays for a month (same logic as CoverageMatrix) */
@@ -112,9 +339,13 @@ function exportRankingCSV(reps, period) {
 function exportProfileCSV(customers, period) {
   const month = MONTH_NAMES[period.month] + ' ' + period.year;
   const prevM = MONTH_NAMES[period.prev_month];
-  const headers = ['كود العميل', 'اسم العميل', `طلبيات ${prevM}`, `كمية ${prevM}`, 'إجمالي الزيارات (الشهر الحالي)'];
+  const headers = ['كود العميل', 'اسم العميل', `طلبيات ${prevM}`, `كمية ${prevM}`,
+    'صافي عدد طلبيات البيع (الشهر الحالي)', 'صافي كميات الشهر الحالي', 'إجمالي الزيارات (الشهر الحالي)',
+    'لديه ثلاجة', 'عدد الثلاجات'];
   const dataRows = customers.map(c => [
-    c.customer_code, c.customer_name, c.prev_orders, c.prev_qty, c.sale_days ? c.sale_days.size : 0,
+    c.customer_code, c.customer_name, c.prev_orders, c.prev_qty,
+    c.curr_orders || 0, c.curr_qty || 0, c.sale_days ? c.sale_days.size : 0,
+    c.fridge_count > 0 ? 'نعم' : 'لا', c.fridge_count || 0,
   ]);
   downloadCSV(`تغطية_عملاء_${month}`, [headers, ...dataRows]);
 }
@@ -134,6 +365,40 @@ const MONTH_NAMES = {
 const fmt  = n => Math.round(n ?? 0).toLocaleString('en-SA');
 const fmtF = n => (n ?? 0).toLocaleString('en-SA', { maximumFractionDigits: 1 });
 
+/* ── Item-category colors (product type) — same palette as the performance dashboard ── */
+const ITEM_CAT_COLORS = {
+  'دجاج مبرد طرية': '#2563eb',
+  'مقطعات طرية':    '#d97706',
+  'دجاج مجمد':      '#7c3aed',
+  'أخرى':           '#64748b',
+};
+function ItemCatMini({ rows, field = 'avg_daily_qty' }) {
+  if (!rows?.length) return null;
+  return (
+    <div className="cov-kpi-cats">
+      {rows.map(c => (
+        <span key={c.category} className="cov-kpi-cat" style={{ color: ITEM_CAT_COLORS[c.category] || '#64748b' }}>
+          {c.category}: {field === 'qty' ? fmt(c.qty) : fmtF(c.avg_daily_qty)}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+const WEEK_COLORS = ['#1d4ed8', '#0891b2', '#059669', '#d97706', '#db2777'];
+function WeeklyVisitsMini({ rows }) {
+  const visible = rows?.filter(w => w.visits > 0);
+  if (!visible?.length) return null;
+  return (
+    <div className="cov-kpi-cats">
+      {visible.map(w => (
+        <span key={w.week} className="cov-kpi-cat" style={{ color: WEEK_COLORS[w.week - 1] || '#64748b' }}>
+          الأسبوع {w.week}: {fmt(w.visits)}
+        </span>
+      ))}
+    </div>
+  );
+}
 /* ── Day helpers ─────────────────────────────────────────────── */
 function getDayOfWeek(year, month, day) {
   return new Date(year, month - 1, day).getDay();
@@ -219,7 +484,7 @@ function RepProfile({ rep, period }) {
         <div className="cov-avatar">{rep.name.charAt(0)}</div>
         <div>
           <div className="cov-rep-name">{rep.name}</div>
-          <div className="cov-rep-branch">📍 {rep.branch || 'غير محدد'}</div>
+          <div className="cov-rep-branch">📍 {branchAr(rep.branch) || 'غير محدد'}</div>
         </div>
         <div className="cov-rep-period">📅 {monthLabel}</div>
       </div>
@@ -227,10 +492,16 @@ function RepProfile({ rep, period }) {
         <div className="cov-kpi" style={{ '--cov-kpi-color': '#1d4ed8' }}>
           <div className="cov-kpi-val">{fmt(k.total_qty)}</div>
           <div className="cov-kpi-lbl">إجمالي الكميات</div>
+          <ItemCatMini rows={k.item_qty_breakdown} field="qty"/>
         </div>
         <div className="cov-kpi" style={{ '--cov-kpi-color': '#0891b2' }}>
           <div className="cov-kpi-val">{fmt(k.invoice_count)}</div>
           <div className="cov-kpi-lbl">عدد الطلبيات</div>
+        </div>
+        <div className="cov-kpi" style={{ '--cov-kpi-color': '#db2777' }}>
+          <div className="cov-kpi-val">{fmt(k.total_visits)}</div>
+          <div className="cov-kpi-lbl">إجمالي الزيارات</div>
+          <WeeklyVisitsMini rows={k.weekly_visits}/>
         </div>
         <div className="cov-kpi" style={{ '--cov-kpi-color': '#059669' }}>
           <div className="cov-kpi-val">{fmt(k.customer_count)}</div>
@@ -239,6 +510,15 @@ function RepProfile({ rep, period }) {
         <div className="cov-kpi" style={{ '--cov-kpi-color': '#7c3aed' }}>
           <div className="cov-kpi-val">{fmtF(avgPerCust)}</div>
           <div className="cov-kpi-lbl">متوسط كمية / عميل</div>
+        </div>
+        <div className="cov-kpi" style={{ '--cov-kpi-color': '#1d4ed8' }}>
+          <div className="cov-kpi-val">{fmtF(k.avg_daily_qty)}</div>
+          <div className="cov-kpi-lbl">متوسط الكميات اليومية</div>
+          <ItemCatMini rows={k.item_qty_breakdown}/>
+        </div>
+        <div className="cov-kpi" style={{ '--cov-kpi-color': '#059669' }}>
+          <div className="cov-kpi-val">{fmtF(k.avg_daily_visits)}</div>
+          <div className="cov-kpi-lbl">متوسط الزيارات اليومية</div>
         </div>
         <div className="cov-kpi" style={{ '--cov-kpi-color': '#d97706' }}>
           <div className="cov-kpi-val">
@@ -288,6 +568,7 @@ function CoverageMatrix({ profile }) {
         prev_orders:   c.invoice_count,
         prev_qty:      c.total_qty,
         curr_orders:   0, curr_qty: 0,
+        fridge_count:  c.fridge_count || 0,
         sale_days:     new Set(),
       });
     });
@@ -296,6 +577,7 @@ function CoverageMatrix({ profile }) {
         const r = map.get(c.customer_code);
         r.curr_orders = c.invoice_count;
         r.curr_qty    = c.total_qty;
+        r.fridge_count = c.fridge_count || r.fridge_count || 0;
       } else {
         map.set(c.customer_code, {
           customer_code: c.customer_code,
@@ -303,6 +585,7 @@ function CoverageMatrix({ profile }) {
           prev_orders: 0, prev_qty: 0,
           curr_orders: c.invoice_count,
           curr_qty:    c.total_qty,
+          fridge_count: c.fridge_count || 0,
           sale_days:   new Set(),
         });
       }
@@ -325,6 +608,16 @@ function CoverageMatrix({ profile }) {
     });
     return { covered0, covered1, covered2, covered3plus, total: customers.length };
   }, [customers, has_day_data]);
+
+  const currTotals = useMemo(() => {
+    return customers.reduce((s, c) => {
+      s.orders += c.curr_orders || 0;
+      s.qty    += c.curr_qty    || 0;
+      s.fridges += c.fridge_count || 0;
+      if (c.fridge_count > 0) s.custsWithFridge++;
+      return s;
+    }, { orders: 0, qty: 0, fridges: 0, custsWithFridge: 0 });
+  }, [customers]);
 
   const weeklyStats = useMemo(() => {
     if (!has_day_data || customers.length === 0) return null;
@@ -366,6 +659,31 @@ function CoverageMatrix({ profile }) {
     if (!todayDay) return null;
     return Math.floor((todayDay - 1) / 7);
   }, [todayDay]);
+
+  // Per-day totals — count of customers with an effective visit (✓) that
+  // day, across all customers — for the totals row at the bottom of the
+  // matrix. Per-week totals (sum of each customer's "sold" count) sit in
+  // the same row under each week's summary column.
+  const dailyVisitTotals = useMemo(() => {
+    if (!has_day_data) return {};
+    const totals = {};
+    weeks.forEach(wk => wk.forEach(d => {
+      let count = 0;
+      customers.forEach(c => {
+        if (getDayStatus(d, c.sale_days, year, month, todayDay) === 'sold') count++;
+      });
+      totals[d] = count;
+    }));
+    return totals;
+  }, [weeks, customers, has_day_data, year, month, todayDay]);
+
+  const weekVisitTotals = useMemo(() => {
+    return weeks.map(wk => {
+      let sold = 0;
+      customers.forEach(c => { sold += getWeekStats(wk, c.sale_days, year, month, todayDay).sold; });
+      return sold;
+    });
+  }, [weeks, customers, year, month, todayDay]);
 
   const monthLabel = `${MONTH_NAMES[month]} ${year}`;
 
@@ -481,6 +799,9 @@ function CoverageMatrix({ profile }) {
                 <col className="cov-col-name" />
                 <col className="cov-col-num" />
                 <col className="cov-col-num" />
+                <col className="cov-col-num" />
+                <col className="cov-col-num" />
+                <col className="cov-col-num" />
                 <col className="cov-col-wsep" />
                 {weeks.map((wk, wi) => (
                   <React.Fragment key={wi}>
@@ -495,6 +816,9 @@ function CoverageMatrix({ profile }) {
                   <th className="cov-th-fixed cov-th-fixed--name" rowSpan={2}>العميل</th>
                   <th className="cov-th-fixed" rowSpan={2}>طلبيات<br/>{MONTH_NAMES[prev_month]}</th>
                   <th className="cov-th-fixed" rowSpan={2}>كمية<br/>{MONTH_NAMES[prev_month]}</th>
+                  <th className="cov-th-fixed" rowSpan={2} style={{ background: '#eff6ff', color: '#1d4ed8' }}>صافي طلبيات<br/>الشهر الحالي</th>
+                  <th className="cov-th-fixed" rowSpan={2} style={{ background: '#eff6ff', color: '#1d4ed8' }}>صافي كمية<br/>الشهر الحالي</th>
+                  <th className="cov-th-fixed" rowSpan={2} style={{ background: '#faf5ff', color: '#7c3aed' }}>الثلاجات</th>
                   <th className="cov-col-wsep" rowSpan={2}></th>
                   {weeks.map((wk, wi) => {
                     const isCurrent = wi === currentWeekIdx;
@@ -539,6 +863,17 @@ function CoverageMatrix({ profile }) {
                     <td className="cov-td cov-td--num">
                       {cust.prev_qty > 0 ? <span className="cov-qty-badge">{fmt(cust.prev_qty)}</span> : <span style={{ color: '#cbd5e1' }}>—</span>}
                     </td>
+                    <td className="cov-td cov-td--num">
+                      {cust.curr_orders > 0 ? <span className="cov-orders-badge">{cust.curr_orders}</span> : <span style={{ color: '#cbd5e1' }}>—</span>}
+                    </td>
+                    <td className="cov-td cov-td--num">
+                      {cust.curr_qty > 0 ? <span className="cov-qty-badge">{fmt(cust.curr_qty)}</span> : <span style={{ color: '#cbd5e1' }}>—</span>}
+                    </td>
+                    <td className="cov-td cov-td--num">
+                      {cust.fridge_count > 0
+                        ? <span className="cov-fridge-badge">🧊 {cust.fridge_count}</span>
+                        : <span className="cov-no-fridge">✕</span>}
+                    </td>
                     <td className="cov-td cov-td--sep"></td>
                     {weeks.map((wk, wi) => {
                       const stats = getWeekStats(wk, cust.sale_days, year, month, todayDay);
@@ -556,6 +891,28 @@ function CoverageMatrix({ profile }) {
                   </tr>
                 ))}
               </tbody>
+              <tfoot>
+                <tr className="cov-tr cov-tr--total">
+                  <td className="cov-td cov-td--name cov-td--total-label">الإجمالي</td>
+                  <td className="cov-td cov-td--num"></td>
+                  <td className="cov-td cov-td--num"></td>
+                  <td className="cov-td cov-td--num">{fmt(currTotals.orders)}</td>
+                  <td className="cov-td cov-td--num">{fmt(currTotals.qty)}</td>
+                  <td className="cov-td cov-td--num">🧊 {fmt(currTotals.fridges)} ({currTotals.custsWithFridge})</td>
+                  <td className="cov-td cov-td--sep"></td>
+                  {weeks.map((wk, wi) => (
+                    <React.Fragment key={wi}>
+                      <td className="cov-td cov-td--total-day">{weekVisitTotals[wi]}</td>
+                      {wk.map(d => (
+                        <td key={d} className="cov-td cov-td--total-day">
+                          {has_day_data ? (dailyVisitTotals[d] || 0) : '—'}
+                        </td>
+                      ))}
+                      {wi < weeks.length - 1 && <td className="cov-td cov-td--sep"></td>}
+                    </React.Fragment>
+                  ))}
+                </tr>
+              </tfoot>
             </table>
           </div>
 
@@ -710,7 +1067,7 @@ function RankingMatrix({ reps, workingDays, year, month }) {
                 </td>
                 <td className="cov-rtd cov-rtd--name">{rep.rep_name}</td>
                 <td className="cov-rtd cov-rtd--branch">
-                  <span className="cov-branch-badge">{rep.branch_name || '—'}</span>
+                  <span className="cov-branch-badge">{branchAr(rep.branch_name) || '—'}</span>
                 </td>
                 <td className="cov-rtd cov-rtd--num">{rep.total_customers}</td>
                 {rep.weeks.map((wk, wi) => (
@@ -893,22 +1250,248 @@ function RankingView({ branch, month, year }) {
 }
 
 /* ══════════════════════════════════════════════════════════════
+   VISITS TRACKING — daily visits per rep vs the 13/day target
+   (same target used by region-performance's scorecard, VISIT_TARGET_SCORE)
+   ══════════════════════════════════════════════════════════════ */
+const VISIT_TARGET = 13;
+
+function exportVisitsCSV(rows, rangeLabel) {
+  const headers = ['المندوب', 'المنطقة', 'متوسط الزيارات/يوم', 'الهدف',
+    'الفجوة', 'نسبة التحقق %', 'الحالة'];
+  const dataRows = rows.map(r => [
+    r.rep_name, r.branch_name,
+    r.hasData ? r.avgVisits.toFixed(1) : '—',
+    VISIT_TARGET,
+    r.hasData ? Math.max(0, VISIT_TARGET - r.avgVisits).toFixed(1) : '—',
+    r.hasData ? Math.round((r.avgVisits / VISIT_TARGET) * 100) : '—',
+    !r.hasData ? 'بدون بيانات يومية' : r.avgVisits >= VISIT_TARGET ? 'محقِّق الهدف' : 'دون الهدف',
+  ]);
+  downloadCSV(`متابعة_الزيارات_اليومية_${rangeLabel}`, [headers, ...dataRows]);
+}
+
+/* dateFrom/dateTo drive an arbitrary calendar range (via /coverage/visits-
+   range) instead of the calendar-month-locked /coverage/ranking — a rep
+   with zero visits in the chosen range simply doesn't appear, same as any
+   other range-scoped report in this app. */
+function VisitsTrackingView({ branches, dateFrom, dateTo }) {
+  /* `branches`: null = كل المناطق · Set = subset picked in the multi-select
+     dropdown (an empty Set is a deliberate "لا شيء" and is handled entirely
+     client-side below — it never reaches the API, same as the empty-type/
+     empty-region states on the fleet/stock matrix pages). */
+  const noneSelected = branches !== null && branches.size === 0;
+  const branchList = branches === null ? [] : [...branches];
+
+  const { data, isLoading, isError } = useQuery({
+    queryKey: ['coverage-visits-range', branchList.join('|'), branches === null, dateFrom, dateTo],
+    queryFn:  () => {
+      const params = new URLSearchParams({ date_from: dateFrom, date_to: dateTo });
+      branchList.forEach(b => params.append('branch', b));
+      return client.get(`/coverage/visits-range?${params}`).then(r => r.data);
+    },
+    enabled:  !!dateFrom && !!dateTo && dateTo >= dateFrom && !noneSelected,
+    staleTime: 3 * 60 * 1000,
+  });
+
+  const [sortAsc, setSortAsc] = useState(true); // worst-first by default
+
+  if (dateFrom && dateTo && dateTo < dateFrom) return (
+    <div className="cov-empty"><AlertCircle size={32} style={{ color: '#f59e0b', marginBottom: 8 }}/><div>نطاق التاريخ غير صحيح — «إلى» قبل «من»</div></div>
+  );
+  if (noneSelected) return (
+    <div className="cov-empty"><span className="cov-empty-icon">📍</span>اختر منطقة واحدة على الأقل من القائمة</div>
+  );
+  if (isLoading) return (
+    <div className="cov-loading"><RefreshCw size={20} className="srp-spin"/><span>جارٍ تحميل بيانات الزيارات…</span></div>
+  );
+  if (isError) return (
+    <div className="cov-empty"><AlertCircle size={32} style={{ color: '#f59e0b', marginBottom: 8 }}/><div>خطأ في تحميل البيانات</div></div>
+  );
+  if (!data) return null;
+
+  const { reps } = data;
+  const rangeLabel = `${dateFrom} → ${dateTo}`;
+
+  if (reps.length === 0) return (
+    <div className="cov-empty"><span className="cov-empty-icon">🚶</span>لا توجد بيانات لهذه الفترة</div>
+  );
+
+  const rows = reps.map(r => ({
+    rep_name:    r.rep_name,
+    branch_name: r.branch_name,
+    hasData:     r.avg_visits != null,
+    avgVisits:   r.avg_visits ?? 0,
+  }));
+
+  const withData  = rows.filter(r => r.hasData);
+  const belowRows = withData.filter(r => r.avgVisits < VISIT_TARGET);
+  const belowCount = belowRows.length;
+  const atOrAboveCount = withData.length - belowCount;
+  const companyAvg = withData.length
+    ? withData.reduce((s, r) => s + r.avgVisits, 0) / withData.length
+    : null;
+
+  const sorted = [...rows].sort((a, b) => {
+    // No-data rows always sink to the bottom regardless of sort direction.
+    if (a.hasData !== b.hasData) return a.hasData ? -1 : 1;
+    return sortAsc ? a.avgVisits - b.avgVisits : b.avgVisits - a.avgVisits;
+  });
+
+  return (
+    <>
+      {/* Summary row */}
+      <div className="cov-rank-summary">
+        <span className="cov-stat-chip">إجمالي المناديب: <strong>{reps.length}</strong></span>
+        {companyAvg != null && (
+          <span className="cov-stat-chip" style={{ background: companyAvg >= VISIT_TARGET ? '#dcfce7' : '#fef3c7' }}>
+            متوسط الشركة: <strong>{companyAvg.toFixed(1)}</strong> / {VISIT_TARGET}
+          </span>
+        )}
+        {belowCount > 0 && (
+          <span className="cov-stat-chip" style={{ background: '#fee2e2' }}>
+            دون الهدف: <strong>{belowCount}</strong>
+          </span>
+        )}
+        {atOrAboveCount > 0 && (
+          <span className="cov-stat-chip" style={{ background: '#dcfce7' }}>
+            محقِّق الهدف: <strong>{atOrAboveCount}</strong>
+          </span>
+        )}
+        {reps.length - withData.length > 0 && (
+          <span className="cov-stat-chip" style={{ color: '#94a3b8' }}>
+            بدون بيانات يومية: <strong>{reps.length - withData.length}</strong>
+          </span>
+        )}
+      </div>
+
+      <div className="cov-rank-card">
+        <div className="cov-section-title">
+          <span>🚶 متابعة الزيارات اليومية — {dateFrom} إلى {dateTo}</span>
+          <span className="cov-section-count">هدف {VISIT_TARGET} زيارة/يوم</span>
+          <div className="cov-export-btns cov-no-print">
+            <button className="cov-export-btn cov-export-btn--excel"
+              onClick={() => exportVisitsCSV(rows, rangeLabel)}
+              title="تصدير Excel">
+              <FileSpreadsheet size={14}/> Excel
+            </button>
+            <button className="cov-export-btn cov-export-btn--pdf"
+              onClick={() => triggerPrint(`متابعة الزيارات اليومية — ${rangeLabel}`)}
+              title="تصدير PDF">
+              <Printer size={14}/> PDF
+            </button>
+          </div>
+        </div>
+
+        <div className="cov-rtable-wrap">
+          <table className="cov-rtable">
+            <thead>
+              <tr>
+                <th className="cov-rth cov-rth--name">المندوب</th>
+                <th className="cov-rth">المنطقة</th>
+                <th className="cov-rth cov-rth--avg cov-rth--sortable"
+                    onClick={() => setSortAsc(a => !a)}
+                    title="اضغط لعكس الترتيب">
+                  زيارة/يوم {sortAsc ? '▲' : '▼'}
+                </th>
+                <th className="cov-rth cov-rth--avg">الهدف</th>
+                <th className="cov-rth cov-rth--avg">الفجوة</th>
+                <th className="cov-rth cov-rth--overall">نسبة التحقق</th>
+                <th className="cov-rth">الحالة</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sorted.map((r, i) => {
+                const pct = r.hasData ? Math.round((r.avgVisits / VISIT_TARGET) * 100) : null;
+                const gap = r.hasData ? Math.max(0, VISIT_TARGET - r.avgVisits) : null;
+                const below = r.hasData && r.avgVisits < VISIT_TARGET;
+                return (
+                  <tr key={r.rep_name + i} className={`cov-rtr${i % 2 !== 0 ? ' cov-rtr--alt' : ''}`}>
+                    <td className="cov-rtd cov-rtd--name">{r.rep_name}</td>
+                    <td className="cov-rtd cov-rtd--branch">
+                      <span className="cov-branch-badge">{branchAr(r.branch_name) || '—'}</span>
+                    </td>
+                    <td className="cov-rtd cov-rtd--num">
+                      {r.hasData ? r.avgVisits.toFixed(1) : <span style={{ color: '#94a3b8' }}>—</span>}
+                    </td>
+                    <td className="cov-rtd cov-rtd--num" style={{ color: '#94a3b8' }}>{VISIT_TARGET}</td>
+                    <td className="cov-rtd cov-rtd--num">
+                      {r.hasData
+                        ? (gap > 0 ? <span style={{ color: '#dc2626', fontWeight: 600 }}>{gap.toFixed(1)}</span>
+                                   : <span style={{ color: '#16a34a' }}>0.0</span>)
+                        : '—'}
+                    </td>
+                    <td className={`cov-rtd cov-rtd--overall ${
+                      !r.hasData ? '' : pct >= 100 ? 'cov-rtd--high' : pct >= 70 ? 'cov-rtd--good' : pct >= 40 ? 'cov-rtd--mid' : 'cov-rtd--low'
+                    }`}>
+                      {r.hasData ? `${pct}%` : '—'}
+                    </td>
+                    <td className="cov-rtd">
+                      {!r.hasData ? (
+                        <span style={{ color: '#94a3b8' }}>بدون بيانات</span>
+                      ) : below ? (
+                        <span className="cov-stat-chip" style={{ background: '#fee2e2', color: '#991b1b' }}>⚠ دون الهدف</span>
+                      ) : (
+                        <span className="cov-stat-chip" style={{ background: '#dcfce7', color: '#166534' }}>✓ محقِّق</span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </>
+  );
+}
+
+/* ══════════════════════════════════════════════════════════════
    MAIN PAGE
    ══════════════════════════════════════════════════════════════ */
 export default function CoveragePage() {
   const now = new Date();
   const [activeTab, setActiveTab] = useState('profile');
   const [branch,    setBranch]    = useState('');
+  /* Region filter for "متابعة الزيارات اليومية" only — a Set lets several
+     regions be combined and others deliberately excluded, unlike `branch`
+     above which the profile/ranking tabs still need as a single value.
+     null = كل المناطق (default); an empty Set = "لا شيء" on purpose. */
+  const [visitsBranches, setVisitsBranches] = useState(null);
   const [repName,   setRepName]   = useState('');
   const [month,     setMonth]     = useState(now.getMonth() + 1);
   const [year,      setYear]      = useState(now.getFullYear());
 
+  /* ── Date range for the visits-tracking tab only — starts at the
+     selected month's own bounds so the tab is never blank, then the user
+     can widen/narrow it freely (it can span more than one month). ── */
+  const defaultRange = monthBounds(now.getFullYear(), now.getMonth() + 1);
+  const [visitsFrom, setVisitsFrom] = useState(defaultRange.from);
+  const [visitsTo,   setVisitsTo]   = useState(defaultRange.to);
+  // Only re-derive the range from month/year the FIRST time the tab is
+  // opened — once the user has picked their own dates, re-clicking the tab
+  // must not silently wipe their custom range back to the current month.
+  const visitsRangeTouched = useRef(false);
+
   /* ── Shared filters ── */
-  const { data: filters, isLoading: filtersLoading } = useQuery({
+  const { data: filters, isLoading: filtersLoading, isError: filtersError, error: filtersErrorObj } = useQuery({
     queryKey: ['coverage-filters', year],
     queryFn:  () => client.get(`/coverage/filters?year=${year}`).then(r => r.data),
     staleTime: 5 * 60 * 1000,
   });
+
+  /* ── Region list (for Arabic labels on the branch_name filter) ── */
+  const { data: regionList = [] } = useQuery({
+    queryKey: ['users-regions'],
+    queryFn:  () => client.get('/users/regions').then(r => r.data),
+    staleTime: 10 * 60 * 1000,
+  });
+  const branchLabelMap = useMemo(() => {
+    const map = { ...REGION_NAME_AR };
+    regionList.forEach(r => {
+      if (r.name_en) map[r.name_en] = r.name_ar || r.name_en;
+      if (r.name_ar) map[r.name_ar] = r.name_ar;
+    });
+    return map;
+  }, [regionList]);
 
   const availableReps = useMemo(() => {
     if (!filters?.reps) return [];
@@ -922,8 +1505,6 @@ export default function CoveragePage() {
     enabled:  !!repName && activeTab === 'profile',
     staleTime: 3 * 60 * 1000,
   });
-
-  const handleBranchChange = e => { setBranch(e.target.value); setRepName(''); };
 
   return (
     <div className="cov-page">
@@ -950,51 +1531,101 @@ export default function CoveragePage() {
         >
           <BarChart2 size={15}/> ترتيب المناديب
         </button>
+        <button
+          className={`cov-tab${activeTab === 'visits' ? ' cov-tab--active' : ''}`}
+          onClick={() => {
+            setActiveTab('visits');
+            if (!visitsRangeTouched.current) {
+              const b = monthBounds(year, month);
+              setVisitsFrom(b.from); setVisitsTo(b.to);
+            }
+          }}
+        >
+          <Activity size={15}/> متابعة الزيارات اليومية
+        </button>
       </div>
 
       {/* ── Filters ── */}
       <div className="cov-filters cov-no-print">
         <div className="cov-filter-group">
           <label className="cov-filter-label">📍 المنطقة / خط السير</label>
-          <select className="cov-select" value={branch} onChange={handleBranchChange}>
-            <option value="">الكل</option>
-            {(filters?.branches || []).map(b => <option key={b} value={b}>{b}</option>)}
-          </select>
+          {activeTab === 'visits' ? (
+            <BranchMultiDropdown
+              branches={filters?.branches || []}
+              value={visitsBranches}
+              onChange={setVisitsBranches}
+              labelMap={branchLabelMap}
+              loading={filtersLoading}
+            />
+          ) : (
+            <BranchDropdown
+              branches={filters?.branches || []}
+              value={branch}
+              onChange={b => { setBranch(b); setRepName(''); }}
+              labelMap={branchLabelMap}
+              loading={filtersLoading}
+            />
+          )}
+          {filtersError && (
+            <span className="cov-filter-error">
+              ⚠️ تعذّر تحميل قائمة المناطق{filtersErrorObj?.response?.data?.error ? `: ${filtersErrorObj.response.data.error}` : ''}
+            </span>
+          )}
+          {!filtersLoading && !filtersError && filters && !filters.branches?.length && (
+            <span className="cov-filter-error">لا توجد بيانات لهذه السنة</span>
+          )}
         </div>
 
         {/* Rep filter — profile tab only */}
         {activeTab === 'profile' && (
           <div className="cov-filter-group">
             <label className="cov-filter-label">👤 المندوب</label>
-            <select
-              className="cov-select cov-select--rep"
+            <RepDropdown
+              reps={availableReps}
               value={repName}
-              onChange={e => setRepName(e.target.value)}
-              disabled={filtersLoading}
-            >
-              <option value="">-- اختر مندوباً --</option>
-              {availableReps.map(r => (
-                <option key={r.name} value={r.name}>
-                  {r.name}{r.branch && branch === '' ? ` (${r.branch})` : ''}
-                </option>
-              ))}
-            </select>
+              onChange={setRepName}
+              showBranch={branch === ''}
+              loading={filtersLoading}
+            />
           </div>
         )}
 
-        <div className="cov-filter-group cov-filter-group--sm">
-          <label className="cov-filter-label">🗓 الشهر</label>
-          <select className="cov-select" value={month} onChange={e => setMonth(Number(e.target.value))}>
-            {Object.entries(MONTH_NAMES).map(([v, lbl]) => <option key={v} value={v}>{lbl}</option>)}
-          </select>
-        </div>
+        {activeTab === 'visits' ? (
+          <>
+            <div className="cov-filter-group cov-filter-group--sm">
+              <label className="cov-filter-label">📅 من</label>
+              <input
+                type="date" className="cov-select"
+                value={visitsFrom} max={visitsTo || undefined}
+                onChange={e => { visitsRangeTouched.current = true; setVisitsFrom(e.target.value); }}
+              />
+            </div>
+            <div className="cov-filter-group cov-filter-group--sm">
+              <label className="cov-filter-label">📅 إلى</label>
+              <input
+                type="date" className="cov-select"
+                value={visitsTo} min={visitsFrom || undefined}
+                onChange={e => { visitsRangeTouched.current = true; setVisitsTo(e.target.value); }}
+              />
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="cov-filter-group cov-filter-group--sm">
+              <label className="cov-filter-label">🗓 الشهر</label>
+              <select className="cov-select" value={month} onChange={e => setMonth(Number(e.target.value))}>
+                {Object.entries(MONTH_NAMES).map(([v, lbl]) => <option key={v} value={v}>{lbl}</option>)}
+              </select>
+            </div>
 
-        <div className="cov-filter-group cov-filter-group--sm">
-          <label className="cov-filter-label">📆 السنة</label>
-          <select className="cov-select" value={year} onChange={e => setYear(Number(e.target.value))}>
-            {[2024, 2025, 2026, 2027].map(y => <option key={y} value={y}>{y}</option>)}
-          </select>
-        </div>
+            <div className="cov-filter-group cov-filter-group--sm">
+              <label className="cov-filter-label">📆 السنة</label>
+              <select className="cov-select" value={year} onChange={e => setYear(Number(e.target.value))}>
+                {[2024, 2025, 2026, 2027].map(y => <option key={y} value={y}>{y}</option>)}
+              </select>
+            </div>
+          </>
+        )}
 
         {activeTab === 'profile' && repName && (
           <button className="cov-btn-clear" onClick={() => setRepName('')}>✕ مسح</button>
@@ -1021,8 +1652,10 @@ export default function CoveragePage() {
             <div>لا توجد بيانات لهذا المندوب في الفترة المحددة</div>
           </div>
         )
-      ) : (
+      ) : activeTab === 'ranking' ? (
         <RankingView branch={branch} month={month} year={year}/>
+      ) : (
+        <VisitsTrackingView branches={visitsBranches} dateFrom={visitsFrom} dateTo={visitsTo}/>
       )}
 
     </div>

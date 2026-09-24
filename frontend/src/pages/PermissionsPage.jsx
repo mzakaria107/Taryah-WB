@@ -19,6 +19,9 @@ const DATA_SCOPE = {
   fridge_admin:   { icon: '📍', label: 'منطقته فقط', cls: 'pp-own' },
   accounts:       { icon: '🌐', label: 'كل المناطق', cls: 'pp-all' },
   viewer:         { icon: '🌐', label: 'كل المناطق', cls: 'pp-all' },
+  carrefour_rep:  { icon: '📍', label: 'فروعه فقط', cls: 'pp-own' },
+  quality_returns_monitor: { icon: '📍', label: 'مناطقه فقط', cls: 'pp-own' },
+  fleet_supervisor: { icon: '🌐', label: 'كل الأسطول', cls: 'pp-all' },
 }; // DATA_SCOPE has same keys as ROLES
 
 const ROLE_DESCS = {
@@ -32,6 +35,9 @@ const ROLE_DESCS = {
   fridge_admin:   'موظف إداري ثلاجات — يرى صفحة الثلاجات ومهام المبيعات لمنطقته فقط.',
   accounts:       'الحسابات — قراءة فقط للفواتير والأرصدة وملفات العملاء لجميع المناطق، بدون صلاحية التعديل.',
   viewer:         'مستعرض — قراءة فقط للرئيسية والفواتير، بدون أي صلاحية تعديل أو تصدير.',
+  carrefour_rep:  'مروج كارفور — يسجّل مرتجعات كارفور وجرد الأرصدة اليومي للفرع/الفروع المخصصة له فقط، بدون وصول لأي صفحة أخرى.',
+  quality_returns_monitor: 'مراقب مرتجعات جودة — يسجّل مرتجعات عيوب الجودة اليومية لخطوط سير المنطقة/المناطق المخصصة له فقط، بدون وصول لأي صفحة أخرى.',
+  fleet_supervisor: 'مشرف حركة — مسؤول أسطول السيارات المركزي: يدير بروفايلات السيارات، قراءات العداد، الصيانة الدورية، والمصاريف، بدون وصول لأي صفحة أخرى.',
 }; // ROLE_DESCS
 
 /* Cell state machine: cycle 0→1→2→0 */

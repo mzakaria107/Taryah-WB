@@ -34,11 +34,17 @@ const taskUpload = multer({ storage: taskStorage, limits: { fileSize: 50 * 1024 
 const ADMIN_ROLES = ['super_admin', 'it_admin'];
 const isAdmin = (user) => ADMIN_ROLES.includes(user.role);
 
+// A user may now be assigned more than one region.
+function userRegionIds(user) {
+  if (Array.isArray(user.region_ids) && user.region_ids.length) return user.region_ids;
+  return user.region_id ? [user.region_id] : [];
+}
+
 // Build region WHERE clause based on user role
 function regionWhere(user, alias = '') {
   const col = alias ? `${alias}.region_id` : 'region_id';
   if (isAdmin(user)) return { sql: '', vals: [], nextP: 1 };
-  return { sql: ` AND ${col} = $1`, vals: [user.region_id], nextP: 2 };
+  return { sql: ` AND ${col} = ANY($1::int[])`, vals: [userRegionIds(user)], nextP: 2 };
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -133,8 +139,8 @@ router.get('/tasks', verifyToken, async (req, res) => {
 
     // Region access control: show tasks in user's region OR assigned directly to this user
     if (!isAdmin(req.user)) {
-      conds.push(`(t.region_id = $${p} OR t.assignee_user_id = $${p + 1})`);
-      vals.push(req.user.region_id, req.user.id);
+      conds.push(`(t.region_id = ANY($${p}::int[]) OR t.assignee_user_id = $${p + 1})`);
+      vals.push(userRegionIds(req.user), req.user.id);
       p += 2;
     } else if (region_id) {
       conds.push(`t.region_id = $${p++}`);
@@ -214,7 +220,7 @@ router.post('/tasks', verifyToken, taskUpload.array('files', 5), async (req, res
 
   // Non-admins can only create tasks for their own region
   const taskRegion = parseInt(region_id, 10) || null;
-  if (!isAdmin(req.user) && taskRegion !== req.user.region_id) {
+  if (!isAdmin(req.user) && !userRegionIds(req.user).includes(taskRegion)) {
     return res.status(403).json({ error: 'لا يمكنك تعيين مهمة لمنطقة أخرى' });
   }
 
@@ -348,7 +354,7 @@ router.get('/tasks/:id', verifyToken, async (req, res) => {
     const task = taskRes.rows[0];
 
     // Region check for non-admin
-    if (!isAdmin(req.user) && task.region_id !== req.user.region_id) {
+    if (!isAdmin(req.user) && !userRegionIds(req.user).includes(task.region_id)) {
       return res.status(403).json({ error: 'ليس لديك صلاحية لعرض هذه المهمة' });
     }
 
@@ -639,7 +645,7 @@ router.get('/files/:storedName', verifyToken, async (req, res) => {
     if (!result.rowCount) return res.status(404).json({ error: 'الملف غير موجود' });
     const file = result.rows[0];
 
-    if (!isAdmin(req.user) && file.region_id !== req.user.region_id) {
+    if (!isAdmin(req.user) && !userRegionIds(req.user).includes(file.region_id)) {
       return res.status(403).json({ error: 'ليس لديك صلاحية' });
     }
 
@@ -696,7 +702,7 @@ router.get('/assignees', verifyToken, async (req, res) => {
 router.get('/regions', verifyToken, async (req, res) => {
   try {
     const result = await pool.query(
-      `SELECT id, name_ar, name_en FROM regions ORDER BY name_ar`
+      `SELECT id, name_ar, name_en FROM regions WHERE fleet_only = false ORDER BY name_ar`
     );
     res.json({ regions: result.rows });
   } catch (err) {

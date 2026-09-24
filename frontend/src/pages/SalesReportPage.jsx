@@ -1,10 +1,11 @@
 import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import * as XLSX from 'xlsx';
 import {
   RefreshCw, ChevronDown, ChevronLeft, Printer,
   TrendingUp, Users, MapPin, Package, RotateCcw, Award,
-  EyeOff, BarChart2, CalendarDays, Calendar,
-  SlidersHorizontal, Check, X,
+  EyeOff, BarChart2, CalendarDays, Calendar, Table2,
+  SlidersHorizontal, Check, X, FileDown, DollarSign, ShieldAlert, Wallet,
 } from 'lucide-react';
 import client from '../api/client';
 import { useAuth } from '../context/AuthContext';
@@ -286,6 +287,7 @@ function SalesContent({ period }) {
   const queryClient  = useQueryClient();
 
   const [refreshing,       setRefreshing]       = useState(false);
+  const [excelExporting,   setExcelExporting]   = useState(false);
   const [excludeWarehouse, setExcludeWarehouse] = useState(true);
   const [filterRegion,     setFilterRegion]     = useState('');
   const [filterDay,        setFilterDay]        = useState('');
@@ -293,6 +295,8 @@ function SalesContent({ period }) {
   const [filterYear,       setFilterYear]       = useState('');
   const [filterFrom,       setFilterFrom]       = useState('');   // YYYY-MM-DD
   const [filterTo,         setFilterTo]         = useState('');   // YYYY-MM-DD
+
+
 
   /* ── Type filter (server-persisted, shared across all users) ── */
   const { data: savedTypes = [] } = useQuery({
@@ -422,10 +426,44 @@ function SalesContent({ period }) {
   const handlePrint = useCallback(() => {
     const label = isMonthly ? 'الشهرية' : 'اليوم';
     const prev  = document.title;
-    document.title = `تقرير المبيعات ${label} — ${new Date().toLocaleDateString('ar-SA', { year:'numeric', month:'long', day:'numeric' })}`;
+    document.title = `تقرير المبيعات ${label} — ${new Date().toLocaleDateString('ar-SA-u-nu-latn', { year:'numeric', month:'long', day:'numeric' })}`;
     window.print();
     window.onafterprint = () => { document.title = prev; window.onafterprint = null; };
   }, [isMonthly]);
+
+  async function handleExcelExport() {
+    setExcelExporting(true);
+    try {
+      const XLSX = await import('xlsx');
+      const rows = [];
+      regions.forEach(region => {
+        region.reps.forEach(rep => {
+          rep.items.forEach(item => {
+            const avg = item.qty !== 0
+              ? Math.abs(item.avgPrice != null ? item.avgPrice : item.total / item.qty)
+              : null;
+            rows.push({
+              'المنطقة':         region.regionName,
+              'المندوب':         rep.repName,
+              'الصنف':           item.itemName,
+              'النوع':           item.itemType || '',
+              'الكمية':          item.qty,
+              'الإجمالي (ر.س)': item.total,
+              'متوسط السعر':     avg != null ? +avg.toFixed(2) : '',
+            });
+          });
+        });
+      });
+      const ws = XLSX.utils.json_to_sheet(rows);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'تقرير المبيعات');
+      const label = isMonthly ? 'الشهرية' : 'اليوم';
+      const date  = new Date().toISOString().slice(0, 10);
+      XLSX.writeFile(wb, `تقرير_المبيعات_${label}_${date}.xlsx`);
+    } finally {
+      setExcelExporting(false);
+    }
+  }
 
   const rawKpi     = data?.kpi     || {};
   const rawRegions = data?.regions || [];
@@ -584,6 +622,7 @@ function SalesContent({ period }) {
       }).filter(Boolean);
     }
 
+
     return result;
   }, [warehouseFiltered, savedRegions, filterRegion, filterDay, filterMonth, filterYear, filterFrom, filterTo, savedTypes]);
 
@@ -724,7 +763,6 @@ function SalesContent({ period }) {
               <p className="srp-type-panel-hint">يُطبَّق على جميع المستخدمين · فارغ = الكل</p>
 
               <div className="srp-type-list">
-                {/* Select All / Clear All */}
                 <label className="srp-type-item srp-type-item--all">
                   <input
                     type="checkbox"
@@ -765,6 +803,11 @@ function SalesContent({ period }) {
           <RefreshCw size={14} className={refreshing ? 'srp-spin' : ''}/>
           {refreshing ? 'جارٍ التحديث…' : 'تحديث'}
         </button>
+        <button className="srp-btn srp-btn--excel" onClick={handleExcelExport}
+          disabled={excelExporting || isLoading || regions.length === 0}>
+          <FileDown size={14}/>
+          {excelExporting ? 'جارٍ التصدير…' : 'Excel'}
+        </button>
         <button className="srp-btn srp-btn--print" onClick={handlePrint}>
           <Printer size={14}/> PDF
         </button>
@@ -784,9 +827,9 @@ function SalesContent({ period }) {
       {isMonthly && (filterFrom || filterTo) && (
         <div className="srp-date-range srp-date-range--custom srp-no-print">
           🔍 الفترة المحددة:&nbsp;
-          <strong>{filterFrom ? new Date(filterFrom).toLocaleDateString('ar-SA', {day:'numeric',month:'long',year:'numeric'}) : '…'}</strong>
+          <strong>{filterFrom ? new Date(filterFrom).toLocaleDateString('ar-SA-u-nu-latn', {day:'numeric',month:'long',year:'numeric'}) : '…'}</strong>
           &nbsp;—&nbsp;
-          <strong>{filterTo   ? new Date(filterTo  ).toLocaleDateString('ar-SA', {day:'numeric',month:'long',year:'numeric'}) : '…'}</strong>
+          <strong>{filterTo   ? new Date(filterTo  ).toLocaleDateString('ar-SA-u-nu-latn', {day:'numeric',month:'long',year:'numeric'}) : '…'}</strong>
           {filterFrom && filterTo && (() => {
             const days = Math.round((new Date(filterTo) - new Date(filterFrom)) / 86400000) + 1;
             return <span className="srp-date-range-days"> ({days} يوم)</span>;
@@ -794,6 +837,14 @@ function SalesContent({ period }) {
           <button className="srp-date-range-clear" onClick={() => { setFilterFrom(''); setFilterTo(''); }}>✕</button>
         </div>
       )}
+
+
+      {/* Category filter note */}
+      <div className="srp-cat-note srp-no-print">
+        <span className="srp-cat-note-icon">ℹ️</span>
+        تقرير NetSuite لا يحتوي على بيانات تصنيف العملاء — للتصفية حسب نوع العميل استخدم&nbsp;
+        <a href="/sales-activity" className="srp-cat-note-link">تقرير العملاء</a>
+      </div>
 
       {/* Filters */}
       {!isLoading && (filterOptions.regions.length > 1 || hasDateData) && (
@@ -881,6 +932,7 @@ function SalesContent({ period }) {
               setFilterRegion(''); setFilterDay('');
               setFilterMonth(''); setFilterYear('');
               setFilterFrom('');  setFilterTo('');
+              setFilterCustCats(new Set());
             }}>
               ✕ إعادة تعيين
             </button>
@@ -964,6 +1016,255 @@ function SalesContent({ period }) {
   );
 }
 
+/* ══════════════════════════════════════════════════════════════
+   BRANCH SUMMARY TAB — drillable Branch → Rep → Category → Customer,
+   built from our own sales_activity + payments + quality_issues, not
+   the live NetSuite feed the other two tabs use. See the backend route's
+   header comment for why Free/Good Return/Expire are absent rather than
+   shown as zero.
+   ══════════════════════════════════════════════════════════════ */
+const BS_LEVEL_LABEL = { branch: 'المنطقة', rep: 'المندوب', category: 'فئة العميل', customer: 'العميل' };
+const BS_LEVELS_FE = ['branch', 'rep', 'category', 'customer'];
+
+/* First day of the month → today (if the current month) or the month's
+   last day — a sane default for the calendar range the first time it's
+   opened, same convention as the coverage page's visits-range picker. */
+function monthBoundsSRP(year, month) {
+  const today   = new Date();
+  const isCur   = today.getFullYear() === year && today.getMonth() + 1 === month;
+  const lastDay = isCur ? today.getDate() : new Date(year, month, 0).getDate();
+  const pad = n => String(n).padStart(2, '0');
+  return { from: `${year}-${pad(month)}-01`, to: `${year}-${pad(month)}-${pad(lastDay)}` };
+}
+
+function BranchSummaryTab() {
+  const now = new Date();
+  const [year,      setYear]      = useState(now.getFullYear());
+  const [fromMonth, setFromMonth] = useState(1);
+  const [toMonth,   setToMonth]   = useState(now.getMonth() + 1);
+
+  /* Calendar range — an alternative to year/from-month/to-month, not an
+     addition to it: when active it overrides them entirely and can span
+     multiple months or years, since the backend rebuilds a real date from
+     sales_activity's report_year/month_num/day instead of matching whole
+     months. */
+  const [useDateRange, setUseDateRange] = useState(false);
+  const defaultRangeSRP = monthBoundsSRP(now.getFullYear(), now.getMonth() + 1);
+  const [dateFrom, setDateFrom] = useState(defaultRangeSRP.from);
+  const [dateTo,   setDateTo]   = useState(defaultRangeSRP.to);
+  const rangeInvalid = useDateRange && dateFrom && dateTo && dateTo < dateFrom;
+
+  /* Drill path — each entry is the {level, value, label} picked to get
+     here; params sent to the API are just the flattened branch/rep/
+     category from this stack. */
+  const [path, setPath] = useState([]); // [{level:'branch', value:'Riyadh', label:'حائل - Hail'}, ...]
+
+  const level    = path.length === 0 ? 'branch' : BS_LEVELS_FE[path.length];
+  const branch   = path[0]?.value;
+  const rep      = path[1]?.value;
+  const category = path[2]?.value;
+
+  const params = new URLSearchParams({ level });
+  if (useDateRange) { params.set('date_from', dateFrom); params.set('date_to', dateTo); }
+  else { params.set('year', year); params.set('from_month', fromMonth); params.set('to_month', toMonth); }
+  if (branch)   params.set('branch', branch);
+  if (rep)      params.set('rep', rep);
+  if (category) params.set('category', category);
+
+  const { data, isLoading, isError, error } = useQuery({
+    queryKey: ['srp-branch-summary', useDateRange, useDateRange ? dateFrom : year,
+               useDateRange ? dateTo : fromMonth, toMonth, level, branch, rep, category],
+    queryFn:  () => client.get(`/sales-report/branch-summary?${params}`).then(r => r.data),
+    enabled:  !rangeInvalid,
+    staleTime: 2 * 60 * 1000,
+  });
+
+  const drillInto = row => {
+    if (!row.drillable) return;
+    setPath(p => [...p, { level, value: row.customer_code ?? row.label, label: row.label }]);
+  };
+  const goToDepth = depth => setPath(p => p.slice(0, depth));
+
+  const t = data?.totals;
+  const rows = data?.rows || [];
+
+  const periodLabel = useDateRange
+    ? `${dateFrom} → ${dateTo}`
+    : `${MONTH_NAMES[fromMonth]}–${MONTH_NAMES[toMonth]} ${year}`;
+
+  const handleExport = () => {
+    if (!data) return;
+    const wb = XLSX.utils.book_new();
+    const header = [BS_LEVEL_LABEL[level], 'الكمية', 'القيمة', 'متوسط السعر', 'التوالف',
+      'توالف الجودة', 'العملاء', 'التحصيل'];
+    const body = rows.map(r => [r.label, r.qty, r.value, r.avg_price, r.returns,
+      r.quality_issue ?? '', r.customers, r.collections]);
+    const totalRow = ['الإجمالي', t.qty, t.value, t.avg_price, t.returns,
+      t.quality_issue ?? '', t.customers, t.collections];
+    const ws = XLSX.utils.aoa_to_sheet([header, ...body, totalRow]);
+    ws['!cols'] = header.map(() => ({ wch: 16 }));
+    XLSX.utils.book_append_sheet(wb, ws, 'ملخص المبيعات');
+    XLSX.writeFile(wb, `ملخص_المبيعات_${periodLabel.replace(/\s/g, '')}.xlsx`);
+  };
+
+  const handlePrint = () => {
+    const prev = document.title;
+    document.title = `ملخص المبيعات — ${periodLabel}`;
+    window.print();
+    window.onafterprint = () => { document.title = prev; window.onafterprint = null; };
+  };
+
+  return (
+    <div className="srp-tab-content">
+      {/* ── Filters ── */}
+      <div className="srp-filters srp-no-print">
+        <label className="srp-range-toggle">
+          <input type="checkbox" checked={useDateRange}
+                 onChange={e => { setUseDateRange(e.target.checked); setPath([]); }} />
+          فترة محددة بالتاريخ
+        </label>
+
+        {useDateRange ? (
+          <>
+            <div className="srp-filter-group">
+              <label className="srp-filter-label">من تاريخ</label>
+              <input type="date" className="srp-filter-select" value={dateFrom} max={dateTo || undefined}
+                     onChange={e => { setDateFrom(e.target.value); setPath([]); }} />
+            </div>
+            <div className="srp-filter-group">
+              <label className="srp-filter-label">إلى تاريخ</label>
+              <input type="date" className="srp-filter-select" value={dateTo} min={dateFrom || undefined}
+                     onChange={e => { setDateTo(e.target.value); setPath([]); }} />
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="srp-filter-group">
+              <label className="srp-filter-label">السنة</label>
+              <select className="srp-filter-select" value={year} onChange={e => { setYear(Number(e.target.value)); setPath([]); }}>
+                {[year - 1, year, year + 1].map(y => <option key={y} value={y}>{y}</option>)}
+              </select>
+            </div>
+            <div className="srp-filter-group">
+              <label className="srp-filter-label">من شهر</label>
+              <select className="srp-filter-select" value={fromMonth} onChange={e => { setFromMonth(Number(e.target.value)); setPath([]); }}>
+                {Object.entries(MONTH_NAMES).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+              </select>
+            </div>
+            <div className="srp-filter-group">
+              <label className="srp-filter-label">إلى شهر</label>
+              <select className="srp-filter-select" value={toMonth} onChange={e => { setToMonth(Number(e.target.value)); setPath([]); }}>
+                {Object.entries(MONTH_NAMES).filter(([v]) => Number(v) >= fromMonth).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+              </select>
+            </div>
+          </>
+        )}
+
+        <button className="srp-btn srp-btn--excel" onClick={handleExport} disabled={!data}>
+          <FileDown size={14}/> تصدير Excel
+        </button>
+        <button className="srp-btn srp-btn--print" onClick={handlePrint} disabled={!data}>
+          <Printer size={14}/> طباعة PDF
+        </button>
+      </div>
+
+      {rangeInvalid && (
+        <div className="srp-error">نطاق التاريخ غير صحيح — «إلى» قبل «من».</div>
+      )}
+
+      {/* ── Breadcrumb ── */}
+      {path.length > 0 && (
+        <div className="srp-breadcrumb srp-no-print">
+          <button className="srp-breadcrumb__crumb" onClick={() => goToDepth(0)}>الكل</button>
+          {path.map((p, i) => (
+            <React.Fragment key={i}>
+              <ChevronLeft size={13}/>
+              <button className="srp-breadcrumb__crumb" onClick={() => goToDepth(i + 1)}>{p.label}</button>
+            </React.Fragment>
+          ))}
+        </div>
+      )}
+
+      {isError && (
+        <div className="srp-error">
+          خطأ في تحميل البيانات{error?.response?.data?.error ? ` — ${error.response.data.error}` : ''}
+        </div>
+      )}
+
+      {/* ── KPI cards ── */}
+      <div className="srp-kpi-row">
+        <KpiCard icon={<Package size={18}/>}     label="الكمية"        value={t ? fmtKpi(t.qty) : '—'} loading={isLoading} color="#1d4ed8"/>
+        <KpiCard icon={<DollarSign size={18}/>}  label="القيمة"        value={t ? fmtKpi(t.value) : '—'} loading={isLoading} color="#059669"/>
+        <KpiCard icon={<TrendingUp size={18}/>}  label="متوسط السعر"   value={t ? fmtC(t.avg_price) : '—'} loading={isLoading} color="#7c3aed"/>
+        <KpiCard icon={<RotateCcw size={18}/>}   label="التوالف"       value={t ? fmtKpi(t.returns) : '—'} loading={isLoading} color="#dc2626"/>
+        <KpiCard icon={<ShieldAlert size={18}/>} label="توالف الجودة"
+                 value={t ? (t.quality_issue != null ? fmtKpi(t.quality_issue) : '—') : '—'}
+                 loading={isLoading} color="#ea580c"/>
+        <KpiCard icon={<Users size={18}/>}       label="العملاء"       value={t ? fmtKpi(t.customers) : '—'} loading={isLoading} color="#0891b2"/>
+        <KpiCard icon={<Wallet size={18}/>}      label="التحصيل"       value={t ? fmtKpi(t.collections) : '—'} loading={isLoading} color="#be185d"/>
+      </div>
+
+      {/* ── Table ── */}
+      <div className="srp-table-wrap">
+        <table className="srp-table">
+          <thead>
+            <tr>
+              <th>{BS_LEVEL_LABEL[level]}</th>
+              <th>الكمية</th>
+              <th>القيمة</th>
+              <th>متوسط السعر</th>
+              <th>التوالف</th>
+              <th>توالف الجودة</th>
+              <th>العملاء</th>
+              <th>التحصيل</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r, i) => (
+              <tr key={i} className={r.drillable ? 'srp-row--drillable' : ''}
+                  onClick={() => drillInto(r)}
+                  title={r.drillable ? `اضغط للانتقال إلى ${BS_LEVEL_LABEL[data.meta.next_level]}` : undefined}>
+                <td className="srp-td-name">{r.label}</td>
+                <td>{fmt(r.qty)}</td>
+                <td>{fmtC(r.value)}</td>
+                <td>{fmtC(r.avg_price)}</td>
+                <td>{r.returns > 0 ? fmt(r.returns) : <span className="srp-dash">—</span>}</td>
+                <td>{r.quality_issue != null ? (r.quality_issue > 0 ? fmt(r.quality_issue) : <span className="srp-dash">—</span>) : <span className="srp-dash" title="غير متاحة على هذا المستوى">—</span>}</td>
+                <td>{fmt(r.customers)}</td>
+                <td>{fmtC(r.collections)}</td>
+              </tr>
+            ))}
+            {!isLoading && !rows.length && (
+              <tr><td colSpan={8} className="srp-empty">لا توجد بيانات</td></tr>
+            )}
+          </tbody>
+          {t && (
+            <tfoot>
+              <tr className="srp-tf-row">
+                <td>الإجمالي</td>
+                <td>{fmt(t.qty)}</td>
+                <td>{fmtC(t.value)}</td>
+                <td>{fmtC(t.avg_price)}</td>
+                <td>{fmt(t.returns)}</td>
+                <td>{t.quality_issue != null ? fmt(t.quality_issue) : '—'}</td>
+                <td>{fmt(t.customers)}</td>
+                <td>{fmtC(t.collections)}</td>
+              </tr>
+            </tfoot>
+          )}
+        </table>
+      </div>
+
+      {data?.meta && (
+        <div className="srp-caveat">
+          <div>{data.meta.qty_caveat}</div>
+          <div>{data.meta.quality_issue_caveat}</div>
+          <div>اضغط على اسم الصف للانتقال للمستوى التالي.</div>
+        </div>
+      )}
+    </div>
+  );
+}
 /* ── Main Page ───────────────────────────────────────────────── */
 export default function SalesReportPage() {
   const [activeTab, setActiveTab] = useState('today');
@@ -975,7 +1276,7 @@ export default function SalesReportPage() {
       <div className="srp-print-header">
         <span>📊</span>
         <span>تقرير المبيعات — {activeTab === 'monthly' ? 'الشهرية' : 'اليوم'}</span>
-        <span>{new Date().toLocaleDateString('ar-SA',{year:'numeric',month:'long',day:'numeric',weekday:'long'})}</span>
+        <span>{new Date().toLocaleDateString('ar-SA-u-nu-latn',{year:'numeric',month:'long',day:'numeric',weekday:'long'})}</span>
       </div>
 
       {/* Page header */}
@@ -1002,11 +1303,19 @@ export default function SalesReportPage() {
           <Calendar size={15}/>
           المبيعات الشهرية
         </button>
+        <button
+          className={`srp-tab${activeTab === 'summary' ? ' srp-tab--active' : ''}`}
+          onClick={() => setActiveTab('summary')}
+        >
+          <Table2 size={15}/>
+          ملخص المبيعات
+        </button>
       </div>
 
       {/* Tab content — key forces remount on tab switch to reset state */}
       {activeTab === 'today'   && <SalesContent key="today"   period="today"   />}
       {activeTab === 'monthly' && <SalesContent key="monthly" period="monthly" />}
+      {activeTab === 'summary' && <BranchSummaryTab key="summary" />}
 
     </div>
   );

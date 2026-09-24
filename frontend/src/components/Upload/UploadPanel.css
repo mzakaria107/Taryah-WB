@@ -223,3 +223,38 @@
   text-underline-offset: 2px;
 }
 .clear-btn:hover { color: var(--color-text-secondary); }
+
+/* ── سلامة ربط البيانات ─────────────────────────────────────── */
+.di-alert {
+  margin: 8px 0; padding: 9px 12px; border-radius: 8px;
+  background: #fef2f2; border: 1px solid #fecaca; border-right: 4px solid #dc2626;
+  color: #b91c1c; font-size: 0.78rem; font-weight: 700; line-height: 1.7;
+}
+.di-warn {
+  margin: 6px 0; padding: 8px 12px; border-radius: 8px;
+  background: #fffbeb; border: 1px solid #fcd34d;
+  color: #a16207; font-size: 0.75rem; line-height: 1.7;
+}
+.di-ok {
+  margin: 8px 0; padding: 8px 12px; border-radius: 8px;
+  background: #f0fdf4; border: 1px solid #bbf7d0;
+  color: #15803d; font-size: 0.78rem; font-weight: 700;
+}
+.di-table-wrap { overflow-x: auto; margin-top: 10px; }
+.di-table { width: 100%; border-collapse: collapse; font-size: 0.74rem; }
+.di-table th {
+  background: #f8fafc; padding: 6px 8px; font-weight: 700; font-size: 0.68rem;
+  color: #475569; border-bottom: 2px solid #e2e8f0; white-space: nowrap; text-align: center;
+}
+.di-table th:first-child, .di-table td:first-child { text-align: right; }
+.di-table td {
+  padding: 6px 8px; border-bottom: 1px solid #f1f5f9; text-align: center;
+  font-family: var(--font-en, inherit);
+}
+.di-table td:first-child { font-family: inherit; font-weight: 700; }
+.di-row-bad { background: #fef2f2; }
+.di-orphans { margin-top: 8px; font-size: 0.72rem; color: #a16207; line-height: 1.8; word-break: break-all; }
+.di-fresh {
+  margin-top: 8px; display: flex; flex-wrap: wrap; gap: 4px 14px;
+  font-size: 0.68rem; color: var(--color-text-muted, #94a3b8); font-family: var(--font-en, inherit);
+}

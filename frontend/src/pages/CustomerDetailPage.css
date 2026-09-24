@@ -122,6 +122,14 @@
   letter-spacing: 0.06em;
 }
 
+.cd-meta-hint {
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--color-warning, #b45309);
+  cursor: help;
+}
+
 .cd-meta-val {
   font-size: 14px;
   font-weight: 700;

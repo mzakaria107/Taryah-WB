@@ -18,14 +18,26 @@ const FridgesPage         = lazy(() => import('./pages/FridgesPage'));
 const StockPage           = lazy(() => import('./pages/StockPage'));
 const CurrentStockPage    = lazy(() => import('./pages/CurrentStockPage'));
 const PermissionsPage     = lazy(() => import('./pages/PermissionsPage'));
-const ProfitabilityPage   = lazy(() => import('./pages/ProfitabilityPage'));
 const SettingsPage        = lazy(() => import('./pages/SettingsPage'));
 const SalesReportPage     = lazy(() => import('./pages/SalesReportPage'));
 const CoveragePage        = lazy(() => import('./pages/CoveragePage'));
 const SummaryPage         = lazy(() => import('./pages/SummaryPage'));
 const HypermarketsPage             = lazy(() => import('./pages/HypermarketsPage'));
+const CategoryPerformancePage      = lazy(() => import('./pages/CategoryPerformancePage'));
+const RegionPerformancePage        = lazy(() => import('./pages/RegionPerformancePage'));
+const QualityIssuesPage            = lazy(() => import('./pages/QualityIssuesPage'));
 const CollectionsPerformancePage   = lazy(() => import('./pages/CollectionsPerformancePage'));
 const AgingPage                    = lazy(() => import('./pages/AgingPage'));
+const RepManagementPage            = lazy(() => import('./pages/RepManagementPage'));
+const PerformanceDashboardPage     = lazy(() => import('./pages/PerformanceDashboardPage'));
+const RepDebtPage                  = lazy(() => import('./pages/RepDebtPage'));
+const ProfitabilityPage            = lazy(() => import('./pages/ProfitabilityPage'));
+const DiscountShopsPage            = lazy(() => import('./pages/DiscountShopsPage'));
+const CarrefourDamageEntryPage     = lazy(() => import('./pages/CarrefourDamageEntryPage'));
+const CarrefourDamageReportPage    = lazy(() => import('./pages/CarrefourDamageReportPage'));
+const QualityReturnsEntryPage      = lazy(() => import('./pages/QualityReturnsEntryPage'));
+const QualityReturnsReportPage     = lazy(() => import('./pages/QualityReturnsReportPage'));
+const FleetManagementPage          = lazy(() => import('./pages/FleetManagementPage'));
 
 /* ── Guards ──────────────────────────────────────── */
 function PrivateRoute({ children }) {
@@ -38,7 +50,12 @@ function RoleRoute({ children, pageKey }) {
   const { canAccess } = usePermissions();
   if (!user) return <Navigate to="/login" replace />;
   if (pageKey && !canAccess(user.role, pageKey)) {
-    return <Navigate to={user.role === 'fridge_admin' ? '/fridges' : '/'} replace />;
+    const fallback = user.role === 'fridge_admin' ? '/fridges'
+      : user.role === 'carrefour_rep' ? '/carrefour-damage'
+      : user.role === 'quality_returns_monitor' ? '/quality-returns'
+      : user.role === 'fleet_supervisor' ? '/fleet-management'
+      : '/';
+    return <Navigate to={fallback} replace />;
   }
   return children;
 }
@@ -160,14 +177,6 @@ export default function App() {
         </RoleRoute>
       } />
 
-      <Route path="/profitability" element={
-        <RoleRoute pageKey="profitability">
-          <AppLayout>
-            <PageSuspense><ProfitabilityPage /></PageSuspense>
-          </AppLayout>
-        </RoleRoute>
-      } />
-
       <Route path="/settings" element={
         <RoleRoute pageKey="settings">
           <AppLayout>
@@ -208,6 +217,30 @@ export default function App() {
         </RoleRoute>
       } />
 
+      <Route path="/category-performance" element={
+        <RoleRoute pageKey="category_performance">
+          <AppLayout>
+            <PageSuspense><CategoryPerformancePage /></PageSuspense>
+          </AppLayout>
+        </RoleRoute>
+      } />
+
+      <Route path="/region-performance" element={
+        <RoleRoute pageKey="region_performance">
+          <AppLayout>
+            <PageSuspense><RegionPerformancePage /></PageSuspense>
+          </AppLayout>
+        </RoleRoute>
+      } />
+
+      <Route path="/quality-issues" element={
+        <RoleRoute pageKey="quality_issues">
+          <AppLayout>
+            <PageSuspense><QualityIssuesPage /></PageSuspense>
+          </AppLayout>
+        </RoleRoute>
+      } />
+
       <Route path="/collections-performance" element={
         <RoleRoute pageKey="collections_performance">
           <AppLayout>
@@ -220,6 +253,86 @@ export default function App() {
         <RoleRoute pageKey="aging">
           <AppLayout>
             <PageSuspense><AgingPage /></PageSuspense>
+          </AppLayout>
+        </RoleRoute>
+      } />
+
+      <Route path="/rep-management" element={
+        <RoleRoute pageKey="rep_management">
+          <AppLayout>
+            <PageSuspense><RepManagementPage /></PageSuspense>
+          </AppLayout>
+        </RoleRoute>
+      } />
+
+      <Route path="/performance-dashboard" element={
+        <RoleRoute pageKey="performance_dashboard">
+          <AppLayout>
+            <PageSuspense><PerformanceDashboardPage /></PageSuspense>
+          </AppLayout>
+        </RoleRoute>
+      } />
+
+      <Route path="/rep-debt/:repName" element={
+        <RoleRoute pageKey="summary">
+          <AppLayout>
+            <PageSuspense><RepDebtPage /></PageSuspense>
+          </AppLayout>
+        </RoleRoute>
+      } />
+
+      <Route path="/profitability" element={
+        <RoleRoute pageKey="profitability">
+          <AppLayout>
+            <PageSuspense><ProfitabilityPage /></PageSuspense>
+          </AppLayout>
+        </RoleRoute>
+      } />
+
+      <Route path="/discount-shops" element={
+        <RoleRoute pageKey="discount_shops">
+          <AppLayout>
+            <PageSuspense><DiscountShopsPage /></PageSuspense>
+          </AppLayout>
+        </RoleRoute>
+      } />
+
+      <Route path="/carrefour-damage" element={
+        <RoleRoute pageKey="carrefour_damage_entry">
+          <AppLayout>
+            <PageSuspense><CarrefourDamageEntryPage /></PageSuspense>
+          </AppLayout>
+        </RoleRoute>
+      } />
+
+      <Route path="/carrefour-damage-report" element={
+        <RoleRoute pageKey="carrefour_damage_report">
+          <AppLayout>
+            <PageSuspense><CarrefourDamageReportPage /></PageSuspense>
+          </AppLayout>
+        </RoleRoute>
+      } />
+
+      <Route path="/quality-returns" element={
+        <RoleRoute pageKey="quality_returns_entry">
+          <AppLayout>
+            <PageSuspense><QualityReturnsEntryPage /></PageSuspense>
+          </AppLayout>
+        </RoleRoute>
+      } />
+
+      <Route path="/quality-returns-report" element={
+        <RoleRoute pageKey="quality_returns_report">
+          <AppLayout>
+            <PageSuspense><QualityReturnsReportPage /></PageSuspense>
+          </AppLayout>
+        </RoleRoute>
+      } />
+
+      <Route path="/fleet-management" element={
+        <RoleRoute pageKey="fleet_management">
+          <AppLayout>
+            <PageSuspense><FleetManagementPage /></PageSuspense>
           </AppLayout>
         </RoleRoute>
       } />

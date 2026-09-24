@@ -11,6 +11,9 @@ export const ROLES = [
   { key: 'fridge_admin',   label: 'موظف إداري (ثلاجات)', color: 'role-fridge'    },
   { key: 'accounts',       label: 'الحسابات',             color: 'role-accounts'  },
   { key: 'viewer',         label: 'مستعرض',               color: 'role-viewer'    },
+  { key: 'carrefour_rep',  label: 'مروج كارفور',          color: 'role-carrefour' },
+  { key: 'quality_returns_monitor', label: 'مراقب مرتجعات جودة', color: 'role-quality' },
+  { key: 'fleet_supervisor', label: 'مشرف حركة', color: 'role-fleet' },
 ];
 
 export const PAGES = [
@@ -27,13 +30,25 @@ export const PAGES = [
   { key: 'users',           label: 'إدارة المستخدمين',  path: '/users',          desc: 'إنشاء وتعديل الحسابات وتغيير الأدوار' },
   { key: 'permissions',     label: 'الصلاحيات',          path: '/permissions',    desc: 'عرض وتعديل جدول صلاحيات الأدوار' },
   { key: 'profitability',   label: 'الربحية',            path: '/profitability',  desc: 'تقرير ربحية المنتجات من NetSuite' },
+  { key: 'discount_shops',  label: 'أداء فئات محلات التخفيضات', path: '/discount-shops', desc: 'أداء مبيعات ومرتجعات قائمة محلات التخفيضات المحددة (40 عميلاً) مع تفصيل شهري' },
+  { key: 'carrefour_damage_entry',  label: 'مرتجعات وأرصدة واستلامات كارفور — الإدخال', path: '/carrefour-damage', desc: 'إدخال المروج اليومي لكميات مرتجعات وأرصدة فرعه في كارفور، مفصّلة بالصنف' },
+  { key: 'carrefour_damage_report', label: 'تقرير أرصدة ومرتجعات واستلامات كارفور', path: '/carrefour-damage-report', desc: 'التقرير الديناميكي لمرتجعات وأرصدة فروع كارفور مع إدارة الفروع والأصناف وربطها بالمروجين' },
+  { key: 'quality_returns_entry',  label: 'مرتجعات عيوب الجودة — الإدخال', path: '/quality-returns', desc: 'إدخال يومي لكميات مرتجعات عيوب الجودة لكل صنف على مستوى خطوط سير المنطقة' },
+  { key: 'quality_returns_report', label: 'مرتجعات عيوب الجودة — التقرير', path: '/quality-returns-report', desc: 'بحث وتقرير مرتجعات عيوب الجودة لكل المناطق مع تحديد فترة زمنية' },
+  { key: 'fleet_management', label: 'إدارة أسطول السيارات', path: '/fleet-management', desc: 'بروفايل كل سيارة، قراءات العداد، جدول الصيانة الدورية والتنبيهات، وسجل المصاريف' },
   { key: 'settings',       label: 'الإعدادات',          path: '/settings',       desc: 'إعدادات خادم البريد الإلكتروني SMTP' },
   { key: 'sales_report',  label: 'صفحة المبيعات',     path: '/sales-report',   desc: 'تقرير مبيعات المناديب حسب المنطقة (NetSuite مباشر)' },
   { key: 'coverage',      label: 'تغطية المناديب',    path: '/coverage',       desc: 'بروفايل أداء المندوب ومصفوفة التغطية الأسبوعية' },
   { key: 'summary',       label: 'الملخص العام',       path: '/summary',         desc: 'ملخص شامل للمبيعات والتحصيل والمديونية مع رسوم بيانية' },
   { key: 'hypermarkets',           label: 'Hypermarkets',    path: '/hypermarkets',           desc: 'أداء مبيعات ومرتجعات فئة Hypermarkets مع مؤشرات شهرية' },
+  { key: 'category_performance',   label: 'أداء فئات العملاء', path: '/category-performance',   desc: 'أداء مبيعات ومرتجعات أي فئة عملاء يتم اختيارها، مع بحث وأداء سنوي لعميل محدد' },
+  { key: 'region_performance',     label: 'تقييم وتخطيط المناطق', path: '/region-performance',  desc: 'تقييم أداء المنطقة (مبيعات، ASP، عملاء، زيارات، توالف، تحصيل، مديونية) مع محرك أهداف نمو وتوقعات للمتبقي من العام' },
+  { key: 'quality_issues',         label: 'توالف الجودة',    path: '/quality-issues',          desc: 'رفع وتتبع مشاكل توالف الجودة (كمية وتكلفة) مع ترند شهري لكل منطقة' },
   { key: 'collections_performance', label: 'أداء التحصيل',    path: '/collections-performance', desc: 'التحصيل اليومي للمناطق مع تحليل طرق الدفع' },
   { key: 'aging',                   label: 'أعمار المديونيات', path: '/aging',                   desc: 'مصفوفة أعمار الديون مع تتبع التغير اليومي' },
+  { key: 'rep_management',          label: 'إدارة المناديب',   path: '/rep-management',          desc: 'إضافة وتعديل المناديب وربطهم بالمناطق والمشرفين وضبط الأهداف' },
+  { key: 'performance_dashboard',   label: 'داشبورد الأداء',   path: '/performance-dashboard',   desc: 'متابعة أداء المناديب (الكميات، العملاء، المديونية، التحصيل) مقارنةً بالأهداف' },
+  { key: 'commissions',             label: 'حساب العمولات',    path: '/performance-dashboard (تبويب)', desc: 'تبويب حساب عمولات المناديب والمشرفين — صلاحية كاملة تتيح تعديل الأوزان وحدود العمولة' },
 ];
 
 /* Default access matrix — fallback before API loads */
@@ -50,14 +65,26 @@ export const DEFAULT_PERMS = {
   upload:          { super_admin:2, it_admin:2, top_management:0, sales_manager:0, supervisor:0, region_manager:0, sales_rep:0, fridge_admin:0, accounts:0, viewer:0 },
   users:           { super_admin:2, it_admin:0, top_management:0, sales_manager:0, supervisor:0, region_manager:0, sales_rep:0, fridge_admin:0, accounts:0, viewer:0 },
   permissions:     { super_admin:2, it_admin:1, top_management:0, sales_manager:0, supervisor:0, region_manager:0, sales_rep:0, fridge_admin:0, accounts:0, viewer:0 },
-  profitability:   { super_admin:2, it_admin:2, top_management:1, sales_manager:2, supervisor:0, region_manager:0, sales_rep:0, fridge_admin:0, accounts:0, viewer:0 },
   settings:        { super_admin:2, it_admin:2, top_management:0, sales_manager:0, supervisor:0, region_manager:0, sales_rep:0, fridge_admin:0, accounts:0, viewer:0 },
   sales_report:    { super_admin:2, it_admin:2, top_management:2, sales_manager:2, supervisor:1, region_manager:1, sales_rep:0, fridge_admin:0, accounts:0, viewer:0 },
   coverage:        { super_admin:2, it_admin:2, top_management:1, sales_manager:2, supervisor:2, region_manager:2, sales_rep:1, fridge_admin:0, accounts:0, viewer:0 },
   summary:         { super_admin:2, it_admin:2, top_management:2, sales_manager:2, supervisor:1, region_manager:1, sales_rep:0, fridge_admin:0, accounts:1, viewer:1 },
   hypermarkets:            { super_admin:2, it_admin:2, top_management:0, sales_manager:0, supervisor:0, region_manager:0, sales_rep:0, fridge_admin:0, accounts:0, viewer:0 },
+  category_performance:    { super_admin:2, it_admin:2, top_management:0, sales_manager:0, supervisor:0, region_manager:0, sales_rep:0, fridge_admin:0, accounts:0, viewer:0 },
+  region_performance:      { super_admin:2, it_admin:2, top_management:1, sales_manager:2, supervisor:0, region_manager:1, sales_rep:0, fridge_admin:0, accounts:0, viewer:0 },
+  quality_issues:          { super_admin:2, it_admin:2, top_management:1, sales_manager:2, supervisor:0, region_manager:1, sales_rep:0, fridge_admin:0, accounts:0, viewer:0 },
   collections_performance: { super_admin:2, it_admin:2, top_management:2, sales_manager:2, supervisor:1, region_manager:1, sales_rep:0, fridge_admin:0, accounts:2, viewer:1 },
   aging:                   { super_admin:2, it_admin:2, top_management:2, sales_manager:2, supervisor:1, region_manager:1, sales_rep:0, fridge_admin:0, accounts:2, viewer:1 },
+  rep_management:          { super_admin:2, it_admin:2, top_management:0, sales_manager:1, supervisor:0, region_manager:0, sales_rep:0, fridge_admin:0, accounts:0, viewer:0 },
+  performance_dashboard:   { super_admin:2, it_admin:2, top_management:2, sales_manager:2, supervisor:1, region_manager:1, sales_rep:0, fridge_admin:0, accounts:0, viewer:0 },
+  commissions:             { super_admin:2, it_admin:2, top_management:0, sales_manager:0, supervisor:0, region_manager:0, sales_rep:0, fridge_admin:0, accounts:0, viewer:0 },
+  profitability:   { super_admin:2, it_admin:2, top_management:1, sales_manager:2, supervisor:0, region_manager:0, sales_rep:0, fridge_admin:0, accounts:0, viewer:0 },
+  discount_shops:  { super_admin:2, it_admin:2, top_management:0, sales_manager:0, supervisor:0, region_manager:0, sales_rep:0, fridge_admin:0, accounts:0, viewer:0 },
+  carrefour_damage_entry:  { super_admin:2, it_admin:2, top_management:0, sales_manager:0, supervisor:0, region_manager:0, sales_rep:0, fridge_admin:0, accounts:0, viewer:0, carrefour_rep:2 },
+  carrefour_damage_report: { super_admin:2, it_admin:2, top_management:1, sales_manager:2, supervisor:0, region_manager:1, sales_rep:0, fridge_admin:0, accounts:0, viewer:0, carrefour_rep:0 },
+  quality_returns_entry:  { super_admin:2, it_admin:2, top_management:0, sales_manager:0, supervisor:0, region_manager:0, sales_rep:0, fridge_admin:0, accounts:0, viewer:0, carrefour_rep:0, quality_returns_monitor:2 },
+  quality_returns_report: { super_admin:2, it_admin:2, top_management:1, sales_manager:2, supervisor:0, region_manager:1, sales_rep:0, fridge_admin:0, accounts:0, viewer:0, carrefour_rep:0, quality_returns_monitor:0 },
+  fleet_management: { super_admin:2, it_admin:2, top_management:1, sales_manager:0, supervisor:0, region_manager:0, sales_rep:0, fridge_admin:0, accounts:0, viewer:0, carrefour_rep:0, quality_returns_monitor:0, fleet_supervisor:2 },
 };
 
 /* Access level display config */

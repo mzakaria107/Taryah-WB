@@ -42,9 +42,9 @@ router.get('/report', verifyToken, applyRegionFilter, async (req, res) => {
     const custParams = [];
     let cp = 1;
 
-    if (req.regionFilter) {
+    if (req.regionFilter && req.regionFilter.length) {
       custConds.push(
-        `EXISTS (SELECT 1 FROM invoices WHERE customer_id = cnh.customer_id AND region_id = $${cp++})`
+        `EXISTS (SELECT 1 FROM invoices WHERE customer_id = cnh.customer_id AND region_id = ANY($${cp++}::int[]))`
       );
       custParams.push(req.regionFilter);
     }
@@ -59,8 +59,8 @@ router.get('/report', verifyToken, applyRegionFilter, async (req, res) => {
     const invParams = [];
     let ip = 1;
 
-    if (req.regionFilter) {
-      invConds.push(`EXISTS (SELECT 1 FROM invoices WHERE id = nh.invoice_id AND region_id = $${ip++})`);
+    if (req.regionFilter && req.regionFilter.length) {
+      invConds.push(`EXISTS (SELECT 1 FROM invoices WHERE id = nh.invoice_id AND region_id = ANY($${ip++}::int[]))`);
       invParams.push(req.regionFilter);
     }
     if (from_date) { invConds.push(`nh.created_at >= $${ip++}`);                              invParams.push(from_date); }

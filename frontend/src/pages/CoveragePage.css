@@ -52,6 +52,7 @@
   flex: 1;
 }
 .cov-filter-group--sm { min-width: 110px; flex: 0; }
+.cov-filter-error { font-size: 0.74rem; color: #dc2626; }
 .cov-filter-label {
   font-size: 0.72rem;
   font-weight: 600;
@@ -74,6 +75,101 @@
   outline: none;
   border-color: var(--color-brand, #3b82f6);
   background: #fff;
+}
+
+/* ── Custom branch dropdown (self-rendered options, not a native
+   <select> popup) ── */
+.cov-dd { position: relative; }
+.cov-dd-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.cov-dd-btn:disabled { opacity: .6; cursor: not-allowed; }
+.cov-dd-caret { transition: transform .15s; color: var(--color-text-muted, #64748b); flex-shrink: 0; }
+.cov-dd-caret--open { transform: rotate(180deg); }
+.cov-dd-panel {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  left: 0;
+  z-index: 40;
+  background: #fff;
+  border: 1px solid var(--color-border, #e2e8f0);
+  border-radius: 10px;
+  box-shadow: 0 10px 30px rgba(0,0,0,.12);
+  max-height: 280px;
+  overflow-y: auto;
+  padding: 4px;
+}
+.cov-dd-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  background: none;
+  border-radius: 6px;
+  font-size: 0.86rem;
+  color: var(--color-text, #1e293b);
+  text-align: right;
+  cursor: pointer;
+  font-family: inherit;
+}
+.cov-dd-item:hover { background: var(--color-bg, #f8fafc); }
+.cov-dd-item--active { background: #eff6ff; color: var(--color-brand, #3b82f6); font-weight: 600; }
+.cov-dd-empty { padding: 10px; font-size: 0.82rem; color: var(--color-text-muted, #64748b); text-align: center; }
+.cov-dd-search {
+  width: 100%;
+  padding: 7px 10px;
+  margin-bottom: 4px;
+  border: 1px solid var(--color-border, #e2e8f0);
+  border-radius: 6px;
+  font-size: 0.84rem;
+  font-family: inherit;
+  box-sizing: border-box;
+}
+.cov-dd-search:focus { outline: none; border-color: var(--color-brand, #3b82f6); }
+
+/* ── Multi-select region dropdown (متابعة الزيارات اليومية) ── */
+.cov-dd-multi-actions {
+  display: flex;
+  gap: 4px;
+  padding: 2px 2px 6px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--color-border, #e2e8f0);
+}
+.cov-dd-multi-action {
+  flex: 1;
+  padding: 6px 8px;
+  border: 1px solid var(--color-border, #e2e8f0);
+  border-radius: 6px;
+  background: var(--color-bg, #f8fafc);
+  color: var(--color-text, #1e293b);
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+}
+.cov-dd-multi-action:hover { background: #eff6ff; border-color: var(--color-brand, #3b82f6); }
+.cov-dd-item--checkbox { gap: 8px; }
+.cov-dd-checkbox {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1.5px solid var(--color-border-strong, #cbd5e1);
+  border-radius: 4px;
+  color: #fff;
+}
+.cov-dd-checkbox--checked {
+  background: var(--color-brand, #3b82f6);
+  border-color: var(--color-brand, #3b82f6);
 }
 .cov-select--rep {
   font-weight: 600;
@@ -185,6 +281,8 @@
   margin-top: 3px;
 }
 .cov-kpi-rank { font-size: 0.7rem; color: #94a3b8; margin-top: 1px; }
+.cov-kpi-cats { display: flex; flex-direction: column; gap: 1px; margin-top: 5px; }
+.cov-kpi-cat { font-size: 0.65rem; font-weight: 600; white-space: nowrap; line-height: 1.3; }
 
 /* rank badge */
 .cov-rank-badge {
@@ -788,6 +886,26 @@
 .cov-tr:hover .cov-td { background-color: #fafbfc !important; }
 .cov-tr--no-prev { background: #fffbeb; }
 
+/* total row (tfoot) */
+.cov-tr--total .cov-td {
+  background: #ecfdf5 !important;
+  font-weight: 700;
+  border-top: 2px solid #86efac;
+}
+.cov-td--total-label {
+  position: sticky;
+  right: 0;
+  z-index: 2;
+  font-size: 0.72rem;
+  color: #166534;
+}
+.cov-td--total-day {
+  text-align: center;
+  color: #166534;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.68rem;
+}
+
 .cov-td {
   padding: 4px 3px;
   border: 1px solid #f1f5f9;
@@ -876,6 +994,18 @@
   font-size: 0.62rem;
   font-weight: 700;
 }
+
+/* fridge status badge */
+.cov-fridge-badge {
+  display: inline-block;
+  background: #f3e8ff;
+  color: #7c3aed;
+  border-radius: 8px;
+  padding: 1px 6px;
+  font-size: 0.68rem;
+  font-weight: 700;
+}
+.cov-no-fridge { color: #cbd5e1; font-size: 0.72rem; }
 
 /* ── Footer stats ────────────────────────────────────────────── */
 .cov-footer-stats {

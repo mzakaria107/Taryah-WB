@@ -22,14 +22,24 @@ const STATUS_MAP = Object.fromEntries(STATUS_OPTS.map(s => [s.v, s]));
 /* Roles allowed to create / edit / delete fridges */
 const FRIDGE_EDIT_ROLES = ['super_admin', 'it_admin', 'fridge_admin'];
 function isAdmin(user) { return FRIDGE_EDIT_ROLES.includes(user?.role); }
+/* Who may WRITE a fridge note — mirrors NOTE_ROLES in fridges.js. Notes are
+   field intelligence, so supervisors and region managers can write them even
+   though they cannot move or delete the asset. */
+const NOTE_ROLES = [...FRIDGE_EDIT_ROLES, 'supervisor', 'region_manager'];
+function canWriteNote(user) { return NOTE_ROLES.includes(user?.role); }
+
+/* Who may RAISE a transfer request — mirrors REQUEST_ROLES in fridges.js.
+   Approval stays with FRIDGE_EDIT_ROLES. */
+const TRANSFER_REQUEST_ROLES = ['supervisor', 'region_manager', 'sales_manager', 'super_admin', 'it_admin'];
+function canRequestTransfer(user) { return TRANSFER_REQUEST_ROLES.includes(user?.role); }
 
 function formatDate(d) {
   if (!d) return '—';
-  return new Date(d).toLocaleDateString('ar-SA', { year: 'numeric', month: 'short', day: 'numeric' });
+  return new Date(d).toLocaleDateString('ar-SA-u-nu-latn', { year: 'numeric', month: 'short', day: 'numeric' });
 }
 function formatDateTime(d) {
   if (!d) return '—';
-  return new Date(d).toLocaleString('ar-SA', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+  return new Date(d).toLocaleString('ar-SA-u-nu-latn', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
 /* ── API ──────────────────────────────────────────────────── */
@@ -42,7 +52,8 @@ const api = {
   detail:     (id) => client.get(`/fridges/${id}`).then(r => r.data),
   delete:     (id) => client.delete(`/fridges/${id}`),
   transfer:(id, d) => client.post(`/fridges/${id}/transfer`, d).then(r => r.data),
-  regions:     ()  => client.get('/sales-tasks/regions').then(r => r.data.regions),
+  refreshCustomerData: () => client.post('/fridges/refresh-customer-data').then(r => r.data),
+  regions:     ()  => client.get('/users/regions').then(r => r.data),
   salesReport: (p) => client.get('/fridges/sales-report', { params: p }).then(r => r.data),
   importXlsx: (file) => {
     const fd = new FormData();
@@ -51,6 +62,16 @@ const api = {
       headers: { 'Content-Type': 'multipart/form-data' },
     }).then(r => r.data);
   },
+  /* transfer requests — raised by a supervisor/region manager, applied only
+     after a fridge admin approves */
+  transferRequests: (status='pending') => client.get('/fridges/transfer-requests', { params: { status } }).then(r => r.data),
+  transferRequest:  (reqId) => client.get(`/fridges/transfer-requests/${reqId}`).then(r => r.data),
+  createTransferRequest: (id, d) => client.post(`/fridges/${id}/transfer-requests`, d).then(r => r.data),
+  approveTransferRequest: (reqId, note) => client.post(`/fridges/transfer-requests/${reqId}/approve`, { note }).then(r => r.data),
+  rejectTransferRequest:  (reqId, note) => client.post(`/fridges/transfer-requests/${reqId}/reject`, { note }).then(r => r.data),
+  /* notes — one current note per fridge + an append-only trail */
+  noteHistory: (id)       => client.get(`/fridges/${id}/notes`).then(r => r.data.history),
+  saveNote:    (id, text) => client.put(`/fridges/${id}/note`, { note_text: text }).then(r => r.data),
   /* contract files */
   contracts:       (id)         => client.get(`/fridges/${id}/contracts`).then(r => r.data.contracts),
   uploadContracts: (id, files)  => {
@@ -147,6 +168,7 @@ function useCustomerLookup(onFill) {
   const [code, setCode] = useState('');
   const [loading, setLoading] = useState(false);
   const [warn, setWarn] = useState('');
+  const [info, setInfo] = useState('');
 
   const lookup = useCallback(async (overrideCode) => {
     const c = (overrideCode ?? code).trim();
@@ -155,15 +177,28 @@ function useCustomerLookup(onFill) {
     setWarn('');
     try {
       const data = await api.lookup(c);
+      /* The endpoint answers 200 with {found:false} for an unknown code — without
+         this the button appeared to work and quietly filled nothing. */
+      if (!data || data.found === false) {
+        setInfo('');
+        setWarn('لم يُعثر على العميل — يمكنك إدخال البيانات يدوياً');
+        return;
+      }
       onFill(data);
+      const fromList = Object.entries(data.sources || {})
+        .filter(([, src]) => src === 'customer_list').map(([f]) => f);
+      setInfo(data.in_customer_list
+        ? `تم الاستحضار من ملف العملاء المرفوع (${fromList.length} حقل)`
+        : 'العميل غير موجود في ملف العملاء المرفوع — تم الاستحضار من الفواتير');
     } catch {
+      setInfo('');
       setWarn('لم يُعثر على العميل — يمكنك إدخال البيانات يدوياً');
     } finally {
       setLoading(false);
     }
   }, [code, onFill]);
 
-  return { code, setCode, loading, warn, setWarn, lookup };
+  return { code, setCode, loading, warn, setWarn, info, setInfo, lookup };
 }
 
 /* ══════════════════════════════════════════════════════════
@@ -207,6 +242,7 @@ function AddFridgeForm({ regions, onSaved, editData, editId, onCancel }) {
     set('customer_code', v);
     lk.setCode(v);
     lk.setWarn('');
+    lk.setInfo('');
   };
 
   const save = async () => {
@@ -280,6 +316,7 @@ function AddFridgeForm({ regions, onSaved, editData, editId, onCancel }) {
             </button>
           </div>
           {lk.warn && <div className="frg-lookup-warn">⚠️ {lk.warn}</div>}
+          {lk.info && <div className="frg-lookup-info">✓ {lk.info}</div>}
         </div>
 
         {/* اسم العميل */}
@@ -397,6 +434,128 @@ function AddFridgeForm({ regions, onSaved, editData, editId, onCancel }) {
 /* ══════════════════════════════════════════════════════════
    CONTRACT FILES SECTION
    ══════════════════════════════════════════════════════════ */
+/* ══════════════════════════════════════════════════════════════
+   Fridge note cell — the notes column in the list.
+
+   Saves only on the ✓ button, never on blur or keystroke: these notes are
+   read by other people, and an accidental half-typed autosave is worse than
+   no note. The latest note stays visible in the cell; every save is appended
+   to an immutable trail reachable from the 🕘 button.
+══════════════════════════════════════════════════════════════ */
+function FridgeNoteCell({ fridge, canEdit, onSaved }) {
+  const [text, setText]       = useState(fridge.note_text || '');
+  const [saved, setSaved]     = useState(fridge.note_text || '');
+  const [status, setStatus]   = useState(null);   // 'saving' | 'saved' | 'error'
+  const [showLog, setShowLog] = useState(false);
+  const [log, setLog]         = useState(null);   // null = not loaded yet
+  const [logBusy, setLogBusy] = useState(false);
+  const [meta, setMeta] = useState({
+    at: fridge.note_updated_at, by: fridge.note_updated_by_name, count: fridge.note_count || 0,
+  });
+
+  /* Adopt server data on refetch, but never clobber an unsaved edit. */
+  const prevIncoming = useRef(fridge.note_text || '');
+  useEffect(() => {
+    const incoming = fridge.note_text || '';
+    if (incoming !== prevIncoming.current) {
+      prevIncoming.current = incoming;
+      setText(t => (t === saved ? incoming : t));
+      setSaved(incoming);
+      setMeta({ at: fridge.note_updated_at, by: fridge.note_updated_by_name, count: fridge.note_count || 0 });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fridge.note_text, fridge.note_updated_at, fridge.note_updated_by_name, fridge.note_count]);
+
+  const dirty = text !== saved;
+
+  const save = async () => {
+    setStatus('saving');
+    try {
+      const res = await api.saveNote(fridge.id, text);
+      setSaved(text);
+      prevIncoming.current = text;
+      setMeta({ at: res.note?.updated_at, by: res.note?.updated_by_name, count: res.note_count });
+      setLog(null);                    // trail changed — reload on next open
+      setStatus('saved');
+      setTimeout(() => setStatus(null), 2000);
+      onSaved?.();
+    } catch (e) {
+      setStatus('error');
+    }
+  };
+
+  const openLog = async () => {
+    const next = !showLog;
+    setShowLog(next);
+    if (next && log === null) {
+      setLogBusy(true);
+      try { setLog(await api.noteHistory(fridge.id)); }
+      catch { setLog([]); }
+      finally { setLogBusy(false); }
+    }
+  };
+
+  return (
+    <div className="frg-note-cell" onClick={e => e.stopPropagation()}>
+      <textarea
+        className={`frg-note-input${saved ? ' frg-note-input--has' : ''}`}
+        value={text}
+        onChange={e => { setText(e.target.value); setStatus(null); }}
+        placeholder={canEdit ? 'ملاحظة…' : 'لا توجد ملاحظة'}
+        rows={2}
+        disabled={!canEdit}
+      />
+      <div className="frg-note-actions">
+        {canEdit && dirty && (
+          <>
+            <button className="frg-note-btn frg-note-btn--save" onClick={save} disabled={status === 'saving'}>
+              {status === 'saving' ? '…' : '✓ حفظ'}
+            </button>
+            <button className="frg-note-btn" onClick={() => { setText(saved); setStatus(null); }}>✕</button>
+          </>
+        )}
+        {!dirty && status === 'saved' && <span className="frg-note-ok">✓ محفوظ</span>}
+        {status === 'error' && <span className="frg-note-err">خطأ في الحفظ</span>}
+        {meta.count > 0 && (
+          <button className="frg-note-btn frg-note-btn--log" onClick={openLog}
+                  title="سجل الملاحظات">
+            🕘 {meta.count}
+          </button>
+        )}
+      </div>
+
+      {!dirty && meta.at && (
+        <div className="frg-note-meta">
+          آخر تحديث: {formatDateTime(meta.at)}{meta.by ? ` — ${meta.by}` : ''}
+        </div>
+      )}
+
+      {showLog && (
+        <div className="frg-note-log">
+          <div className="frg-note-log__head">
+            <span>سجل الملاحظات ({meta.count})</span>
+            <button className="frg-note-btn" onClick={() => setShowLog(false)}>✕</button>
+          </div>
+          {logBusy && <div className="frg-note-log__empty">جارٍ التحميل…</div>}
+          {!logBusy && log && log.length === 0 && (
+            <div className="frg-note-log__empty">لا يوجد سجل</div>
+          )}
+          {!logBusy && log && log.map(h => (
+            <div key={h.id} className="frg-note-log__item">
+              <div className="frg-note-log__text">
+                {h.note_text ? h.note_text : <em className="frg-note-log__cleared">— تم مسح الملاحظة —</em>}
+              </div>
+              <div className="frg-note-log__meta">
+                {formatDateTime(h.saved_at)}{h.saved_by_name ? ` — ${h.saved_by_name}` : ''}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ContractFilesSection({ fridgeId, contracts: initialContracts, admin, onChanged }) {
   const qc = useQueryClient();
   const fileInputRef = useRef(null);
@@ -539,6 +698,267 @@ function ContractFilesSection({ fridgeId, contracts: initialContracts, admin, on
 /* ══════════════════════════════════════════════════════════
    FRIDGE DETAIL MODAL
    ══════════════════════════════════════════════════════════ */
+/* ══════════════════════════════════════════════════════════════
+   طلب نقل ثلاجة — raised by a supervisor / region manager, applied only
+   after a fridge admin (or system admin) approves.
+
+   Deliberately separate from the direct "نقل لعميل جديد" action: that one
+   moves the fridge immediately and is limited to fridge admins. This one
+   records an intent, prints as a signed sheet, and changes nothing until
+   somebody with the authority approves it.
+══════════════════════════════════════════════════════════════ */
+function TransferRequestForm({ fridge, onDone, onCancel }) {
+  const [code, setCode]   = useState('');
+  const [reason, setReason] = useState('');
+  const [busy, setBusy]   = useState(false);
+  const [err, setErr]     = useState('');
+  const [target, setTarget] = useState(null);   // looked-up new customer
+  const [looking, setLooking] = useState(false);
+
+  const lookup = async () => {
+    if (!code.trim()) return;
+    setLooking(true); setErr('');
+    try {
+      const d = await api.lookup(code.trim());
+      if (!d || d.found === false) { setTarget(null); setErr('لم يُعثر على العميل'); }
+      else setTarget(d);
+    } catch { setErr('تعذّر استحضار بيانات العميل'); }
+    finally { setLooking(false); }
+  };
+
+  const submit = async () => {
+    if (!code.trim()) { setErr('رقم العميل الجديد مطلوب'); return; }
+    setBusy(true); setErr('');
+    try {
+      const res = await api.createTransferRequest(fridge.id, {
+        to_customer_code: code.trim(), reason,
+      });
+      onDone?.(res.request);
+    } catch (e) {
+      setErr(e.response?.data?.error || 'تعذّر إنشاء الطلب');
+    } finally { setBusy(false); }
+  };
+
+  return (
+    <div className="frg-transfer-form frg-transfer-request">
+      <div className="frg-transfer-title">📝 طلب نقل الثلاجة لعميل آخر</div>
+      <div className="frg-req-hint">
+        الطلب يُرفع لمسؤولي الثلاجات كطلب مبدئي — لا تُنقل الثلاجة إلا بعد الموافقة.
+      </div>
+      {err && <div className="frg-alert frg-alert-error">{err}</div>}
+
+      <div className="frg-form-group">
+        <label className="frg-label">رقم العميل الجديد <span className="frg-req">*</span></label>
+        <div className="frg-lookup-row">
+          <input className="frg-input" value={code} dir="ltr" placeholder="رقم العميل"
+                 onChange={e => { setCode(e.target.value); setTarget(null); setErr(''); }}
+                 onKeyDown={e => e.key === 'Enter' && lookup()} />
+          <button className="frg-btn frg-btn-primary frg-btn-sm" onClick={lookup}
+                  disabled={looking || !code.trim()}>
+            {looking ? '…' : 'استحضار'}
+          </button>
+        </div>
+      </div>
+
+      {target && (
+        <div className="frg-req-preview">
+          <div className="frg-req-preview__row">
+            <span>العميل الحالي</span>
+            <strong><bdi>{fridge.customer_name || fridge.customer_code || '—'}</bdi></strong>
+          </div>
+          <div className="frg-req-preview__row">
+            <span>خط السير الحالي / المندوب</span>
+            <strong><bdi>{fridge.route_code || '—'} · {fridge.salesrep_name || '—'}</bdi></strong>
+          </div>
+          <div className="frg-req-preview__arrow">↓</div>
+          <div className="frg-req-preview__row">
+            <span>العميل الجديد</span>
+            <strong><bdi>{target.customer_name || code}</bdi></strong>
+          </div>
+          <div className="frg-req-preview__row">
+            <span>خط السير الجديد / المندوب</span>
+            <strong><bdi>{target.route_code || '—'} · {target.salesrep_name || '—'}</bdi></strong>
+          </div>
+        </div>
+      )}
+
+      <div className="frg-form-group">
+        <label className="frg-label">سبب النقل</label>
+        <textarea className="frg-textarea" rows={2} value={reason}
+                  placeholder="سبب الطلب…" onChange={e => setReason(e.target.value)} />
+      </div>
+
+      <div className="frg-transfer-actions">
+        <button className="frg-btn frg-btn-ghost frg-btn-sm" onClick={onCancel}>إلغاء</button>
+        <button className="frg-btn frg-btn-primary frg-btn-sm" onClick={submit} disabled={busy}>
+          {busy ? 'جارٍ الإرسال…' : '📤 رفع الطلب للاعتماد'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* Printable request sheet — its own window so the page's own print rules
+   (and every dashboard chrome element) stay out of it. */
+function printRequestSheet(rq) {
+  const line = (k, v) => `<tr><th>${k}</th><td>${v ?? '—'}</td></tr>`;
+  const statusAr = { pending: 'مبدئي — بانتظار الاعتماد', approved: 'معتمد', rejected: 'مرفوض', cancelled: 'ملغى' };
+  const html = `<!doctype html><html dir="rtl" lang="ar"><head><meta charset="utf-8">
+    <title>طلب نقل ثلاجة ${rq.asset_number || ''}</title>
+    <style>
+      body { font-family: "Segoe UI", Tahoma, sans-serif; padding: 28px; color: #1f2937; }
+      h1 { font-size: 20px; margin: 0 0 4px; }
+      .sub { color: #6b7280; font-size: 12px; margin-bottom: 18px; }
+      .badge { display:inline-block; padding:3px 10px; border-radius:999px; font-size:12px;
+               font-weight:700; background:#fef3c7; color:#92400e; border:1px solid #fcd34d; }
+      table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
+      th, td { border: 1px solid #e5e7eb; padding: 7px 10px; font-size: 13px; text-align: right; }
+      th { background: #f8fafc; width: 210px; font-weight: 700; color: #374151; }
+      h2 { font-size: 14px; margin: 16px 0 6px; padding-bottom: 4px; border-bottom: 2px solid #e5e7eb; }
+      .sign { margin-top: 34px; display: flex; gap: 40px; }
+      .sign div { flex: 1; border-top: 1px solid #9ca3af; padding-top: 6px; font-size: 12px; color: #4b5563; }
+      @media print { body { padding: 0; } }
+    </style></head><body>
+    <h1>طلب نقل ثلاجة</h1>
+    <div class="sub">رقم الطلب: ${rq.id} · التاريخ: ${new Date(rq.requested_at).toLocaleString('ar-SA-u-nu-latn')}
+      · <span class="badge">${statusAr[rq.status] || rq.status}</span></div>
+
+    <h2>بيانات الثلاجة</h2>
+    <table>
+      ${line('رقم الثلاجة / الأصل', rq.asset_number)}
+      ${line('رقم العقد', rq.contract_number)}
+      ${line('حالة الثلاجة', rq.fridge_status)}
+    </table>
+
+    <h2>العميل الحالي</h2>
+    <table>
+      ${line('رقم العميل', rq.from_customer_code)}
+      ${line('اسم العميل', rq.from_customer_name)}
+      ${line('خط السير', [rq.from_route_code, rq.from_route_name].filter(Boolean).join(' — '))}
+      ${line('المندوب المسؤول', rq.from_salesman_name)}
+      ${line('المنطقة', rq.from_region_name)}
+    </table>
+
+    <h2>العميل الجديد (المطلوب النقل إليه)</h2>
+    <table>
+      ${line('رقم العميل', rq.to_customer_code)}
+      ${line('اسم العميل', rq.to_customer_name)}
+      ${line('خط السير', [rq.to_route_code, rq.to_route_name].filter(Boolean).join(' — '))}
+      ${line('المندوب المسؤول', rq.to_salesman_name)}
+      ${line('المنطقة', rq.to_region_name)}
+    </table>
+
+    <h2>مقدّم الطلب</h2>
+    <table>
+      ${line('الاسم', rq.requested_by_name)}
+      ${line('الصفة', rq.requested_by_role)}
+      ${line('سبب النقل', rq.reason)}
+      ${rq.decided_by_name ? line('القرار', `${statusAr[rq.status]} — ${rq.decided_by_name}`) : ''}
+      ${rq.decision_note ? line('ملاحظة القرار', rq.decision_note) : ''}
+    </table>
+
+    <div class="sign">
+      <div>توقيع مقدّم الطلب</div>
+      <div>توقيع مسؤول الثلاجات</div>
+      <div>الاعتماد النهائي</div>
+    </div>
+    <script>window.onload = () => window.print();</script>
+  </body></html>`;
+  const w = window.open('', '_blank');
+  if (!w) { alert('يرجى السماح بالنوافذ المنبثقة لطباعة الطلب'); return; }
+  w.document.write(html);
+  w.document.close();
+}
+
+/* Pending-requests banner for fridge admins — the "إشعار" side of the flow. */
+function PendingRequestsBanner() {
+  const { user } = useAuth();
+  const qc = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const [busyId, setBusyId] = useState(null);
+
+  const { data } = useQuery({
+    queryKey: ['fridge-transfer-requests', 'pending'],
+    queryFn:  () => api.transferRequests('pending'),
+    staleTime: 30_000,
+  });
+
+  const requests = data?.requests || [];
+  const canApprove = !!data?.can_approve;
+  if (!requests.length) return null;
+
+  const decide = async (id, approve) => {
+    const note = approve ? '' : (window.prompt('سبب الرفض (اختياري)') ?? '');
+    if (!approve && note === null) return;
+    setBusyId(id);
+    try {
+      if (approve) await api.approveTransferRequest(id, note);
+      else         await api.rejectTransferRequest(id, note);
+      qc.invalidateQueries({ queryKey: ['fridge-transfer-requests'] });
+      qc.invalidateQueries({ queryKey: ['fridges'] });
+      qc.invalidateQueries({ queryKey: ['fridge-stats'] });
+    } catch (e) {
+      alert(e.response?.data?.error || 'تعذّر تنفيذ القرار');
+    } finally { setBusyId(null); }
+  };
+
+  return (
+    <div className="frg-req-banner">
+      <span className="frg-req-banner__icon">📝</span>
+      <div className="frg-req-banner__body">
+        <div className="frg-req-banner__title">
+          {requests.length} طلب نقل ثلاجة بانتظار الاعتماد
+        </div>
+        <div className="frg-req-banner__sub">
+          {canApprove
+            ? 'الثلاجة لا تُنقل إلا بعد اعتمادك للطلب.'
+            : 'الطلبات معروضة للاطلاع — الاعتماد من صلاحية مسؤولي الثلاجات.'}
+        </div>
+      </div>
+      <button className="frg-btn frg-btn-sm frg-btn-ghost" onClick={() => setOpen(v => !v)}>
+        {open ? 'إخفاء' : 'عرض الطلبات'}
+      </button>
+
+      {open && (
+        <div className="frg-req-list">
+          {requests.map(r => (
+            <div key={r.id} className="frg-req-item">
+              <div className="frg-req-item__main">
+                <strong dir="ltr">{r.asset_number}</strong>
+                <span className="frg-req-item__move">
+                  <bdi>{r.from_customer_name || r.from_customer_code || '—'}</bdi>
+                  {' '}(خط {r.from_route_code || '—'} · {r.from_salesman_name || '—'})
+                  {' ← '}
+                  <bdi>{r.to_customer_name || r.to_customer_code}</bdi>
+                  {' '}(خط {r.to_route_code || '—'} · {r.to_salesman_name || '—'})
+                </span>
+                <span className="frg-req-item__meta">
+                  مقدّم الطلب: {r.requested_by_name || '—'} · {formatDateTime(r.requested_at)}
+                  {r.reason ? ` · ${r.reason}` : ''}
+                </span>
+              </div>
+              <div className="frg-req-item__actions">
+                <button className="frg-btn frg-btn-sm frg-btn-ghost"
+                        onClick={() => printRequestSheet(r)}>🖨 طباعة</button>
+                {canApprove && (
+                  <>
+                    <button className="frg-btn frg-btn-sm frg-btn-primary"
+                            disabled={busyId === r.id}
+                            onClick={() => decide(r.id, true)}>✅ اعتماد</button>
+                    <button className="frg-btn frg-btn-sm frg-btn-danger"
+                            disabled={busyId === r.id}
+                            onClick={() => decide(r.id, false)}>✕ رفض</button>
+                  </>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function FridgeDetailModal({ fridgeId, regions, onClose, onChanged }) {
   const { user } = useAuth();
   const admin = isAdmin(user);
@@ -554,14 +974,22 @@ function FridgeDetailModal({ fridgeId, regions, onClose, onChanged }) {
   const [panel, setPanel] = useState(null);
 
   /* repair form */
-  const [repairNotes, setRepairNotes] = useState('');
-  const [repairBusy, setRepairBusy]   = useState(false);
-  const [repairErr, setRepairErr]     = useState('');
+  const [repairNotes, setRepairNotes]         = useState('');
+  const [repairFromRegionId, setRepairFromRegionId] = useState(''); // منطقة السحب
+  const [repairToRegionId, setRepairToRegionId]     = useState(''); // منطقة التسليم
+  const [repairStatus, setRepairStatus]       = useState('warehouse_maintenance');
+  const [repairEditStatus, setRepairEditStatus] = useState(false); // toggles the status select
+  const [repairBusy, setRepairBusy]           = useState(false);
+  const [repairErr, setRepairErr]             = useState('');
 
   /* reassign form */
   const [newCode, setNewCode]         = useState('');
   const [newName, setNewName]         = useState('');
   const [reassignNotes, setReassignNotes] = useState('');
+  /* "بانتظار توقيع العقد" — set when the fridge changes hands but the new
+     signed contract is not available yet. It stays on the fridge as an alert
+     until a contract file is uploaded, which clears it server-side. */
+  const [pendingContract, setPendingContract] = useState(true);
   const [lookingUp, setLookingUp]     = useState(false);
   const [lookupWarn, setLookupWarn]   = useState('');
   const [reassignBusy, setReassignBusy] = useState(false);
@@ -579,10 +1007,19 @@ function FridgeDetailModal({ fridgeId, regions, onClose, onChanged }) {
   const doRepair = async () => {
     setRepairBusy(true); setRepairErr('');
     try {
-      await api.transfer(fridgeId, { transfer_type: 'repair', notes: repairNotes });
+      await api.transfer(fridgeId, {
+        transfer_type: 'repair',
+        notes: repairNotes,
+        from_region_id: repairFromRegionId || null,
+        to_region_id:   repairToRegionId   || null,
+        status:         repairStatus,
+      });
       invalidate();
       setPanel(null);
       setRepairNotes('');
+      setRepairFromRegionId('');
+      setRepairToRegionId('');
+      setRepairStatus('warehouse_maintenance');
     } catch (e) {
       setRepairErr(e.response?.data?.error || 'حدث خطأ');
     } finally { setRepairBusy(false); }
@@ -610,10 +1047,11 @@ function FridgeDetailModal({ fridgeId, regions, onClose, onChanged }) {
         to_customer_code: newCode.trim(),
         to_customer_name: newName.trim(),
         notes: reassignNotes,
+        pending_contract: pendingContract,
       });
       invalidate();
       setPanel(null);
-      setNewCode(''); setNewName(''); setReassignNotes('');
+      setNewCode(''); setNewName(''); setReassignNotes(''); setPendingContract(true);
     } catch (e) {
       setReassignErr(e.response?.data?.error || 'حدث خطأ');
     } finally { setReassignBusy(false); }
@@ -666,6 +1104,9 @@ function FridgeDetailModal({ fridgeId, regions, onClose, onChanged }) {
             </div>
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            {fridge.pending_contract && (
+              <span className="frg-pending-badge" title="نُقلت لعميل جديد دون عقد موقّع">⏳ بانتظار العقد</span>
+            )}
             <StatusBadge status={fridge.status} />
             <button className="frg-modal-close" onClick={onClose} title="إغلاق">
               <X size={16} />
@@ -675,6 +1116,23 @@ function FridgeDetailModal({ fridgeId, regions, onClose, onChanged }) {
 
         {/* ── Modal Body ── */}
         <div className="frg-modal-body">
+
+          {/* Awaiting-contract alert — stays until a contract file is uploaded,
+              which clears the flag server-side inside the same transaction. */}
+          {fridge.pending_contract && (
+            <div className="frg-pending-alert">
+              <span className="frg-pending-alert__icon">⏳</span>
+              <div>
+                <div className="frg-pending-alert__title">بانتظار توقيع العقد</div>
+                <div className="frg-pending-alert__sub">
+                  نُقلت الثلاجة إلى <bdi>{fridge.customer_name || fridge.customer_code || 'عميل جديد'}</bdi> دون
+                  رفع عقد جديد موقّع
+                  {fridge.pending_contract_since && <> — منذ {formatDateTime(fridge.pending_contract_since)}</>}.
+                  ارفع ملف العقد من قسم «ملفات العقد» أدناه ليُلغى هذا التنبيه تلقائياً.
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* ── Inline Edit Form ── */}
           {panel === 'edit' && (
@@ -767,17 +1225,36 @@ function FridgeDetailModal({ fridgeId, regions, onClose, onChanged }) {
                 <button
                   className="frg-btn frg-btn-sm"
                   style={{ background: '#fef3c7', color: '#92400e', border: '1px solid #fcd34d' }}
-                  onClick={() => { setPanel('repair'); setRepairErr(''); setRepairNotes(''); }}
+                  onClick={() => {
+                    setPanel('repair'); setRepairErr(''); setRepairNotes('');
+                    const curRegion = fridge.region_id != null ? String(fridge.region_id) : '';
+                    setRepairFromRegionId(curRegion);
+                    setRepairToRegionId(curRegion);
+                    setRepairStatus('warehouse_maintenance');
+                    setRepairEditStatus(false);
+                  }}
                 >
                   🔧 سحب للإصلاح
                 </button>
-                <button
-                  className="frg-btn frg-btn-sm"
-                  style={{ background: '#ede9fe', color: '#5b21b6', border: '1px solid #c4b5fd' }}
-                  onClick={() => { setPanel('reassign'); setReassignErr(''); setLookupWarn(''); setNewCode(''); setNewName(''); setReassignNotes(''); }}
-                >
-                  🔄 نقل لعميل جديد
-                </button>
+                {admin && (
+                  <button
+                    className="frg-btn frg-btn-sm"
+                    style={{ background: '#ede9fe', color: '#5b21b6', border: '1px solid #c4b5fd' }}
+                    onClick={() => { setPanel('reassign'); setReassignErr(''); setLookupWarn(''); setNewCode(''); setNewName(''); setReassignNotes(''); }}
+                  >
+                    🔄 نقل لعميل جديد
+                  </button>
+                )}
+                {/* Supervisors / region managers cannot move a fridge themselves —
+                    they raise a request that a fridge admin has to approve. */}
+                {canRequestTransfer(user) && (
+                  <button
+                    className="frg-btn frg-btn-sm frg-btn-request"
+                    onClick={() => setPanel('request')}
+                  >
+                    📝 طلب نقل لعميل آخر
+                  </button>
+                )}
                 {admin && (
                   <button className="frg-btn frg-btn-danger frg-btn-sm" onClick={doDelete}>
                     <Trash2 size={13} /> حذف
@@ -791,6 +1268,32 @@ function FridgeDetailModal({ fridgeId, regions, onClose, onChanged }) {
                   <div className="frg-transfer-title">🔧 سحب الثلاجة للإصلاح</div>
                   {repairErr && <div className="frg-alert frg-alert-error">{repairErr}</div>}
                   <div className="frg-form-group">
+                    <label className="frg-label">منطقة السحب</label>
+                    <select
+                      className="frg-select"
+                      value={repairFromRegionId}
+                      onChange={e => setRepairFromRegionId(e.target.value)}
+                    >
+                      <option value="">— بدون تحديد —</option>
+                      {regions.map(r => (
+                        <option key={r.id} value={r.id}>{r.name_ar}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="frg-form-group">
+                    <label className="frg-label">منطقة التسليم</label>
+                    <select
+                      className="frg-select"
+                      value={repairToRegionId}
+                      onChange={e => setRepairToRegionId(e.target.value)}
+                    >
+                      <option value="">— بدون تحديد —</option>
+                      {regions.map(r => (
+                        <option key={r.id} value={r.id}>{r.name_ar}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="frg-form-group">
                     <label className="frg-label">ملاحظات الإصلاح</label>
                     <textarea
                       className="frg-textarea"
@@ -800,6 +1303,28 @@ function FridgeDetailModal({ fridgeId, regions, onClose, onChanged }) {
                       rows={3}
                     />
                   </div>
+                  {!repairEditStatus ? (
+                    <button
+                      type="button"
+                      className="frg-link-btn"
+                      onClick={() => setRepairEditStatus(true)}
+                    >
+                      ✏️ تعديل حالة الثلاجة
+                    </button>
+                  ) : (
+                    <div className="frg-form-group">
+                      <label className="frg-label">حالة الثلاجة</label>
+                      <select
+                        className="frg-select"
+                        value={repairStatus}
+                        onChange={e => setRepairStatus(e.target.value)}
+                      >
+                        {STATUS_OPTS.map(s => (
+                          <option key={s.v} value={s.v}>{s.l}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
                   <div className="frg-transfer-actions">
                     <button className="frg-btn frg-btn-ghost frg-btn-sm" onClick={() => setPanel(null)}>إلغاء</button>
                     <button
@@ -815,6 +1340,22 @@ function FridgeDetailModal({ fridgeId, regions, onClose, onChanged }) {
               )}
 
               {/* ── Reassign Form ── */}
+              {panel === 'request' && (
+                <TransferRequestForm
+                  fridge={fridge}
+                  onCancel={() => setPanel(null)}
+                  onDone={(rq) => {
+                    setPanel(null);
+                    invalidate();
+                    qc.invalidateQueries({ queryKey: ['fridge-transfer-requests'] });
+                    /* Print immediately — the sheet IS the deliverable of raising
+                       a request, and the data is freshest right now. */
+                    printRequestSheet({ ...rq, fridge_status: fridge.status,
+                                        contract_number: fridge.contract_number });
+                  }}
+                />
+              )}
+
               {panel === 'reassign' && (
                 <div className="frg-transfer-form frg-transfer-reassign">
                   <div className="frg-transfer-title">🔄 نقل الثلاجة لعميل جديد</div>
@@ -860,6 +1401,26 @@ function FridgeDetailModal({ fridgeId, regions, onClose, onChanged }) {
                       rows={2}
                     />
                   </div>
+                  {/* Awaiting-contract flag. A fridge moving to a new customer
+                      needs a contract signed by THAT customer — the files
+                      already on the fridge belong to the previous one — so this
+                      is on by default and turned off only when the new signed
+                      contract has already been attached above. */}
+                  <label className={`frg-pending-toggle${pendingContract ? ' frg-pending-toggle--on' : ''}`}>
+                    <input
+                      type="checkbox"
+                      checked={pendingContract}
+                      onChange={e => setPendingContract(e.target.checked)}
+                    />
+                    <span className="frg-pending-toggle__body">
+                      <span className="frg-pending-toggle__title">⏳ بانتظار توقيع العقد</span>
+                      <span className="frg-pending-toggle__sub">
+                        فعّله إذا لم يُرفَع عقد جديد موقّع من العميل الجديد أثناء النقل. سيظل تنبيه
+                        على الثلاجة حتى يتم رفع العقد، ويُلغى التنبيه تلقائياً بمجرد رفعه.
+                      </span>
+                    </span>
+                  </label>
+
                   <div className="frg-transfer-actions">
                     <button className="frg-btn frg-btn-ghost frg-btn-sm" onClick={() => setPanel(null)}>إلغاء</button>
                     <button
@@ -889,6 +1450,9 @@ function FridgeDetailModal({ fridgeId, regions, onClose, onChanged }) {
                             {h.transfer_type === 'reassign' && '🔄 نقل لعميل جديد'}
                             {h.transfer_type === 'return'   && '↩️ إعادة'}
                             {!['repair','reassign','return'].includes(h.transfer_type) && h.transfer_type}
+                            {h.pending_contract && (
+                              <span className="frg-pending-chip" title="تم النقل دون عقد جديد موقّع">⏳ بلا عقد</span>
+                            )}
                           </div>
                           <div className="frg-history-meta">
                             {h.from_customer_name && h.to_customer_name && (
@@ -896,6 +1460,12 @@ function FridgeDetailModal({ fridgeId, regions, onClose, onChanged }) {
                             )}
                             {h.from_customer_name && !h.to_customer_name && (
                               <span>من: {h.from_customer_name}</span>
+                            )}
+                            {h.transfer_type === 'repair' && h.to_region_name && h.from_region_id !== h.to_region_id && (
+                              <span>
+                                {h.from_customer_name || h.to_customer_name ? ' — ' : ''}
+                                المنطقة: {h.from_region_name || '—'} ← {h.to_region_name}
+                              </span>
                             )}
                           </div>
                           {h.notes && <div className="frg-history-notes">{h.notes}</div>}
@@ -928,6 +1498,27 @@ function FridgesList({ regions, onAddClick }) {
   const [detailId, setDetailId]         = useState(null);
 
   const qc = useQueryClient();
+
+  const [refreshing, setRefreshing] = useState(false);
+  const doRefreshCustomerData = async () => {
+    if (!window.confirm(
+      'تحديث خط السير واسم المندوب لكل الثلاجات من العميل المرتبط بكل ثلاجة حالياً؟'
+    )) return;
+    setRefreshing(true);
+    try {
+      const d = await api.refreshCustomerData();
+      qc.invalidateQueries({ queryKey: ['fridges'] });
+      qc.invalidateQueries({ queryKey: ['fridge-stats'] });
+      alert(
+        `تم تحديث ${d.updated} ثلاجة من أصل ${d.total_with_customer} مرتبطة بعميل — ` +
+        'تم جلب خط السير واسم المندوب المرتبطين بالعميل حالياً.'
+      );
+    } catch (e) {
+      alert(e.response?.data?.error || 'تعذّر تحديث البيانات');
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   const params = {};
   if (statusFilter) params.status    = statusFilter;
@@ -964,8 +1555,47 @@ function FridgesList({ regions, onAddClick }) {
     }
   });
 
+  /* Fridges handed to a new customer with no signed contract yet. Surfaced as
+     a standing banner (not a toast) because it is a state to be cleared, not
+     an event that happened once. */
+  const pendingContracts = stats?.pending_contracts || [];
+  const [showPendingOnly, setShowPendingOnly] = useState(false);
+  const visible = showPendingOnly ? filtered.filter(f => f.pending_contract) : filtered;
+
   return (
     <div>
+      {/* ── Transfer requests awaiting approval ── */}
+      <PendingRequestsBanner />
+
+      {/* ── Awaiting-contract notification ── */}
+      {pendingContracts.length > 0 && (
+        <div className="frg-pending-banner">
+          <span className="frg-pending-banner__icon">⏳</span>
+          <div className="frg-pending-banner__body">
+            <div className="frg-pending-banner__title">
+              {pendingContracts.length} ثلاجة بانتظار توقيع العقد
+            </div>
+            <div className="frg-pending-banner__sub">
+              نُقلت لعملاء جدد دون رفع عقد موقّع. الأقدم:{' '}
+              {pendingContracts.slice(0, 3).map((f, i) => (
+                <span key={f.id}>
+                  {i > 0 ? ' · ' : ''}
+                  <bdi>{f.asset_number}</bdi> — <bdi>{f.customer_name || f.customer_code || '—'}</bdi>
+                  {f.days_waiting != null && <> ({f.days_waiting} يوم)</>}
+                </span>
+              ))}
+              {pendingContracts.length > 3 && <> … و{pendingContracts.length - 3} أخرى</>}
+            </div>
+          </div>
+          <button
+            className={`frg-btn frg-btn-sm ${showPendingOnly ? 'frg-btn-primary' : 'frg-btn-ghost'}`}
+            onClick={() => setShowPendingOnly(v => !v)}
+          >
+            {showPendingOnly ? 'عرض الكل' : 'عرض المعلّقة فقط'}
+          </button>
+        </div>
+      )}
+
       {/* ── Stats strip ── */}
       {stats && (
         <div className="frg-stats-strip">
@@ -1011,6 +1641,16 @@ function FridgesList({ regions, onAddClick }) {
           options={regions.map(r => ({ value: String(r.id), label: r.name_ar || r.name_en }))}
         />
         {admin && (
+          <button
+            className="frg-btn frg-btn-ghost"
+            onClick={doRefreshCustomerData}
+            disabled={refreshing}
+            title="جلب خط السير واسم المندوب المرتبطين حالياً بعميل كل ثلاجة"
+          >
+            <RefreshCw size={14} /> {refreshing ? 'جارٍ التحديث…' : 'تحديث بيانات الثلاجات'}
+          </button>
+        )}
+        {admin && (
           <button className="frg-btn frg-btn-primary" style={{ marginRight: 'auto' }} onClick={onAddClick}>
             <Plus size={14} /> إضافة ثلاجة
           </button>
@@ -1020,10 +1660,12 @@ function FridgesList({ regions, onAddClick }) {
       {/* ── Table ── */}
       {isLoading ? (
         <div className="frg-loading">جارٍ التحميل…</div>
-      ) : filtered.length === 0 ? (
+      ) : visible.length === 0 ? (
         <div className="frg-empty">
           <div className="frg-empty-icon">🧊</div>
-          <div className="frg-empty-text">لا توجد ثلاجات مطابقة</div>
+          <div className="frg-empty-text">
+            {showPendingOnly ? 'لا توجد ثلاجات بانتظار العقد ضمن الفلاتر الحالية' : 'لا توجد ثلاجات مطابقة'}
+          </div>
         </div>
       ) : (
         <div className="frg-table-wrap">
@@ -1035,14 +1677,16 @@ function FridgesList({ regions, onAddClick }) {
                 <th>المنطقة</th>
                 <th>الخط</th>
                 <th>الحالة</th>
+                <th>رقم العقد</th>
                 <th>تاريخ العقد</th>
                 <th title="ملفات العقد المرفوعة">ملف العقد</th>
                 <th>الثلاجات/عميل</th>
+                <th className="frg-note-col">ملاحظات</th>
                 <th className="frg-no-print">إجراءات</th>
               </tr>
             </thead>
             <tbody>
-              {filtered.map(f => {
+              {visible.map(f => {
                 const cnt = f.customer_code ? (customerCounts[f.customer_code] || 1) : 1;
                 const region = regions.find(r => String(r.id) === String(f.region_id));
                 return (
@@ -1053,6 +1697,9 @@ function FridgesList({ regions, onAddClick }) {
                   >
                     <td>
                       <span className="frg-asset-num" dir="ltr">{f.asset_number}</span>
+                      {f.pending_contract && (
+                        <span className="frg-pending-chip" title="نُقلت لعميل جديد دون عقد موقّع">⏳ بانتظار العقد</span>
+                      )}
                     </td>
                     <td>
                       <div className="frg-customer-cell">
@@ -1065,6 +1712,7 @@ function FridgesList({ regions, onAddClick }) {
                     <td>{region?.name_ar || f.region_name || '—'}</td>
                     <td dir="ltr">{f.route_code ?? '—'}</td>
                     <td><StatusBadge status={f.status} /></td>
+                    <td dir="ltr">{f.contract_number || '—'}</td>
                     <td>{formatDate(f.contract_date)}</td>
                     <td>
                       {f.contract_count > 0
@@ -1081,6 +1729,13 @@ function FridgesList({ regions, onAddClick }) {
                         ? <span className="frg-multi-badge">{cnt} ثلاجات</span>
                         : <span style={{ color: '#9ca3af', fontSize: 12 }}>1</span>
                       }
+                    </td>
+                    <td className="frg-note-col">
+                      <FridgeNoteCell
+                        fridge={f}
+                        canEdit={canWriteNote(user)}
+                        onSaved={() => qc.invalidateQueries({ queryKey: ['fridges'] })}
+                      />
                     </td>
                     <td className="frg-no-print" onClick={e => e.stopPropagation()}>
                       <button
@@ -1266,7 +1921,7 @@ function SalesReportTab({ regions }) {
   const exportCSV = () => {
     const header = [
       'رقم العميل','اسم العميل','المنطقة','المندوب',
-      'عدد الثلاجات','أرقام الثلاجات',
+      'عدد الثلاجات','أرقام الثلاجات','رقم العقد',
       'إجمالي الكميات','عدد الفواتير','صافي المرتجعات',
       ...(hasTarget ? ['الهدف MTD','التحقيق %','الإنذار'] : []),
       'آخر نشاط','الحالة',
@@ -1280,6 +1935,7 @@ function SalesReportTab({ regions }) {
         r.salesrep_name   || '',
         r.fridge_count,
         `"${r.asset_numbers || ''}"`,
+        `"${r.contract_numbers || ''}"`,
         r.total_qty,
         r.invoice_count,
         r.total_bad_return_qty || 0,
@@ -1307,35 +1963,35 @@ function SalesReportTab({ regions }) {
         <div className="frg-kpi-card frg-kpi-total">
           <div className="frg-kpi-icon">🧊</div>
           <div className="frg-kpi-body">
-            <div className="frg-kpi-num">{kpiTotal.toLocaleString('ar-SA')}</div>
+            <div className="frg-kpi-num">{kpiTotal.toLocaleString('ar-SA-u-nu-latn')}</div>
             <div className="frg-kpi-lbl">إجمالي الثلاجات</div>
           </div>
         </div>
         <div className="frg-kpi-card frg-kpi-active">
           <div className="frg-kpi-icon">✅</div>
           <div className="frg-kpi-body">
-            <div className="frg-kpi-num">{kpiActive.toLocaleString('ar-SA')}</div>
+            <div className="frg-kpi-num">{kpiActive.toLocaleString('ar-SA-u-nu-latn')}</div>
             <div className="frg-kpi-lbl">نشطة</div>
           </div>
         </div>
         <div className="frg-kpi-card frg-kpi-inactive">
           <div className="frg-kpi-icon">⛔</div>
           <div className="frg-kpi-body">
-            <div className="frg-kpi-num">{kpiInactive.toLocaleString('ar-SA')}</div>
+            <div className="frg-kpi-num">{kpiInactive.toLocaleString('ar-SA-u-nu-latn')}</div>
             <div className="frg-kpi-lbl">غير نشطة</div>
           </div>
         </div>
         <div className="frg-kpi-card frg-kpi-warehouse">
           <div className="frg-kpi-icon">📦</div>
           <div className="frg-kpi-body">
-            <div className="frg-kpi-num">{kpiWarehouse.toLocaleString('ar-SA')}</div>
+            <div className="frg-kpi-num">{kpiWarehouse.toLocaleString('ar-SA-u-nu-latn')}</div>
             <div className="frg-kpi-lbl">بالمستودع</div>
           </div>
         </div>
         <div className="frg-kpi-card frg-kpi-maintenance">
           <div className="frg-kpi-icon">🔧</div>
           <div className="frg-kpi-body">
-            <div className="frg-kpi-num">{kpiMaintenance.toLocaleString('ar-SA')}</div>
+            <div className="frg-kpi-num">{kpiMaintenance.toLocaleString('ar-SA-u-nu-latn')}</div>
             <div className="frg-kpi-lbl">صيانة / خارج الخدمة</div>
           </div>
         </div>
@@ -1350,8 +2006,17 @@ function SalesReportTab({ regions }) {
             const warehouse   = rCount(reg.by_status, ['warehouse_new','warehouse_used','warehouse_maintenance']);
             const maintenance = rCount(reg.by_status, ['out_of_service','damaged']);
             const pct = reg.total > 0 ? Math.round((active / reg.total) * 100) : 0;
+            const isActive = String(regionFilter) === String(reg.region_id);
             return (
-              <div key={reg.region_name} className="frg-rc">
+              <div
+                key={reg.region_name}
+                className={`frg-rc${isActive ? ' frg-rc--active' : ''}`}
+                role="button"
+                tabIndex={0}
+                title={isActive ? 'اضغط لإلغاء تصفية المنطقة' : `اضغط لعرض ${reg.region_name} فقط`}
+                onClick={() => setRegionFilter(isActive ? '' : String(reg.region_id))}
+                onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setRegionFilter(isActive ? '' : String(reg.region_id)); } }}
+              >
                 <div className="frg-rc-header">
                   <span className="frg-rc-name">{reg.region_name}</span>
                   <span className="frg-rc-total">{reg.total} ثلاجة</span>
@@ -1485,7 +2150,7 @@ function SalesReportTab({ regions }) {
             <span className="frg-sr-pill-lbl">⛔ غير متعاملة</span>
           </div>
           <div className="frg-sr-pill" style={{ background: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe' }}>
-            <span className="frg-sr-pill-num">{(summary.total_qty ?? 0).toLocaleString('ar-SA')}</span>
+            <span className="frg-sr-pill-num">{(summary.total_qty ?? 0).toLocaleString('ar-SA-u-nu-latn')}</span>
             <span className="frg-sr-pill-lbl">إجمالي الكميات</span>
           </div>
         </div>
@@ -1505,7 +2170,7 @@ function SalesReportTab({ regions }) {
             <span className="frg-tbar-icon">🎯</span>
             <div className="frg-tbar-body">
               <span className="frg-tbar-lbl">الهدف الكلي</span>
-              <span className="frg-tbar-val">{overallTgt.toLocaleString('ar-SA')} وحدة</span>
+              <span className="frg-tbar-val">{overallTgt.toLocaleString('ar-SA-u-nu-latn')} وحدة</span>
             </div>
           </div>
           <div className="frg-tbar-item" style={{ color: getRiskLevel(overallAch).color }}>
@@ -1564,6 +2229,7 @@ function SalesReportTab({ regions }) {
                   ثلاجات <SortIcon col="fridge_count" />
                 </th>
                 <th>أرقام الثلاجات</th>
+                <th>رقم العقد</th>
                 <th onClick={() => toggleSort('invoice_count')} className={`frg-th-sort frg-th-num${sortCol==='invoice_count'?' frg-th-sort-active':''}`}>
                   فواتير <SortIcon col="invoice_count" />
                 </th>
@@ -1619,20 +2285,23 @@ function SalesReportTab({ regions }) {
                     <td className="frg-td-assets" dir="ltr" title={r.asset_numbers || ''}>
                       {r.asset_numbers || '—'}
                     </td>
-                    <td className="frg-td-num">{r.invoice_count > 0 ? r.invoice_count.toLocaleString('ar-SA') : '—'}</td>
+                    <td className="frg-td-assets" dir="ltr" title={r.contract_numbers || ''}>
+                      {r.contract_numbers || '—'}
+                    </td>
+                    <td className="frg-td-num">{r.invoice_count > 0 ? r.invoice_count.toLocaleString('ar-SA-u-nu-latn') : '—'}</td>
                     <td className="frg-td-num frg-td-qty">
-                      {active ? r.total_qty.toLocaleString('ar-SA') : '—'}
+                      {active ? r.total_qty.toLocaleString('ar-SA-u-nu-latn') : '—'}
                     </td>
                     <td className="frg-td-num frg-td-return">
                       {r.total_bad_return_qty > 0
-                        ? <span className="frg-return-badge">{r.total_bad_return_qty.toLocaleString('ar-SA')}</span>
+                        ? <span className="frg-return-badge">{r.total_bad_return_qty.toLocaleString('ar-SA-u-nu-latn')}</span>
                         : <span className="frg-td-dash">—</span>
                       }
                     </td>
                     {hasTarget && (<>
                       <td className="frg-td-num frg-td-target">
                         {r.target > 0
-                          ? r.target.toLocaleString('ar-SA')
+                          ? r.target.toLocaleString('ar-SA-u-nu-latn')
                           : <span className="frg-no-target">بدون هدف</span>}
                       </td>
                       <td className="frg-td-achieve">
@@ -1918,12 +2587,12 @@ export default function FridgesPage() {
 
   const handlePrint = useCallback(() => {
     const prev = document.title;
-    document.title = `متابعة الثلاجات — ${TAB_LABELS[tab]} — ${new Date().toLocaleDateString('ar-SA', { year:'numeric', month:'long', day:'numeric' })}`;
+    document.title = `متابعة الثلاجات — ${TAB_LABELS[tab]} — ${new Date().toLocaleDateString('ar-SA-u-nu-latn', { year:'numeric', month:'long', day:'numeric' })}`;
     window.print();
     window.onafterprint = () => { document.title = prev; window.onafterprint = null; };
   }, [tab]);
 
-  const printDate = new Date().toLocaleDateString('ar-SA', { year:'numeric', month:'long', day:'numeric', weekday:'long' });
+  const printDate = new Date().toLocaleDateString('ar-SA-u-nu-latn', { year:'numeric', month:'long', day:'numeric', weekday:'long' });
 
   return (
     <div className="frg-page">

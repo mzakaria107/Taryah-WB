@@ -1,0 +1,388 @@
+/* PerformanceDashboardPage — prefix: pdp- */
+.pdp-page { padding: 16px 20px 40px; direction: rtl; }
+
+/* Print header */
+.pdp-print-header {
+  display: none;
+  justify-content: space-between; align-items: center;
+  padding: 10px 20px; background: #0C1F17; color: #fff;
+  border-radius: 8px; font-weight: 600; margin-bottom: 16px;
+}
+@media print {
+  .pdp-no-print { display: none !important; }
+  .pdp-print-header { display: flex !important; }
+  .pdp-page { padding: 4px; }
+  @page { size: A4 landscape; margin: 0.8cm; }
+  /* Readability at print hinges on the table's PHYSICAL width, not just
+     font-size: the cell sub-elements below use fixed rem sizes that
+     ignore the table squeeze, keeping columns wide and forcing the
+     browser to shrink-to-fit the whole page (which is what actually
+     made everything unreadable). So: one larger base size, everything
+     inside converted to em so it tracks it, and the A+/A- zoom pinned
+     to 1 for a predictable width. */
+  .pdp-table { font-size: 10px !important; }
+  .pdp-th, .pdp-td { padding: 3px 4px !important; }
+  .pdp-table-wrap { overflow: visible; --pdp-num-scale: 1 !important; }
+  .pdp-th-name   { min-width: 110px !important; }
+  .pdp-th-num, .pdp-th-center { min-width: 0 !important; }
+  .pdp-th-sub       { font-size: .8em  !important; }
+  .pdp-region-name  { font-size: 1.05em !important; }
+  .pdp-region-meta  { font-size: .8em  !important; }
+  .pdp-rep-name     { font-size: 1.05em !important; }
+  .pdp-rep-sup      { font-size: .8em  !important; }
+  .pdp-rep-avatar   { display: none !important; }
+  .pdp-qty-cat      { font-size: .85em !important; }
+  .pdp-penalty-badge{ font-size: .8em  !important; border-bottom: none; }
+  .pdp-debt-reps-count { font-size: .85em !important; }
+  .pdp-ach-badge    { font-size: .95em !important; padding: 1px 5px; }
+  .pdp-fridge-cell  { font-size: .95em !important; }
+  .pdp-fridge-lbl   { font-size: .85em !important; }
+  .pdp-kpi-row { grid-template-columns: repeat(6, 1fr) !important; margin-bottom: 8px; }
+
+  /* The 7px squeeze above exists for the 16-column performance matrix.
+     Commission tables have only 9 columns — they fit landscape A4
+     comfortably at a readable size, so undo the squeeze for them. */
+  .pdp-comm-section .pdp-table { font-size: 12px !important; }
+  .pdp-comm-section .pdp-th,
+  .pdp-comm-section .pdp-td { padding: 6px 8px !important; }
+  .pdp-comm-section .pdp-num-input {
+    border: none; background: transparent; width: auto; font-size: 12px;
+  }
+  .pdp-comm-section { break-inside: avoid-page; }
+}
+
+/* Header */
+.pdp-header {
+  display: flex; justify-content: space-between; align-items: flex-start;
+  margin-bottom: 20px; flex-wrap: wrap; gap: 12px;
+}
+.pdp-title {
+  font-size: 1.4rem; font-weight: 700; color: var(--color-text); margin: 0 0 4px;
+  letter-spacing: .01em;
+}
+.pdp-subtitle { font-size: .82rem; color: var(--color-text-muted); margin: 0; }
+.pdp-header-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+.pdp-select {
+  padding: 7px 12px; border: 1px solid var(--color-border); border-radius: 8px;
+  background: var(--color-surface); color: var(--color-text); font-size: .85rem; cursor: pointer;
+  box-shadow: var(--shadow-card);
+  transition: var(--transition-fast);
+}
+.pdp-select:hover { border-color: var(--color-brand-gold); }
+.pdp-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 8px 16px; border: none; border-radius: 8px;
+  font-size: .83rem; font-weight: 600; cursor: pointer; transition: var(--transition-fast);
+}
+.pdp-btn:disabled { opacity: .5; cursor: not-allowed; }
+.pdp-btn--refresh {
+  background: var(--color-surface); color: var(--color-text);
+  border: 1px solid var(--color-border); box-shadow: var(--shadow-card);
+}
+.pdp-btn--refresh:hover { border-color: var(--color-brand-gold); color: var(--color-brand-green-dark); }
+.pdp-btn--print {
+  background: var(--grad-header, #0C1F17); color: #fff;
+  border: 1px solid rgba(201,162,39,.4);
+  box-shadow: 0 2px 10px rgba(12,31,23,.25);
+}
+.pdp-btn--print:hover { box-shadow: var(--shadow-gold, 0 4px 18px rgba(201,162,39,.3)); transform: translateY(-1px); }
+.pdp-spin { animation: pdpSpin 1s linear infinite; }
+@keyframes pdpSpin { to { transform: rotate(360deg); } }
+
+/* KPI row — luxe cards */
+.pdp-kpi-row {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(175px, 1fr));
+  gap: 14px; margin-bottom: 22px;
+}
+.pdp-kpi {
+  position: relative;
+  background: var(--grad-card, linear-gradient(180deg, #fff, #FBFAF7));
+  border: 1px solid var(--color-border);
+  border-radius: 14px; padding: 16px 14px;
+  display: flex; align-items: flex-start; gap: 12px;
+  box-shadow: var(--shadow-card);
+  transition: var(--transition-normal);
+  overflow: hidden;
+}
+/* Colored glow strip on the right edge (RTL) */
+.pdp-kpi::before {
+  content: '';
+  position: absolute; right: 0; top: 0; bottom: 0; width: 4px;
+  background: linear-gradient(180deg, var(--kpi-color, #0E6B4F), transparent 140%);
+  border-radius: 0 14px 14px 0;
+}
+/* Faint tinted halo in the corner */
+.pdp-kpi::after {
+  content: '';
+  position: absolute; top: -30px; left: -30px; width: 110px; height: 110px;
+  background: radial-gradient(circle, var(--kpi-color, #0E6B4F) 0%, transparent 70%);
+  opacity: .07; pointer-events: none;
+}
+.pdp-kpi:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-card-hover);
+  border-color: rgba(201,162,39,.45);
+}
+.pdp-kpi-icon {
+  color: var(--kpi-color); flex-shrink: 0;
+  width: 38px; height: 38px; border-radius: 11px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: color-mix(in srgb, var(--kpi-color, #0E6B4F) 10%, #fff);
+  border: 1px solid color-mix(in srgb, var(--kpi-color, #0E6B4F) 18%, #fff);
+}
+.pdp-kpi-val {
+  font-size: 1.28rem; font-weight: 800; color: var(--color-text);
+  font-variant-numeric: tabular-nums; letter-spacing: -.01em; line-height: 1.25;
+}
+.pdp-kpi-lbl  { font-size: .78rem; color: var(--color-text-secondary); margin-top: 2px; font-weight: 600; }
+.pdp-kpi-sub  { font-size: .75rem; color: var(--color-text-muted); margin-top: 2px; }
+
+/* Note */
+.pdp-note { font-size: .8rem; color: var(--color-text-muted); margin-bottom: 14px; }
+.pdp-link { color: var(--color-primary); text-decoration: none; }
+.pdp-link:hover { text-decoration: underline; }
+
+/* Error */
+.pdp-error { background: var(--color-danger-bg); color: #8C1D18; padding: 12px 16px; border-radius: 10px; margin-bottom: 16px; font-size: .85rem; border: 1px solid rgba(179,38,30,.2); }
+
+/* Table — framed like a plaque */
+.pdp-table-wrap {
+  overflow-x: auto; border-radius: 14px;
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-card);
+  background: var(--color-surface);
+}
+.pdp-table { width: 100%; border-collapse: collapse; font-size: .8rem; }
+
+.pdp-thead-row { background: var(--grad-header, #0C1F17); }
+.pdp-th {
+  padding: 11px 10px; color: #fff; font-weight: 600; white-space: nowrap;
+  border-bottom: 2px solid rgba(201,162,39,.4); text-align: center;
+}
+.pdp-th-name   { text-align: right; min-width: 180px; }
+.pdp-th-num    { min-width: 80px; }
+.pdp-th-center { min-width: 80px; }
+.pdp-th-sub    { font-size: .7rem; font-weight: 400; opacity: .75; color: #E9DFC0; }
+
+.pdp-td { padding: 9px 10px; border-bottom: 1px solid var(--color-border); vertical-align: middle; }
+.pdp-td-num    { text-align: center; font-variant-numeric: tabular-nums; font-size: calc(1em * var(--pdp-num-scale, 1)); }
+.pdp-td-center { text-align: center; font-size: calc(1em * var(--pdp-num-scale, 1)); }
+.pdp-td-name   { text-align: right; }
+
+.pdp-bold { font-weight: 700; }
+.pdp-muted { color: var(--color-text-muted); }
+
+/* Qty-cell item-category breakdown */
+.pdp-qty-cats { display: flex; flex-direction: column; gap: 1px; margin-top: 2px; }
+.pdp-qty-cat { font-size: calc(0.66rem * var(--pdp-num-scale, 1)); font-weight: 500; white-space: nowrap; line-height: 1.25; }
+
+.pdp-penalty-badge {
+  font-size: calc(0.64rem * var(--pdp-num-scale, 1)); font-weight: 700; color: #dc2626; margin-top: 3px;
+  white-space: nowrap; cursor: help; border-bottom: 1px dashed #dc2626; display: inline-block;
+}
+
+/* New customers badge */
+.pdp-new-cust { display: block; font-size: calc(.72rem * var(--pdp-num-scale, 1)); color: var(--color-brand-green); font-weight: 600; white-space: nowrap; }
+.pdp-tfoot-row .pdp-new-cust { color: #8FD9BE; }
+@media print { .pdp-new-cust { font-size: .85em !important; } }
+
+/* Debt status */
+.pdp-debt-exceeded { color: #B3261E; font-weight: 600; display: inline-flex; align-items: center; gap: 2px; }
+.pdp-debt-ok { color: var(--color-brand-green); }
+.pdp-debt-reps-count { font-size: calc(.75rem * var(--pdp-num-scale, 1)); font-weight: 400; color: #8C1D18; }
+.pdp-limit-hint { font-size: calc(.72rem * var(--pdp-num-scale, 1)); color: var(--color-text-muted); margin-top: 1px; white-space: nowrap; }
+@media print { .pdp-limit-hint { display: none; } }
+
+/* Region row — warm ivory band with gold left whisper */
+.pdp-region-row {
+  background: linear-gradient(90deg, #FBF6E8 0%, #F2F5EF 45%, #F2F5EF 100%);
+  cursor: pointer; border-bottom: 2px solid var(--color-border);
+  transition: background .15s;
+}
+.pdp-region-row:hover { background: linear-gradient(90deg, #F7EDD2 0%, #E9F0E8 45%, #E9F0E8 100%); }
+.pdp-region-name { display: flex; align-items: center; gap: 6px; font-weight: 700; color: var(--color-brand-green-dark); font-size: .85rem; }
+.pdp-toggle      { color: var(--color-brand-gold-dark, #A88418); flex-shrink: 0; }
+.pdp-crown       { flex-shrink: 0; }
+.pdp-region-meta { font-size: .75rem; color: var(--color-text-muted); margin-right: 4px; font-weight: 400; }
+
+/* Rep row */
+.pdp-rep-row { transition: background .12s; }
+.pdp-rep-row:hover { background: var(--color-brand-gold-light, #FBF6E8); }
+.pdp-rep-row td { padding-right: 18px; }
+.pdp-rep-avatar {
+  width: 27px; height: 27px; border-radius: 50%;
+  background: linear-gradient(135deg, var(--color-brand-green), var(--color-brand-green-dark));
+  color: #fff;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: .75rem; font-weight: 700; flex-shrink: 0; margin-left: 8px;
+  box-shadow: 0 2px 6px rgba(14,107,79,.3);
+  border: 1.5px solid rgba(201,162,39,.5);
+}
+.pdp-rep-name { font-weight: 500; font-size: .83rem; }
+.pdp-rep-sup  { font-size: .72rem; color: var(--color-text-muted); }
+
+/* Achievement badge */
+.pdp-ach-badge {
+  display: inline-block; padding: 2px 9px; border-radius: 12px;
+  font-size: calc(.78rem * var(--pdp-num-scale, 1)); font-weight: 700;
+  box-shadow: inset 0 0 0 1px rgba(0,0,0,.04);
+}
+
+/* Tfoot — the grand total bar */
+.pdp-tfoot-row { background: var(--grad-header, #0C1F17); color: #fff; }
+.pdp-tfoot-row .pdp-td { border-top: 2px solid rgba(201,162,39,.5); color: #fff; }
+.pdp-tfoot-row .pdp-muted { color: rgba(255,255,255,.5); }
+.pdp-tfoot-row .pdp-qty-cat:nth-child(1) { color: #60a5fa !important; }
+.pdp-tfoot-row .pdp-qty-cat:nth-child(2) { color: #fbbf24 !important; }
+.pdp-tfoot-row .pdp-qty-cat:nth-child(3) { color: #c4b5fd !important; }
+.pdp-tfoot-row .pdp-qty-cat:nth-child(4) { color: #cbd5e1 !important; }
+
+/* Empty / loading */
+.pdp-loading { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 60px; color: var(--color-text-muted); font-size: .9rem; }
+.pdp-empty   { text-align: center; padding: 60px; color: var(--color-text-muted); }
+
+/* ── Category breakdown (per-rep / per-region expand + summary) ── */
+.pdp-rep-toggle { margin-inline-end: 4px; color: var(--color-text-muted); vertical-align: middle; }
+.pdp-cat-row td { padding: 0 !important; background: var(--color-bg, #fafaf8); }
+.pdp-cat-row--region td { background: #fdf9ef; }
+.pdp-cat-wrap { padding: 12px 20px 16px; }
+.pdp-cat-title { font-size: .82rem; font-weight: 700; color: var(--color-text); margin-bottom: 8px; }
+.pdp-cat-empty { padding: 10px 0; color: var(--color-text-muted); font-size: .82rem; }
+.pdp-cat-table { width: 100%; border-collapse: collapse; font-size: .8rem; }
+.pdp-cat-table th {
+  text-align: right; padding: 6px 10px; font-weight: 600;
+  color: var(--color-text-muted); border-bottom: 1px solid var(--color-border);
+}
+.pdp-cat-table td { padding: 6px 10px; border-bottom: 1px solid var(--color-border); }
+.pdp-cat-name { font-weight: 600; }
+
+.pdp-cat-summary { margin-bottom: 18px; }
+.pdp-cat-summary-toggle {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: none; border: none; cursor: pointer;
+  font-size: .85rem; font-weight: 600; color: var(--color-brand-green-dark, #0C1F17);
+  padding: 6px 0;
+}
+.pdp-cat-summary .pdp-cat-wrap {
+  background: var(--color-surface); border: 1px solid var(--color-border);
+  border-radius: 10px; padding: 12px 16px; box-shadow: var(--shadow-card);
+}
+
+/* ── Category split settings modal ──────────────────────────── */
+.pdp-modal-overlay {
+  position: fixed; inset: 0; background: rgba(12,31,23,.5);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 1000; padding: 20px;
+}
+.pdp-modal {
+  background: var(--color-surface, #fff); border-radius: 14px;
+  width: 100%; max-width: 480px; max-height: 85vh; overflow-y: auto;
+  box-shadow: 0 20px 60px rgba(0,0,0,.3);
+}
+.pdp-modal-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 16px 20px; border-bottom: 1px solid var(--color-border);
+  font-weight: 700; font-size: .95rem;
+}
+.pdp-modal-close { background: none; border: none; cursor: pointer; color: var(--color-text-muted); }
+.pdp-modal-body { padding: 18px 20px; }
+.pdp-modal-hint { font-size: .8rem; color: var(--color-text-muted); margin: 0 0 14px; line-height: 1.6; }
+.pdp-split-table { width: 100%; border-collapse: collapse; font-size: .85rem; }
+.pdp-split-table th { text-align: right; padding: 6px 4px; color: var(--color-text-muted); font-size: .78rem; }
+.pdp-split-table td { padding: 7px 4px; border-bottom: 1px solid var(--color-border); }
+.pdp-split-table tfoot td { border-top: 2px solid var(--color-border); border-bottom: none; font-weight: 700; padding-top: 10px; }
+.pdp-split-input-wrap { display: flex; align-items: center; gap: 6px; }
+.pdp-split-input {
+  width: 80px; padding: 5px 8px; border: 1px solid var(--color-border);
+  border-radius: 6px; font-size: .85rem; text-align: center;
+}
+.pdp-split-total-ok   { color: #059669; }
+.pdp-split-total-warn { color: #dc2626; }
+.pdp-modal-actions { display: flex; gap: 8px; margin-top: 16px; flex-wrap: wrap; }
+.pdp-btn--danger {
+  background: #fef2f2; color: #dc2626; border: 1px solid #fecaca;
+}
+.pdp-btn--danger:hover { background: #fee2e2; }
+
+.pdp-scope-tabs { display: flex; gap: 6px; margin-bottom: 14px; }
+.pdp-scope-tab {
+  flex: 1; padding: 7px 10px; border: 1px solid var(--color-border);
+  border-radius: 8px; background: var(--color-surface); color: var(--color-text-muted);
+  font-size: .8rem; font-weight: 600; cursor: pointer; transition: var(--transition-fast);
+}
+.pdp-scope-tab--active {
+  background: var(--grad-header, #0C1F17); color: #fff; border-color: transparent;
+}
+.pdp-scope-note {
+  font-size: .76rem; color: var(--color-text-muted); background: var(--color-bg, #fafaf8);
+  border: 1px dashed var(--color-border); border-radius: 8px; padding: 8px 10px; margin-bottom: 10px;
+}
+.pdp-empty-hint { font-size: .82rem; margin-top: 8px; }
+
+/* ── تغطية الثلاجات cell ─────────────────────────────────────── */
+.pdp-fridge-cell { display: flex; flex-direction: column; gap: 3px; font-size: calc(.78rem * var(--pdp-num-scale, 1)); white-space: nowrap; }
+.pdp-fridge-line { display: flex; align-items: center; gap: 4px; }
+.pdp-fridge-lbl { color: var(--color-text-muted); font-size: calc(.72rem * var(--pdp-num-scale, 1)); }
+.pdp-fridge-pct { font-weight: 700; }
+
+/* ── Page-level tabs (الأداء / حساب العمولات) ─────────────────── */
+.pdp-tabs { display: flex; gap: 8px; margin-bottom: 18px; border-bottom: 1px solid var(--color-border); }
+.pdp-tab-btn {
+  padding: 9px 18px; border: none; background: none; cursor: pointer;
+  font-size: .88rem; font-weight: 600; color: var(--color-text-muted);
+  border-bottom: 2px solid transparent; margin-bottom: -1px; transition: var(--transition-fast);
+}
+.pdp-tab-btn:hover { color: var(--color-text); }
+.pdp-tab-btn--active { color: var(--color-brand-green-dark, #0C1F17); border-bottom-color: var(--color-brand-gold, #C9A227); }
+
+/* ── Commission amount privacy blur ────────────────────────────── */
+.pdp-blur { filter: blur(5px); transition: filter .15s; }
+.pdp-blur:hover { filter: none; }
+@media print { .pdp-blur { filter: none; } }
+
+/* ── Matrix numeric font-size zoom controls ───────────────────── */
+.pdp-font-zoom { display: inline-flex; gap: 2px; }
+.pdp-font-zoom-btn { min-width: 34px; padding: 6px 8px; font-weight: 800; }
+
+/* ── حساب العمولات tab ───────────────────────────────────────── */
+.pdp-comm-methodology {
+  background: var(--color-surface); border: 1px solid var(--color-border);
+  border-radius: 12px; padding: 10px 16px; margin-bottom: 16px; box-shadow: var(--shadow-card);
+}
+.pdp-comm-methodology-toggle {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  background: none; border: none; cursor: pointer; padding: 4px 0;
+  font-size: .9rem; font-weight: 700; color: var(--color-text);
+}
+.pdp-comm-methodology-body { margin-top: 10px; font-size: .82rem; line-height: 1.9; color: var(--color-text); }
+.pdp-comm-methodology-body p { margin: 8px 0; }
+.pdp-comm-methodology-body ul { margin: 4px 0 10px; padding-inline-start: 20px; }
+.pdp-comm-methodology-body ul ul { margin: 4px 0; font-size: .95em; color: var(--color-text-muted); }
+.pdp-comm-methodology-body li { margin: 4px 0; }
+.pdp-comm-methodology-body strong { color: var(--color-primary); }
+
+.pdp-comm-weights {
+  background: var(--color-surface); border: 1px solid var(--color-border);
+  border-radius: 12px; padding: 16px 18px; margin-bottom: 22px; box-shadow: var(--shadow-card);
+}
+.pdp-comm-weights-title { font-size: .95rem; font-weight: 700; margin-bottom: 4px; }
+.pdp-comm-weights-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 12px; margin: 12px 0 14px;
+}
+.pdp-comm-weight-field { display: flex; flex-direction: column; gap: 5px; }
+.pdp-comm-weight-field label { font-size: .78rem; color: var(--color-text-muted); font-weight: 600; }
+.pdp-comm-weight-total { justify-content: flex-end; }
+.pdp-comm-weight-total span { font-size: 1.05rem; font-weight: 800; }
+.pdp-comm-actions { display: flex; justify-content: flex-end; margin-bottom: 14px; }
+/* Commission tables reuse .pdp-td-num etc. but sit outside the matrix
+   wrapper that carries the A+/A- zoom variable — give them the same
+   enlarged default so their numbers read comfortably too. */
+.pdp-comm-section { margin-bottom: 26px; --pdp-num-scale: 1.3; }
+.pdp-comm-section .pdp-table { font-size: .85rem; }
+.pdp-comm-section-title { font-size: 1rem; font-weight: 700; padding: 12px 16px; border-bottom: 1px solid var(--color-border); }
+.pdp-num-input {
+  width: 110px; padding: 6px 8px; border: 1px solid var(--color-border); border-radius: 6px;
+  font-size: calc(.85rem * var(--pdp-num-scale, 1)); text-align: center; background: var(--color-bg); color: var(--color-text);
+}

@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useLanguage } from '../../context/LanguageContext';
 import './CombinedStatusKPICard.css';
 
 /* ── Animated count ───────────────────────────── */
@@ -93,6 +94,8 @@ function Skeleton() {
 
 /* ── Main component ───────────────────────────── */
 export default function CombinedStatusKPICard({ unpaidData, partialData, loading }) {
+  const { lang } = useLanguage();
+  const en = lang === 'en';
   const unpaidTotal  = unpaidData?.total  ?? 0;
   const partialTotal = partialData?.total ?? 0;
   const grandTotal   = unpaidTotal + partialTotal;
@@ -124,8 +127,8 @@ export default function CombinedStatusKPICard({ unpaidData, partialData, loading
 
       {/* Header */}
       <div className="ckpi-header">
-        <span className="ckpi-title">فواتير غير مسددة</span>
-        <span className="ckpi-subtitle">حسب المنطقة</span>
+        <span className="ckpi-title">{en ? 'Unpaid Invoices' : 'فواتير غير مسددة'}</span>
+        <span className="ckpi-subtitle">{en ? 'By region' : 'حسب المنطقة'}</span>
       </div>
 
       {/* Three totals */}
@@ -136,7 +139,7 @@ export default function CombinedStatusKPICard({ unpaidData, partialData, loading
           <span className="ckpi-total-num" style={{ color: '#333' }}>
             {animGrand.toLocaleString('en-SA')}
           </span>
-          <span className="ckpi-total-lbl">الإجمالي</span>
+          <span className="ckpi-total-lbl">{en ? 'Total' : 'الإجمالي'}</span>
         </div>
 
         {/* Unpaid */}
@@ -145,7 +148,7 @@ export default function CombinedStatusKPICard({ unpaidData, partialData, loading
           <span className="ckpi-total-num" style={{ color: COLOR_UNPAID }}>
             {animUnpaid.toLocaleString('en-SA')}
           </span>
-          <span className="ckpi-total-lbl">غير مسددة</span>
+          <span className="ckpi-total-lbl">{en ? 'Unpaid' : 'غير مسددة'}</span>
         </div>
 
         {/* Partial */}
@@ -154,14 +157,14 @@ export default function CombinedStatusKPICard({ unpaidData, partialData, loading
           <span className="ckpi-total-num" style={{ color: COLOR_PARTIAL }}>
             {animPartial.toLocaleString('en-SA')}
           </span>
-          <span className="ckpi-total-lbl">جزئي</span>
+          <span className="ckpi-total-lbl">{en ? 'Partial' : 'جزئي'}</span>
         </div>
 
       </div>
 
       {/* Regions */}
       {grandTotal === 0 ? (
-        <div className="ckpi-empty">لا توجد فواتير غير مسددة</div>
+        <div className="ckpi-empty">{en ? 'No unpaid invoices' : 'لا توجد فواتير غير مسددة'}</div>
       ) : (
         <div className="ckpi-regions">
           {regions.map((r, i) => (

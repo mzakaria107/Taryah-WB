@@ -1,6 +1,7 @@
 import React from 'react';
 import { Settings2, RotateCcw } from 'lucide-react';
 import useRegionCardSettings, { SIZE_OPTS, FONT_STEPS } from '../../hooks/useRegionCardSettings';
+import { useLanguage } from '../../context/LanguageContext';
 import './RegionBalanceCards.css';
 
 /* ── Year accent colours (same palette as YearStrip) ── */
@@ -40,17 +41,19 @@ function SkeletonCard() {
 
 /* ── Settings bar ── */
 function RBCSettingsBar({ canEdit, cardSize, fontScale, canFontUp, canFontDown, setCardSize, fontUp, fontDown, reset }) {
+  const { lang } = useLanguage();
+  const en = lang === 'en';
   if (!canEdit) return null;
   return (
     <div className="rbc-settings-bar">
       {/* Label */}
       <span className="rbc-settings-lbl">
-        <Settings2 size={11} /> تخصيص الكروت
+        <Settings2 size={11} /> {en ? 'Customize cards' : 'تخصيص الكروت'}
       </span>
 
       {/* Size presets */}
       <div className="rbc-settings-group">
-        <span className="rbc-settings-sublbl">الحجم</span>
+        <span className="rbc-settings-sublbl">{en ? 'Size' : 'الحجم'}</span>
         <div className="rbc-size-btns">
           {SIZE_OPTS.map(o => (
             <button
@@ -58,7 +61,7 @@ function RBCSettingsBar({ canEdit, cardSize, fontScale, canFontUp, canFontDown, 
               className={`rbc-sz-btn${cardSize === o.val ? ' active' : ''}`}
               onClick={() => setCardSize(o.val)}
             >
-              {o.label}
+              {en ? (o.labelEn || o.label) : o.label}
             </button>
           ))}
         </div>
@@ -68,13 +71,13 @@ function RBCSettingsBar({ canEdit, cardSize, fontScale, canFontUp, canFontDown, 
 
       {/* Font scale */}
       <div className="rbc-settings-group">
-        <span className="rbc-settings-sublbl">الخط</span>
+        <span className="rbc-settings-sublbl">{en ? 'Font' : 'الخط'}</span>
         <div className="rbc-font-btns">
           <button
             className="rbc-font-btn"
             onClick={fontDown}
             disabled={!canFontDown}
-            title="تصغير الخط"
+            title={en ? 'Smaller font' : 'تصغير الخط'}
           >
             A<sup>−</sup>
           </button>
@@ -83,7 +86,7 @@ function RBCSettingsBar({ canEdit, cardSize, fontScale, canFontUp, canFontDown, 
             className="rbc-font-btn"
             onClick={fontUp}
             disabled={!canFontUp}
-            title="تكبير الخط"
+            title={en ? 'Larger font' : 'تكبير الخط'}
           >
             A<sup>+</sup>
           </button>
@@ -91,7 +94,7 @@ function RBCSettingsBar({ canEdit, cardSize, fontScale, canFontUp, canFontDown, 
       </div>
 
       {/* Reset */}
-      <button className="rbc-reset-btn" onClick={reset} title="إعادة الضبط">
+      <button className="rbc-reset-btn" onClick={reset} title={en ? 'Reset' : 'إعادة الضبط'}>
         <RotateCcw size={11} />
       </button>
     </div>
@@ -100,6 +103,8 @@ function RBCSettingsBar({ canEdit, cardSize, fontScale, canFontUp, canFontDown, 
 
 /* ── Main component ── */
 export default function RegionBalanceCards({ data = [], loading }) {
+  const { lang } = useLanguage();
+  const en = lang === 'en';
   const {
     cardSize, fontScale, canEdit,
     setCardSize, fontUp, fontDown, canFontUp, canFontDown, reset,
@@ -122,7 +127,7 @@ export default function RegionBalanceCards({ data = [], loading }) {
           canFontUp={canFontUp} canFontDown={canFontDown}
           setCardSize={setCardSize} fontUp={fontUp} fontDown={fontDown} reset={reset}
         />
-        <div className="rbc-strip" style={stripVars} role="list" aria-label="أرصدة المناطق">
+        <div className="rbc-strip" style={stripVars} role="list" aria-label={en ? "Region balances" : "أرصدة المناطق"}>
           {[0, 1, 2].map(i => <SkeletonCard key={i} />)}
         </div>
       </div>
@@ -139,7 +144,7 @@ export default function RegionBalanceCards({ data = [], loading }) {
         setCardSize={setCardSize} fontUp={fontUp} fontDown={fontDown} reset={reset}
       />
 
-      <div className="rbc-strip" style={stripVars} role="list" aria-label="أرصدة المناطق">
+      <div className="rbc-strip" style={stripVars} role="list" aria-label={en ? "Region balances" : "أرصدة المناطق"}>
         {data.map((region, idx) => {
           const maxBal = Math.max(...region.years.map(y => y.balance), 1);
           const rate   = region.total_amount > 0
@@ -162,7 +167,7 @@ export default function RegionBalanceCards({ data = [], loading }) {
               {/* Total balance */}
               <div className="rbc-total-bal">
                 {fmtBal(region.total_balance)}
-                <span className="rbc-total-lbl"> رصيد</span>
+                <span className="rbc-total-lbl"> {en ? "balance" : "رصيد"}</span>
               </div>
 
               {/* Divider */}

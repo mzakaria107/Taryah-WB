@@ -9,6 +9,7 @@ const TYPE_AR    = {
   route_master:     'دليل المسارات',
   payments:         'حركات السداد',
   sales_activity:   'العملاء المتعاملة',
+  quality_issues:   'توالف الجودة',
 };
 
 export default function Upload() {
@@ -58,7 +59,7 @@ export default function Upload() {
                   </span>
                 </td>
                 <td style={{ fontFamily: 'var(--font-en)', fontSize: 12, whiteSpace: 'nowrap' }}>
-                  {h.created_at ? new Date(h.created_at).toLocaleString('ar-SA', { dateStyle: 'short', timeStyle: 'short' }) : '—'}
+                  {h.created_at ? new Date(h.created_at).toLocaleString('ar-SA-u-nu-latn', { dateStyle: 'short', timeStyle: 'short' }) : '—'}
                 </td>
                 <td style={{ fontFamily: 'var(--font-en)' }}>
                   {Number(h.row_count || 0).toLocaleString('en-SA')}

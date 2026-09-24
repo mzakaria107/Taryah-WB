@@ -1,10 +1,15 @@
 import React, { useEffect, useRef } from 'react';
+import { useLanguage } from '../../context/LanguageContext';
 import './MonthlyBalanceChart.css';
 
-/* ── Arabic month names ───────────────────────────── */
+/* ── Month names ──────────────────────────────────── */
 const MONTH_AR = [
   '', 'يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو',
   'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر',
+];
+const MONTH_EN = [
+  '', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
 ];
 
 /* ── Compact number formatter ────────────────────── */
@@ -56,6 +61,9 @@ function AnimBar({ pct, color, delay = 0 }) {
 
 /* ── Main component ──────────────────────────────── */
 export default function MonthlyBalanceChart({ data, loading }) {
+  const { lang } = useLanguage();
+  const en = lang === 'en';
+  const MONTHS = en ? MONTH_EN : MONTH_AR;
   const today   = new Date();
   const curMonth = today.getMonth() + 1; // 1-based
 
@@ -79,18 +87,18 @@ export default function MonthlyBalanceChart({ data, loading }) {
       {/* ── Header ── */}
       <div className="mbc-header">
         <div className="mbc-title-wrap">
-          <span className="mbc-title">الأرصدة الشهرية — {year}</span>
-          <span className="mbc-subtitle">الفواتير الغير مسددة</span>
+          <span className="mbc-title">{en ? 'Monthly Balances' : 'الأرصدة الشهرية'} — {year}</span>
+          <span className="mbc-subtitle">{en ? 'Unpaid invoices' : 'الفواتير الغير مسددة'}</span>
         </div>
         <div className="mbc-totals">
           <div className="mbc-total-item">
             <span className="mbc-total-val danger">{fmtNum(total_balance)}</span>
-            <span className="mbc-total-lbl">إجمالي المتبقي</span>
+            <span className="mbc-total-lbl">{en ? 'Total Remaining' : 'إجمالي المتبقي'}</span>
           </div>
           <div className="mbc-total-sep" />
           <div className="mbc-total-item">
             <span className="mbc-total-val">{total_unpaid_count.toLocaleString('en-SA')}</span>
-            <span className="mbc-total-lbl">فاتورة غير مسددة</span>
+            <span className="mbc-total-lbl">{en ? 'Unpaid Invoices' : 'فاتورة غير مسددة'}</span>
           </div>
         </div>
       </div>
@@ -98,7 +106,7 @@ export default function MonthlyBalanceChart({ data, loading }) {
       {/* ── Monthly bars ── */}
       <div className="mbc-months-section">
         {visibleMonths.length === 0 ? (
-          <div className="mbc-empty">لا توجد بيانات للعام {year}</div>
+          <div className="mbc-empty">{en ? `No data for ${year}` : `لا توجد بيانات للعام ${year}`}</div>
         ) : (
           visibleMonths.map((m, idx) => {
             const pct     = maxBalance > 0 ? (m.total_balance / maxBalance) * 100 : 0;
@@ -109,7 +117,7 @@ export default function MonthlyBalanceChart({ data, loading }) {
                 key={m.month}
                 className={`mbc-month-row${isCur ? ' mbc-month-current' : ''}${isEmpty ? ' mbc-month-empty' : ''}`}
               >
-                <span className="mbc-month-name">{MONTH_AR[m.month]}</span>
+                <span className="mbc-month-name">{MONTHS[m.month]}</span>
                 <AnimBar
                   pct={isEmpty ? 0 : pct}
                   color="var(--color-brand-red)"
@@ -117,7 +125,7 @@ export default function MonthlyBalanceChart({ data, loading }) {
                 />
                 <span className="mbc-month-bal">{isEmpty ? '—' : fmtNum(m.total_balance)}</span>
                 <span className={`mbc-month-badge${isEmpty ? ' mbc-badge-zero' : ''}`}>
-                  {isEmpty ? '٠' : m.unpaid_count}
+                  {isEmpty ? '0' : m.unpaid_count}
                 </span>
               </div>
             );
@@ -129,7 +137,7 @@ export default function MonthlyBalanceChart({ data, loading }) {
       {regions.length > 0 && (
         <>
           <div className="mbc-section-label">
-            <span>حصة المناطق من الغير مسدد</span>
+            <span>{en ? "Regions' share of unpaid" : 'حصة المناطق من الغير مسدد'}</span>
           </div>
 
           {/* ── Region breakdown ── */}

@@ -31,7 +31,7 @@ router.get('/unread-count', async (req, res) => {
 router.get('/', async (req, res) => {
   try {
     const { rows } = await pool.query(
-      `SELECT id, title, body, type, task_id, is_read, created_at
+      `SELECT id, title, body, type, task_id, target_request_id, is_read, created_at
        FROM notifications
        WHERE user_id = $1
        ORDER BY created_at DESC

@@ -8,7 +8,7 @@ import './CollectionsPerformancePage.css';
 const fmt = (n) =>
   n == null
     ? '—'
-    : Number(n).toLocaleString('ar-SA', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+    : Number(n).toLocaleString('ar-SA-u-nu-latn', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 
 const fmtDate = (iso) => {
   if (!iso) return '';
@@ -55,6 +55,148 @@ async function fetchPerformance(params) {
   return data;
 }
 
+async function fetchLiveToday() {
+  const { data } = await api.get('/collections/live-today');
+  return data;
+}
+
+/* Groups flat live rows into المنطقة (branch) → المندوب (salesman) → عملاء */
+function groupLiveRows(rows) {
+  const regionMap = new Map();
+  rows.forEach(r => {
+    const regionName = r.branch || 'غير محدد';
+    const repName     = r.salesman || 'غير محدد';
+    if (!regionMap.has(regionName)) regionMap.set(regionName, { name: regionName, total: 0, count: 0, reps: new Map() });
+    const region = regionMap.get(regionName);
+    region.total += r.amount;
+    region.count += 1;
+    if (!region.reps.has(repName)) region.reps.set(repName, { name: repName, total: 0, count: 0, customers: [] });
+    const rep = region.reps.get(repName);
+    rep.total += r.amount;
+    rep.count += 1;
+    rep.customers.push(r);
+  });
+  return [...regionMap.values()]
+    .map(region => ({ ...region, reps: [...region.reps.values()].sort((a, b) => b.total - a.total) }))
+    .sort((a, b) => b.total - a.total);
+}
+
+/* ── Tab: التحصيل اليوم لايف — live feed straight from NetSuite,
+   grouped as منطقة ← مندوب ← تفاصيل العملاء ── */
+function LiveTodayTab() {
+  const { data, isLoading, isError, isFetching, refetch, dataUpdatedAt } = useQuery({
+    queryKey: ['collections-live-today'],
+    queryFn:  fetchLiveToday,
+    refetchInterval: 60_000, // live: auto-refresh every minute
+    staleTime: 30_000,
+  });
+
+  const [collapsed, setCollapsed] = useState({}); // key → true when collapsed
+  const toggle = key => setCollapsed(c => ({ ...c, [key]: !c[key] }));
+
+  const regions = useMemo(() => groupLiveRows(data?.rows || []), [data]);
+
+  const allKeys = useMemo(() => {
+    const keys = [];
+    regions.forEach(region => {
+      const regionKey = `r:${region.name}`;
+      keys.push(regionKey);
+      region.reps.forEach(rep => keys.push(`${regionKey}:${rep.name}`));
+    });
+    return keys;
+  }, [regions]);
+
+  const expandAll   = () => setCollapsed({});
+  const collapseAll = () => setCollapsed(Object.fromEntries(allKeys.map(k => [k, true])));
+
+  const lastUpdated = dataUpdatedAt ? new Date(dataUpdatedAt).toLocaleTimeString('ar-SA-u-nu-latn', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '';
+
+  return (
+    <div>
+      <div className="cp-live-toolbar cp-no-print">
+        <button className="cp-live-refresh" onClick={() => refetch()} disabled={isFetching}>
+          {isFetching ? 'جارٍ التحديث…' : '↻ تحديث الآن'}
+        </button>
+        <button className="cp-live-expand-btn" onClick={expandAll}>⊞ توسيع الكل</button>
+        <button className="cp-live-expand-btn" onClick={collapseAll}>⊟ ضم الكل</button>
+        {lastUpdated && <span className="cp-live-updated">آخر تحديث: {lastUpdated}</span>}
+        {data?.stale && <span className="cp-live-stale">⚠️ تعذّر الوصول لـ NetSuite — تُعرض آخر بيانات محفوظة</span>}
+      </div>
+      <p className="cp-live-note">الإجمالي صافي — عمليات "↩ مرتجع" تُخصم من إجمالي التحصيل بدلاً من إضافتها.</p>
+
+      {isLoading ? (
+        <div className="cp-empty">جارٍ تحميل بيانات NetSuite…</div>
+      ) : isError ? (
+        <div className="cp-empty">⚠️ تعذّر الاتصال بـ NetSuite</div>
+      ) : data.rows.length === 0 ? (
+        <div className="cp-empty">لا توجد عمليات تحصيل مسجّلة حتى الآن لهذا اليوم</div>
+      ) : (
+        <div className="cp-region-table-wrap">
+          <table className="cp-region-table cp-live-matrix">
+            <thead>
+              <tr>
+                <th>المنطقة / المندوب / العميل</th>
+                <th>رقم المستند</th>
+                <th>طريقة الدفع</th>
+                <th>المبلغ</th>
+              </tr>
+            </thead>
+            <tbody>
+              {regions.map(region => {
+                const regionKey = `r:${region.name}`;
+                const regionOpen = !collapsed[regionKey];
+                return (
+                  <React.Fragment key={regionKey}>
+                    <tr className="cp-live-region-row" onClick={() => toggle(regionKey)}>
+                      <td>{regionOpen ? '▾' : '◂'} 📍 {region.name}<span className="cp-live-sub">({region.count} عملية)</span></td>
+                      <td></td>
+                      <td></td>
+                      <td className="cp-region-total-cell">{fmt(region.total)}</td>
+                    </tr>
+                    {regionOpen && region.reps.map(rep => {
+                      const repKey = `${regionKey}:${rep.name}`;
+                      const repOpen = !collapsed[repKey];
+                      return (
+                        <React.Fragment key={repKey}>
+                          <tr className="cp-live-rep-row" onClick={() => toggle(repKey)}>
+                            <td>{repOpen ? '▾' : '◂'} 👤 {rep.name}<span className="cp-live-sub">({rep.count} عملية)</span></td>
+                            <td></td>
+                            <td></td>
+                            <td className="cp-region-total-cell">{fmt(rep.total)}</td>
+                          </tr>
+                          {repOpen && rep.customers.map(c => (
+                            <tr key={c.id} className={`cp-live-detail-row${c.is_refund ? ' cp-live-refund-row' : ''}`}>
+                              <td>
+                                {c.customer || '—'}
+                                {c.is_refund && <span className="cp-live-refund-badge" title="مرتجع — يُخصم من إجمالي التحصيل">↩ مرتجع</span>}
+                              </td>
+                              <td>{c.document_number}</td>
+                              <td>{c.payment_method || '—'}</td>
+                              <td className={`cp-region-total-cell${c.is_refund ? ' cp-live-refund-amount' : ''}`}>{fmt(c.amount)}</td>
+                            </tr>
+                          ))}
+                        </React.Fragment>
+                      );
+                    })}
+                  </React.Fragment>
+                );
+              })}
+            </tbody>
+            <tfoot>
+              <tr>
+                <td>الإجمالي — {data.count} عملية</td>
+                <td></td>
+                <td></td>
+                <td className="cp-region-total-cell">{fmt(data.total)}</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ═══════════════════════════════════════════════════════════════
    Main Page
 ═══════════════════════════════════════════════════════════════ */
@@ -65,7 +207,7 @@ export default function CollectionsPerformancePage() {
   const [regionId,  setRegionId]  = useState('');
   const [dateFrom,  setDateFrom]  = useState('');
   const [dateTo,    setDateTo]    = useState('');
-  const [activeTab, setActiveTab] = useState('daily'); // 'daily' | 'regions'
+  const [activeTab, setActiveTab] = useState('daily'); // 'daily' | 'regions' | 'live'
 
   /* ── Handle date-from: auto-sync year/month ─────────────────── */
   const handleDateFrom = useCallback((val) => {
@@ -354,6 +496,12 @@ export default function CollectionsPerformancePage() {
             >
               ملخص المناطق
             </button>
+            <button
+              className={`cp-tab${activeTab === 'live' ? ' cp-tab--active' : ''}`}
+              onClick={() => setActiveTab('live')}
+            >
+              🔴 التحصيل اليوم لايف
+            </button>
           </div>
 
           {/* ── Tab: Daily pivot table ────────────────────────────── */}
@@ -395,6 +543,15 @@ export default function CollectionsPerformancePage() {
               )}
             </div>
           )}
+
+          {/* ── Tab: التحصيل اليوم لايف — متاح لجميع المستخدمين، مع تطبيق
+               فلترة المنطقة على مستوى الـ API (كل مستخدم يرى منطقته فقط،
+               إن كان له منطقة محددة) ── */}
+          {activeTab === 'live' && (
+            <div className="cp-no-print" style={{ marginTop: 16 }}>
+              <LiveTodayTab />
+            </div>
+          )}
         </>
       )}
     </div>
@@ -425,17 +582,17 @@ function PivotTable({ dates, regions, pivotMap, colMax, regionId, daily }) {
   const grandRow = Object.values(grandCol).reduce((s, v) => s + v, 0);
 
   const fmt2 = (n) =>
-    n ? Number(n).toLocaleString('ar-SA', { maximumFractionDigits: 0 }) : '';
+    n ? Number(n).toLocaleString('ar-SA-u-nu-latn', { maximumFractionDigits: 0 }) : '';
 
   return (
     <table className="cp-pivot-table">
       <thead>
         <tr>
           <th>التاريخ</th>
+          <th>الإجمالي</th>
           {regions.map(r => (
             <th key={r.id}>{r.name_ar}</th>
           ))}
-          <th>الإجمالي</th>
         </tr>
       </thead>
       <tbody>
@@ -444,6 +601,9 @@ function PivotTable({ dates, regions, pivotMap, colMax, regionId, daily }) {
           return (
             <tr key={d}>
               <td>{fmtDateShort(d)}</td>
+              <td className={heatClass(rowTotal, rowMax)} style={{ fontWeight: 600 }}>
+                {fmt2(rowTotal)}
+              </td>
               {regions.map(r => {
                 const val = pivotMap[d]?.[r.id] || 0;
                 return (
@@ -455,9 +615,6 @@ function PivotTable({ dates, regions, pivotMap, colMax, regionId, daily }) {
                   </td>
                 );
               })}
-              <td className={heatClass(rowTotal, rowMax)} style={{ fontWeight: 600 }}>
-                {fmt2(rowTotal)}
-              </td>
             </tr>
           );
         })}
@@ -465,10 +622,10 @@ function PivotTable({ dates, regions, pivotMap, colMax, regionId, daily }) {
       <tfoot>
         <tr className="cp-pivot-total">
           <td>الإجمالي</td>
+          <td>{fmt2(grandRow)}</td>
           {regions.map(r => (
             <td key={r.id}>{fmt2(grandCol[r.id])}</td>
           ))}
-          <td>{fmt2(grandRow)}</td>
         </tr>
       </tfoot>
     </table>
@@ -501,7 +658,7 @@ function SingleRegionTable({ dates, daily, regionId }) {
     );
 
   const fmt2 = (n) =>
-    n ? Number(n).toLocaleString('ar-SA', { maximumFractionDigits: 0 }) : '';
+    n ? Number(n).toLocaleString('ar-SA-u-nu-latn', { maximumFractionDigits: 0 }) : '';
 
   const maxPaid = Math.max(...dates.map(d => parseFloat(byDate[d]?.total_paid || 0)), 0);
 
@@ -570,7 +727,7 @@ function RegionSummaryTable({ regionTotals, grandTotal, kpis }) {
   const fmt2 = (n) =>
     n == null
       ? '—'
-      : Number(n).toLocaleString('ar-SA', { maximumFractionDigits: 0 });
+      : Number(n).toLocaleString('ar-SA-u-nu-latn', { maximumFractionDigits: 0 });
 
   return (
     <table className="cp-region-table">

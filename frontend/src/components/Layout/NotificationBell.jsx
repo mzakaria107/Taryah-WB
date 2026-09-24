@@ -3,6 +3,8 @@ import { Bell, X, CheckCheck, ExternalLink } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import client from '../../api/client';
+import { useLanguage } from '../../context/LanguageContext';
+import TargetApprovalModal from './TargetApprovalModal';
 import './NotificationBell.css';
 
 /* ── API helpers ─────────────────────────────────────────── */
@@ -20,25 +22,28 @@ const TYPE_COLOR = {
   task_completed:   '#10b981',
   task_cancelled:   '#ef4444',
   task:             '#6b7280',
+  target_approval:  '#0ea5e9',
 };
 
-function timeAgo(dateStr) {
+function timeAgo(dateStr, t) {
   const diff = Date.now() - new Date(dateStr);
   const mins  = Math.floor(diff / 60000);
   const hours = Math.floor(diff / 3600000);
   const days  = Math.floor(diff / 86400000);
-  if (mins  < 1)   return 'الآن';
-  if (mins  < 60)  return `منذ ${mins} دقيقة`;
-  if (hours < 24)  return `منذ ${hours} ساعة`;
-  return `منذ ${days} يوم`;
+  if (mins  < 1)   return t('justNow');
+  if (mins  < 60)  return t('minutesAgo', mins);
+  if (hours < 24)  return t('hoursAgo', hours);
+  return t('daysAgo', days);
 }
 
 /* ── Component ───────────────────────────────────────────── */
 export default function NotificationBell() {
   const [open, setOpen]     = useState(false);
+  const [approvalRequestId, setApprovalRequestId] = useState(null);
   const panelRef            = useRef(null);
   const navigate            = useNavigate();
   const qc                  = useQueryClient();
+  const { t }                = useLanguage();
 
   /* Poll unread count every 30 s */
   const { data: unreadCount = 0 } = useQuery({
@@ -88,7 +93,10 @@ export default function NotificationBell() {
 
   function handleClick(n) {
     if (!n.is_read) doMarkOne(n.id);
-    if (n.task_id) {
+    if (n.type === 'target_approval' && n.target_request_id) {
+      setApprovalRequestId(n.target_request_id);
+      setOpen(false);
+    } else if (n.task_id) {
       navigate('/sales-tasks', { state: { openTaskId: n.task_id } });
       setOpen(false);
     }
@@ -100,7 +108,7 @@ export default function NotificationBell() {
       <button
         className="navbar-icon-btn nb-bell-btn"
         onClick={() => setOpen(v => !v)}
-        aria-label="الإشعارات"
+        aria-label={t('notifications')}
       >
         <Bell size={18} />
         {unreadCount > 0 && (
@@ -114,13 +122,13 @@ export default function NotificationBell() {
           {/* Header */}
           <div className="nb-header">
             <span className="nb-header-title">
-              الإشعارات
+              {t('notifications')}
               {unreadCount > 0 && <span className="nb-header-count">{unreadCount}</span>}
             </span>
             <div style={{ display:'flex', gap:6 }}>
               {unreadCount > 0 && (
-                <button className="nb-action-btn" onClick={() => doMarkAll()} title="تحديد الكل كمقروء">
-                  <CheckCheck size={14} /> الكل مقروء
+                <button className="nb-action-btn" onClick={() => doMarkAll()} title={t('markAllReadTitle')}>
+                  <CheckCheck size={14} /> {t('markAllRead')}
                 </button>
               )}
             </div>
@@ -129,11 +137,11 @@ export default function NotificationBell() {
           {/* List */}
           <div className="nb-list">
             {isLoading ? (
-              <div className="nb-empty">جارٍ التحميل…</div>
+              <div className="nb-empty">{t('loading')}</div>
             ) : notifications.length === 0 ? (
               <div className="nb-empty">
                 <Bell size={28} style={{ color:'#d1d5db', marginBottom:8 }} />
-                <div>لا توجد إشعارات</div>
+                <div>{t('noNotifications')}</div>
               </div>
             ) : (
               notifications.map(n => (
@@ -149,13 +157,13 @@ export default function NotificationBell() {
                   <div className="nb-content">
                     <div className="nb-title">{n.title}</div>
                     {n.body && <div className="nb-body">{n.body}</div>}
-                    <div className="nb-time">{timeAgo(n.created_at)}</div>
+                    <div className="nb-time">{timeAgo(n.created_at, t)}</div>
                   </div>
-                  {n.task_id && <ExternalLink size={12} className="nb-link-icon" />}
+                  {(n.task_id || n.target_request_id) && <ExternalLink size={12} className="nb-link-icon" />}
                   <button
                     className="nb-delete-btn"
                     onClick={e => { e.stopPropagation(); doDelete(n.id); }}
-                    title="حذف"
+                    title={t('delete')}
                   >
                     <X size={12} />
                   </button>
@@ -164,6 +172,14 @@ export default function NotificationBell() {
             )}
           </div>
         </div>
+      )}
+
+      {approvalRequestId && (
+        <TargetApprovalModal
+          requestId={approvalRequestId}
+          onClose={() => setApprovalRequestId(null)}
+          onApproved={invalidate}
+        />
       )}
     </div>
   );

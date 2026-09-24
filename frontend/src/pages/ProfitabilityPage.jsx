@@ -26,7 +26,7 @@ function fmtPct(v) {
 }
 function fmtTime(ts) {
   if (!ts) return '—';
-  return new Date(ts).toLocaleString('ar-SA', {
+  return new Date(ts).toLocaleString('ar-SA-u-nu-latn', {
     year: 'numeric', month: 'short', day: 'numeric',
     hour: '2-digit', minute: '2-digit',
   });
@@ -386,7 +386,7 @@ function DailyPerformanceSection({ selectedYear, selectedMonth, onMonthChange, o
   // slice(0,10) extracts YYYY-MM-DD; T12:00:00 = local noon avoids UTC-offset day shift
   const sparkLabels = sparkSnaps.map(s => {
     const d = new Date(String(s.snapshot_date).slice(0, 10) + 'T12:00:00');
-    return d.toLocaleDateString('ar-SA', { day: 'numeric', month: 'short', weekday: 'short' });
+    return d.toLocaleDateString('ar-SA-u-nu-latn', { day: 'numeric', month: 'short', weekday: 'short' });
   });
 
   // ── Trend: today vs avg of previous 3 days ────────────────────
@@ -483,7 +483,7 @@ function DailyPerformanceSection({ selectedYear, selectedMonth, onMonthChange, o
           <AlertCircle size={14}/>
           <span>أيام ناقصة ({gapDates.length}): {gapDates.map(d => {
             const dt = new Date(d + 'T12:00:00');
-            return dt.toLocaleDateString('ar-SA', { weekday: 'short', day: 'numeric', month: 'short' });
+            return dt.toLocaleDateString('ar-SA-u-nu-latn', { weekday: 'short', day: 'numeric', month: 'short' });
           }).join(' · ')}</span>
           {gapDates.length === 1 && (
             <button className="prf-gap-add-btn" onClick={() => { setAddDayDate(gapDates[0]); setShowAddDay(true); }}>
@@ -614,7 +614,7 @@ function DailyPerformanceSection({ selectedYear, selectedMonth, onMonthChange, o
                       <tr className={isToday ? 'prf-daily-today' : ''}>
                         <td className="prf-daily-date">
                           {isToday && <span className="prf-today-badge">اليوم</span>}
-                          {new Date(snapDate + 'T12:00:00').toLocaleDateString('ar-SA', {
+                          {new Date(snapDate + 'T12:00:00').toLocaleDateString('ar-SA-u-nu-latn', {
                             day: 'numeric', month: 'short', weekday: 'short',
                           })}
                         </td>
@@ -635,7 +635,7 @@ function DailyPerformanceSection({ selectedYear, selectedMonth, onMonthChange, o
                         <tr key={`gap-${gDate}`} className="prf-gap-row">
                           <td className="prf-daily-date">
                             <span className="prf-gap-badge">ناقص</span>
-                            {new Date(gDate + 'T12:00:00').toLocaleDateString('ar-SA', {
+                            {new Date(gDate + 'T12:00:00').toLocaleDateString('ar-SA-u-nu-latn', {
                               day: 'numeric', month: 'short', weekday: 'short',
                             })}
                           </td>

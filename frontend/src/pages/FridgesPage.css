@@ -335,6 +335,21 @@
   margin-right: 3px;
 }
 
+.frg-link-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  color: #2563eb;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  margin-bottom: 14px;
+  align-self: flex-start;
+}
+.frg-link-btn:hover {
+  text-decoration: underline;
+}
+
 /* ── Lookup row (input + button side by side) ── */
 .frg-lookup-row {
   display: flex;
@@ -788,11 +803,17 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
-  transition: box-shadow .15s, transform .15s;
+  transition: box-shadow .15s, transform .15s, border-color .15s;
+  cursor: pointer;
+  user-select: none;
 }
 .frg-rc:hover {
   box-shadow: 0 4px 14px rgba(0,0,0,.10);
   transform: translateY(-2px);
+}
+.frg-rc--active {
+  border-color: #16a34a;
+  box-shadow: 0 0 0 2px rgba(22,163,74,.25);
 }
 
 .frg-rc-header {
@@ -1676,9 +1697,27 @@
     border: 1px solid #e5e7eb !important;
   }
 
-  .frg-table thead { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+  .frg-table thead,
+  .frg-table thead tr,
+  .frg-table thead th {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
   .frg-table thead tr { background: #1e3a5f !important; }
-  .frg-table thead th { color: #fff !important; }
+  .frg-table thead th {
+    color: #fff !important;
+    font-size: 10px !important;
+    font-weight: 700 !important;
+    background: #1e3a5f !important;
+    border-color: #2d5a8e !important;
+  }
+  /* Active sort column: keep dark header, not the screen light-blue */
+  .frg-table thead th.frg-th-sort-active {
+    background: #2d5a8e !important;
+    color: #fff !important;
+  }
+  /* Hide sort interaction icons in print */
+  .frg-sort-icon { display: none !important; }
 
   /* Alternate row shading */
   .frg-table tbody tr:nth-child(even) { background: #f8fafc !important; }
@@ -1777,3 +1816,175 @@
   padding: 3px 7px !important; font-size: 0.72rem !important;
   display: inline-flex; align-items: center; gap: 3px;
 }
+
+/* ══════════════════════════════════════════════════════════════
+   بانتظار توقيع العقد — a fridge reassigned to a new customer with
+   no signed contract attached yet. The flag clears itself the moment
+   a contract file is uploaded (see fridges.js contract upload).
+══════════════════════════════════════════════════════════════ */
+
+/* Toggle inside the reassign form */
+.frg-pending-toggle {
+  display: flex; gap: 9px; align-items: flex-start;
+  margin: 4px 0 12px; padding: 9px 11px;
+  border: 1px solid #fcd34d; border-radius: 9px;
+  background: #fffbeb; cursor: pointer;
+  transition: border-color .15s, background .15s;
+}
+.frg-pending-toggle--on { border-color: #f59e0b; background: #fef3c7; }
+.frg-pending-toggle input { margin-top: 3px; cursor: pointer; flex: none; }
+.frg-pending-toggle__body { display: flex; flex-direction: column; gap: 3px; }
+.frg-pending-toggle__title { font-weight: 800; font-size: 0.8rem; color: #92400e; }
+.frg-pending-toggle__sub { font-size: 0.72rem; color: #a16207; line-height: 1.6; }
+
+/* Alert at the top of the fridge modal */
+.frg-pending-alert {
+  display: flex; gap: 10px; align-items: flex-start;
+  margin-bottom: 14px; padding: 11px 13px;
+  border: 1px solid #f59e0b; border-right: 4px solid #f59e0b;
+  border-radius: 9px; background: #fffbeb;
+}
+.frg-pending-alert__icon  { font-size: 18px; line-height: 1.2; }
+.frg-pending-alert__title { font-weight: 800; font-size: 0.85rem; color: #92400e; margin-bottom: 2px; }
+.frg-pending-alert__sub   { font-size: 0.75rem; color: #a16207; line-height: 1.7; }
+
+/* Badge in the modal header */
+.frg-pending-badge {
+  display: inline-flex; align-items: center; gap: 3px;
+  padding: 3px 9px; border-radius: 999px; white-space: nowrap;
+  font-size: 0.7rem; font-weight: 800;
+  background: #fef3c7; color: #92400e; border: 1px solid #fcd34d;
+}
+
+/* Small chip used in the list rows and the transfer history */
+.frg-pending-chip {
+  display: inline-flex; align-items: center; gap: 3px;
+  margin-right: 6px; padding: 1px 6px; border-radius: 999px;
+  font-size: 0.63rem; font-weight: 700; white-space: nowrap;
+  background: #fef3c7; color: #92400e; border: 1px solid #fcd34d;
+}
+
+/* Standing banner above the fridge list */
+.frg-pending-banner {
+  display: flex; gap: 11px; align-items: center; flex-wrap: wrap;
+  margin-bottom: 12px; padding: 11px 14px;
+  border: 1px solid #f59e0b; border-right: 4px solid #f59e0b;
+  border-radius: 10px; background: #fffbeb;
+}
+.frg-pending-banner__icon  { font-size: 19px; }
+.frg-pending-banner__body  { flex: 1; min-width: 240px; }
+.frg-pending-banner__title { font-weight: 800; font-size: 0.85rem; color: #92400e; }
+.frg-pending-banner__sub   { font-size: 0.73rem; color: #a16207; line-height: 1.7; margin-top: 2px; }
+
+@media print { .frg-pending-banner button { display: none; } }
+
+/* ══════════════════════════════════════════════════════════════
+   ملاحظات الثلاجة — notes column with an append-only trail
+══════════════════════════════════════════════════════════════ */
+.frg-note-col { width: 230px; min-width: 210px; }
+
+.frg-note-cell { position: relative; display: flex; flex-direction: column; gap: 3px; }
+
+.frg-note-input {
+  width: 100%; resize: vertical; min-height: 34px;
+  padding: 5px 7px; font-size: 0.75rem; line-height: 1.5;
+  font-family: inherit; color: #1f2937;
+  border: 1px dashed #cbd5e1; border-radius: 7px; background: transparent;
+  transition: border-color .15s, background .15s;
+}
+.frg-note-input--has { background: #fffbeb; border-style: solid; border-color: #fcd34d; }
+.frg-note-input:focus {
+  outline: none; background: #fff;
+  border: 1px solid #2563eb; box-shadow: 0 0 0 2px rgba(37, 99, 235, .12);
+}
+.frg-note-input:disabled { background: transparent; color: #6b7280; cursor: default; }
+
+.frg-note-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; min-height: 20px; }
+.frg-note-btn {
+  padding: 2px 7px; font-size: 0.68rem; font-weight: 700;
+  border: 1px solid #d1d5db; border-radius: 6px; background: #fff;
+  color: #4b5563; cursor: pointer;
+}
+.frg-note-btn:hover { border-color: #9ca3af; background: #f9fafb; }
+.frg-note-btn--save { border-color: #16a34a; color: #16a34a; background: rgba(22,163,74,.06); }
+.frg-note-btn--save:hover { background: #16a34a; color: #fff; }
+.frg-note-btn--log { border-color: #c7d2fe; color: #4338ca; background: #eef2ff; }
+.frg-note-ok  { font-size: 0.66rem; font-weight: 700; color: #16a34a; }
+.frg-note-err { font-size: 0.66rem; font-weight: 700; color: #dc2626; }
+.frg-note-meta { font-size: 0.63rem; color: #9ca3af; line-height: 1.5; }
+
+/* Trail popover */
+.frg-note-log {
+  position: absolute; top: 100%; inset-inline-end: 0; z-index: 30;
+  width: 300px; max-height: 260px; overflow-y: auto;
+  margin-top: 4px; padding: 8px 10px;
+  background: #fff; border: 1px solid #e5e7eb; border-radius: 9px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, .14);
+}
+.frg-note-log__head {
+  display: flex; align-items: center; justify-content: space-between;
+  font-size: 0.72rem; font-weight: 800; color: #374151;
+  padding-bottom: 6px; border-bottom: 1px solid #f1f5f9; margin-bottom: 6px;
+}
+.frg-note-log__item { padding: 5px 0; border-bottom: 1px dashed #f1f5f9; }
+.frg-note-log__item:last-child { border-bottom: none; }
+.frg-note-log__text { font-size: 0.73rem; color: #1f2937; line-height: 1.6; white-space: pre-wrap; }
+.frg-note-log__cleared { color: #9ca3af; }
+.frg-note-log__meta { font-size: 0.63rem; color: #9ca3af; margin-top: 2px; }
+.frg-note-log__empty { font-size: 0.72rem; color: #9ca3af; padding: 6px 0; }
+
+@media print {
+  .frg-note-log { display: none; }
+  .frg-note-actions { display: none; }
+  .frg-note-input { border: none; background: transparent; padding: 0; resize: none; }
+}
+
+/* lookup source note — "استحضار" tells you whether the values came from the
+   uploaded customer list or fell back to invoices */
+.frg-lookup-info {
+  margin-top: 4px; font-size: 0.7rem; font-weight: 600; color: #15803d;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   طلب نقل ثلاجة — request → approval workflow
+══════════════════════════════════════════════════════════════ */
+.frg-btn-request { background: #eef2ff; color: #4338ca; border: 1px solid #c7d2fe; }
+.frg-btn-request:hover { background: #e0e7ff; }
+
+.frg-transfer-request { border-color: #c7d2fe !important; background: #f8faff; }
+.frg-req-hint {
+  font-size: 0.72rem; color: #4338ca; background: #eef2ff;
+  border: 1px solid #c7d2fe; border-radius: 8px; padding: 7px 10px; margin-bottom: 10px; line-height: 1.7;
+}
+.frg-req-preview {
+  margin: 8px 0 12px; padding: 10px 12px; border-radius: 9px;
+  background: #fff; border: 1px dashed #c7d2fe;
+}
+.frg-req-preview__row {
+  display: flex; justify-content: space-between; gap: 10px;
+  font-size: 0.76rem; padding: 3px 0; color: #475569;
+}
+.frg-req-preview__arrow { text-align: center; color: #4338ca; font-size: 1.1rem; margin: 4px 0; }
+
+/* banner + list */
+.frg-req-banner {
+  display: flex; gap: 11px; align-items: center; flex-wrap: wrap;
+  margin-bottom: 12px; padding: 11px 14px;
+  border: 1px solid #818cf8; border-right: 4px solid #4f46e5;
+  border-radius: 10px; background: #eef2ff;
+}
+.frg-req-banner__icon  { font-size: 19px; }
+.frg-req-banner__body  { flex: 1; min-width: 240px; }
+.frg-req-banner__title { font-weight: 800; font-size: 0.85rem; color: #3730a3; }
+.frg-req-banner__sub   { font-size: 0.73rem; color: #4338ca; margin-top: 2px; }
+.frg-req-list { flex-basis: 100%; margin-top: 8px; display: flex; flex-direction: column; gap: 8px; }
+.frg-req-item {
+  display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+  background: #fff; border: 1px solid #e0e7ff; border-radius: 9px; padding: 9px 11px;
+}
+.frg-req-item__main { flex: 1; min-width: 260px; display: flex; flex-direction: column; gap: 3px; }
+.frg-req-item__move { font-size: 0.75rem; color: #1e293b; line-height: 1.7; }
+.frg-req-item__meta { font-size: 0.68rem; color: #94a3b8; }
+.frg-req-item__actions { display: flex; gap: 6px; flex-wrap: wrap; }
+
+@media print { .frg-req-banner { display: none; } }

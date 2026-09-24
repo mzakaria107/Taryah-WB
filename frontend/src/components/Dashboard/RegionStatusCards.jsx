@@ -1,5 +1,6 @@
 import React from 'react';
 import useRegionCardSettings, { SIZE_OPTS } from '../../hooks/useRegionCardSettings';
+import { useLanguage } from '../../context/LanguageContext';
 import './RegionBalanceCards.css';
 import './RegionStatusCards.css';
 
@@ -32,6 +33,8 @@ function SkeletonCard() {
 
 /* ── Main component ── */
 export default function RegionStatusCards({ statusByRegion, loading }) {
+  const { lang } = useLanguage();
+  const en = lang === 'en';
   const {
     cardSize, fontScale, canFontUp, canFontDown,
   } = useRegionCardSettings();    // reuse same settings as balance cards
@@ -83,7 +86,9 @@ export default function RegionStatusCards({ statusByRegion, loading }) {
 
   const grandTotal = regions.reduce((s, r) => s + r.total, 0);
 
-  const sectionLabel = '📋 الفواتير غير المسددة كليًا أو جزئيًا — حسب المنطقة والسنة';
+  const sectionLabel = en
+    ? '📋 Unpaid or Partially Paid Invoices — by Region and Year'
+    : '📋 الفواتير غير المسددة كليًا أو جزئيًا — حسب المنطقة والسنة';
 
   if (loading) {
     return (
@@ -106,17 +111,17 @@ export default function RegionStatusCards({ statusByRegion, loading }) {
       <div className="rsc-header-row">
         <span className="rsc-section-lbl">{sectionLabel}</span>
         <span className="rsc-grand-total">
-          إجمالي:&nbsp;
+          {en ? 'Total:' : 'إجمالي:'}&nbsp;
           <strong>{grandTotal.toLocaleString('en-SA')}</strong>
-          &nbsp;فاتورة
+          &nbsp;{en ? 'invoices' : 'فاتورة'}
           &nbsp;·&nbsp;
-          <span style={{ color: '#c62828' }}>✗ {(statusByRegion?.unpaid?.total ?? 0).toLocaleString('en-SA')} غير مسددة</span>
+          <span style={{ color: '#c62828' }}>✗ {(statusByRegion?.unpaid?.total ?? 0).toLocaleString('en-SA')} {en ? 'unpaid' : 'غير مسددة'}</span>
           &nbsp;·&nbsp;
-          <span style={{ color: '#e65100' }}>◑ {(statusByRegion?.partial?.total ?? 0).toLocaleString('en-SA')} جزئي</span>
+          <span style={{ color: '#e65100' }}>◑ {(statusByRegion?.partial?.total ?? 0).toLocaleString('en-SA')} {en ? 'partial' : 'جزئي'}</span>
         </span>
       </div>
 
-      <div className="rbc-strip" style={stripVars} role="list" aria-label="فواتير المناطق حسب السنة">
+      <div className="rbc-strip" style={stripVars} role="list" aria-label={en ? 'Region invoices by year' : 'فواتير المناطق حسب السنة'}>
         {regions.map((region, idx) => {
           const pctOfAll = grandTotal > 0 ? (region.total / grandTotal * 100) : 0;
 
@@ -144,7 +149,7 @@ export default function RegionStatusCards({ statusByRegion, loading }) {
               {/* Total count */}
               <div className="rbc-total-bal rsc-total-count">
                 {region.total.toLocaleString('en-SA')}
-                <span className="rbc-total-lbl"> فاتورة</span>
+                <span className="rbc-total-lbl"> {en ? 'invoices' : 'فاتورة'}</span>
               </div>
 
               {/* Divider */}

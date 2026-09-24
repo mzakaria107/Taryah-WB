@@ -3,11 +3,16 @@ import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { X, ExternalLink } from 'lucide-react';
 import client from '../../api/client';
+import { useLanguage } from '../../context/LanguageContext';
 import './RegionMonthDrawer.css';
 
 const MONTH_AR = [
   'يناير','فبراير','مارس','أبريل','مايو','يونيو',
   'يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر',
+];
+const MONTH_EN = [
+  'Jan','Feb','Mar','Apr','May','Jun',
+  'Jul','Aug','Sep','Oct','Nov','Dec',
 ];
 
 function fmtBal(n) {
@@ -30,6 +35,9 @@ function SkeletonRows() {
 
 export default function RegionMonthDrawer({ cell, customerTypeParam, onClose }) {
   const navigate = useNavigate();
+  const { lang } = useLanguage();
+  const en = lang === 'en';
+  const MONTHS = en ? MONTH_EN : MONTH_AR;
   const { region_id, region_name, month, year } = cell;
 
   const { data, isLoading } = useQuery({
@@ -57,9 +65,9 @@ export default function RegionMonthDrawer({ cell, customerTypeParam, onClose }) 
         <div className="rmd-header">
           <div className="rmd-header-text">
             <span className="rmd-region">{region_name}</span>
-            <span className="rmd-period">{MONTH_AR[month - 1]} {year}</span>
+            <span className="rmd-period">{MONTHS[month - 1]} {year}</span>
           </div>
-          <button className="rmd-close" onClick={onClose} title="إغلاق">
+          <button className="rmd-close" onClick={onClose} title={en ? 'Close' : 'إغلاق'}>
             <X size={17} />
           </button>
         </div>
@@ -68,23 +76,23 @@ export default function RegionMonthDrawer({ cell, customerTypeParam, onClose }) 
         <div className="rmd-kpis">
           <div className="rmd-kpi">
             <span className="rmd-kpi-val">{isLoading ? '—' : (data?.customerCount ?? 0).toLocaleString('en-SA')}</span>
-            <span className="rmd-kpi-lbl">عميل</span>
+            <span className="rmd-kpi-lbl">{en ? 'customers' : 'عميل'}</span>
           </div>
           <div className="rmd-kpi">
             <span className="rmd-kpi-val">{isLoading ? '—' : (data?.invoiceCount ?? 0).toLocaleString('en-SA')}</span>
-            <span className="rmd-kpi-lbl">فاتورة</span>
+            <span className="rmd-kpi-lbl">{en ? 'invoices' : 'فاتورة'}</span>
           </div>
           <div className="rmd-kpi rmd-kpi-unpaid">
             <span className="rmd-kpi-val">{isLoading ? '—' : (data?.unpaidCount ?? 0).toLocaleString('en-SA')}</span>
-            <span className="rmd-kpi-lbl">✗ غير مسدد</span>
+            <span className="rmd-kpi-lbl">✗ {en ? 'unpaid' : 'غير مسدد'}</span>
           </div>
           <div className="rmd-kpi rmd-kpi-partial">
             <span className="rmd-kpi-val">{isLoading ? '—' : (data?.partialCount ?? 0).toLocaleString('en-SA')}</span>
-            <span className="rmd-kpi-lbl">◑ جزئي</span>
+            <span className="rmd-kpi-lbl">◑ {en ? 'partial' : 'جزئي'}</span>
           </div>
           <div className="rmd-kpi rmd-kpi-balance">
             <span className="rmd-kpi-val">{isLoading ? '—' : fmtBal(data?.totalBalance ?? 0)}</span>
-            <span className="rmd-kpi-lbl">ر.س رصيد</span>
+            <span className="rmd-kpi-lbl">{en ? 'SAR balance' : 'ر.س رصيد'}</span>
           </div>
         </div>
 
@@ -93,11 +101,11 @@ export default function RegionMonthDrawer({ cell, customerTypeParam, onClose }) 
           <table className="rmd-table">
             <thead>
               <tr>
-                <th>العميل</th>
-                <th>الخط</th>
+                <th>{en ? 'Customer' : 'العميل'}</th>
+                <th>{en ? 'Route' : 'الخط'}</th>
                 <th>✗</th>
                 <th>◑</th>
-                <th>الرصيد</th>
+                <th>{en ? 'Balance' : 'الرصيد'}</th>
                 <th></th>
               </tr>
             </thead>
@@ -105,14 +113,14 @@ export default function RegionMonthDrawer({ cell, customerTypeParam, onClose }) 
               {isLoading ? (
                 <SkeletonRows />
               ) : customers.length === 0 ? (
-                <tr><td colSpan={6} className="rmd-empty">لا توجد بيانات</td></tr>
+                <tr><td colSpan={6} className="rmd-empty">{en ? 'No data' : 'لا توجد بيانات'}</td></tr>
               ) : (
                 customers.map(c => (
                   <tr
                     key={c.customer_id}
                     className="rmd-cust-row"
                     onClick={() => navigate(`/customers/${c.customer_id}`)}
-                    title="انقر لعرض تفاصيل العميل"
+                    title={en ? 'Click to view customer details' : 'انقر لعرض تفاصيل العميل'}
                   >
                     <td>
                       <span className="rmd-cust-name">{c.customer_name}</span>
@@ -153,7 +161,7 @@ export default function RegionMonthDrawer({ cell, customerTypeParam, onClose }) 
               <tfoot>
                 <tr>
                   <td colSpan={2} className="rmd-tf-lbl">
-                    المجموع ({customers.length} عميل)
+                    {en ? `Total (${customers.length} customers)` : `المجموع (${customers.length} عميل)`}
                   </td>
                   <td><span className="rmd-badge rmd-badge-unpaid">{data?.unpaidCount ?? 0}</span></td>
                   <td><span className="rmd-badge rmd-badge-partial">{data?.partialCount ?? 0}</span></td>

@@ -65,12 +65,12 @@ const BATCH_SIZE = 500;
  * We return all non-null variants so the filter can use = ANY($x).
  */
 async function resolveRegionBranch(regionId) {
-  if (!regionId) return null;
+  if (!regionId || (Array.isArray(regionId) && !regionId.length)) return null;
+  const ids = Array.isArray(regionId) ? regionId : [regionId];
   try {
-    const res = await pool.query('SELECT name_ar, name_en FROM regions WHERE id = $1', [regionId]);
+    const res = await pool.query('SELECT name_ar, name_en FROM regions WHERE id = ANY($1::int[])', [ids]);
     if (!res.rows.length) return null;
-    const { name_ar, name_en } = res.rows[0];
-    const names = [name_ar, name_en].filter(Boolean);
+    const names = res.rows.flatMap(r => [r.name_ar, r.name_en]).filter(Boolean);
     return names.length ? names : null;
   } catch { return null; }
 }
@@ -177,10 +177,13 @@ router.post('/upload', verifyToken, applyRegionFilter, csvUpload.single('file'),
     const COL_QTY         = findKey('Total Net qty with FOC');
     const COL_CATEGORY    = findKey('Category Name English');
     const COL_BAD_RETURN  = findKey('Total Bad Return Qty');
+    const COL_ITEM_CAT    = findKey('Item Category Name English');
+    const COL_ITEM_NAME   = findKey('Item Name English');
+    const COL_REVENUE     = findKey('Total Net Sales Revenue');
     // Day: prefer explicit 'Day' column, fallback to extracting from 'Transaction Date'
     const COL_DAY         = sampleKeys.includes('Day') ? 'Day' : null;
     const COL_DATE        = sampleKeys.find(k => k.replace(/^﻿/, '').trim() === 'Transaction Date') || null;
-    console.log('[SalesActivity] Column mapping:', { COL_CUST_NAME, COL_CUST_CODE, COL_BRANCH, COL_REP, COL_INVOICE, COL_MONTH, COL_QTY, COL_CATEGORY, COL_BAD_RETURN, COL_DAY, COL_DATE });
+    console.log('[SalesActivity] Column mapping:', { COL_CUST_NAME, COL_CUST_CODE, COL_BRANCH, COL_REP, COL_INVOICE, COL_MONTH, COL_QTY, COL_CATEGORY, COL_ITEM_CAT, COL_ITEM_NAME, COL_BAD_RETURN, COL_REVENUE, COL_DAY, COL_DATE });
     if (rawRows.length > 0) {
       const sample = rawRows[0];
       console.log('[SalesActivity] First row sample:', {
@@ -221,6 +224,8 @@ router.post('/upload', verifyToken, applyRegionFilter, csvUpload.single('file'),
       const qty          = parseInt(qtyRaw, 10) || 0;
       const badReturnRaw = String(r[COL_BAD_RETURN] || '0').replace(/,/g, '').trim();
       const badReturnQty = parseInt(badReturnRaw, 10) || 0;
+      const revenueRaw   = String(r[COL_REVENUE]    || '0').replace(/,/g, '').trim();
+      const netRevenue   = parseFloat(revenueRaw) || 0;
 
       let day = null;
       if (COL_DAY && r[COL_DAY]) {
@@ -231,18 +236,31 @@ router.post('/upload', verifyToken, applyRegionFilter, csvUpload.single('file'),
         if (m) day = parseInt(m[1], 10) || null;
       }
 
+      // Year must come from the actual transaction date, not be assumed —
+      // a single upload can span a year boundary (e.g. rows for both
+      // December of last year and January of this year), and hardcoding
+      // one year for the whole file mislabels whichever rows don't match.
+      let reportYear = new Date().getFullYear(); // fallback when no date column is present
+      if (COL_DATE && r[COL_DATE]) {
+        const ym = String(r[COL_DATE]).trim().match(/^(\d{4})-/);
+        if (ym) reportYear = parseInt(ym[1], 10);
+      }
+
       validRows.push({
-        customer_name:  custName  || custCode,
-        customer_code:  custCode,
-        branch_name:    String(r[COL_BRANCH]   || '').trim() || null,
-        salesrep_name:  String(r[COL_REP]      || '').trim() || null,
-        category_name:  String(r[COL_CATEGORY] || '').trim() || null,
-        invoice_number: invoiceNum,
-        month_name:     monthName,
-        month_num:      monthNum,
-        report_year:    2026,
+        customer_name:    custName  || custCode,
+        customer_code:    custCode,
+        branch_name:      String(r[COL_BRANCH]    || '').trim() || null,
+        salesrep_name:    String(r[COL_REP]       || '').trim() || null,
+        category_name:    String(r[COL_CATEGORY]  || '').trim() || null,
+        item_category_en: String(r[COL_ITEM_CAT]  || '').trim() || '',
+        item_name_en:     String(r[COL_ITEM_NAME] || '').trim() || '',
+        invoice_number:   invoiceNum,
+        month_name:       monthName,
+        month_num:        monthNum,
+        report_year:      reportYear,
         qty,
-        bad_return_qty: badReturnQty,
+        bad_return_qty:   badReturnQty,
+        net_revenue:      netRevenue,
         day,
       });
     }
@@ -252,33 +270,35 @@ router.post('/upload', verifyToken, applyRegionFilter, csvUpload.single('file'),
     if (!validRows.length)
       return res.status(400).json({ error: 'لا توجد صفوف صالحة بعد التحقق', errors: errors.slice(0, 50) });
 
-    // ── Determine which months & year are in the uploaded file ──
-    // Only those months will be replaced; all other months stay untouched.
-    const uploadYear   = validRows[0].report_year;
-    const uploadMonths = [...new Set(validRows.map(r => r.month_num))];
-    console.log(`[SalesActivity] Will replace month(s) ${uploadMonths.join(',')} of ${uploadYear} only`);
+    // ── Determine which (year, month) combinations are in the uploaded
+    // file — only those exact combos get replaced. A single upload can
+    // legitimately span a year boundary (e.g. December of last year plus
+    // January of this year), so this can no longer assume one shared year. ──
+    const yearMonthPairs = [...new Set(validRows.map(r => `${r.report_year}-${r.month_num}`))]
+      .map(s => { const [y, m] = s.split('-').map(Number); return { year: y, month: m }; });
+    console.log(`[SalesActivity] Will replace: ${yearMonthPairs.map(p => `${p.month}/${p.year}`).join(', ')}`);
 
-    // Batch replace (DELETE month(s) then INSERT fresh)
+    // Batch replace (DELETE each (year, month) combo then INSERT fresh)
     const dbClient = await pool.connect();
     let inserted = 0, deleted = 0;
 
     try {
       await dbClient.query('BEGIN');
 
-      // Delete ONLY the months present in the uploaded file for this year
-      const delRes = await dbClient.query(
-        `DELETE FROM sales_activity
-         WHERE report_year = $1
-           AND month_num   = ANY($2::smallint[])`,
-        [uploadYear, uploadMonths]
-      );
-      deleted = delRes.rowCount;
-      console.log(`[SalesActivity] Deleted ${deleted} old rows for month(s) ${uploadMonths.join(',')}`);
+      // Delete ONLY the exact (year, month) combos present in this upload
+      for (const { year: y, month: m } of yearMonthPairs) {
+        const delRes = await dbClient.query(
+          `DELETE FROM sales_activity WHERE report_year = $1 AND month_num = $2`,
+          [y, m]
+        );
+        deleted += delRes.rowCount;
+      }
+      console.log(`[SalesActivity] Deleted ${deleted} old rows total`);
 
       // Insert all new rows in batches
       for (let i = 0; i < validRows.length; i += BATCH_SIZE) {
         const chunk = validRows.slice(i, i + BATCH_SIZE);
-        const COLS  = 12;   // +1 for bad_return_qty, +1 for day
+        const COLS  = 15;
         const vals  = [];
         const ph    = chunk.map((row, idx) => {
           const b = idx * COLS;
@@ -287,23 +307,27 @@ router.post('/upload', verifyToken, applyRegionFilter, csvUpload.single('file'),
             row.salesrep_name, row.category_name, row.invoice_number,
             row.month_name, row.month_num, row.report_year, row.qty,
             row.bad_return_qty ?? 0, row.day ?? null,
+            row.item_category_en, row.item_name_en, row.net_revenue ?? 0,
           );
-          return `($${b+1},$${b+2},$${b+3},$${b+4},$${b+5},$${b+6},$${b+7},$${b+8},$${b+9},$${b+10},$${b+11},$${b+12})`;
+          return `($${b+1},$${b+2},$${b+3},$${b+4},$${b+5},$${b+6},$${b+7},$${b+8},$${b+9},$${b+10},$${b+11},$${b+12},$${b+13},$${b+14},$${b+15})`;
         });
 
         const result = await dbClient.query(
           `INSERT INTO sales_activity
              (customer_name, customer_code, branch_name, salesrep_name,
               category_name, invoice_number, month_name, month_num, report_year, qty,
-              bad_return_qty, day)
+              bad_return_qty, day, item_category_en, item_name_en, net_revenue)
            VALUES ${ph.join(',')}
-           ON CONFLICT (invoice_number, report_year) DO UPDATE SET
-             qty            = EXCLUDED.qty,
-             bad_return_qty = EXCLUDED.bad_return_qty,
-             day            = EXCLUDED.day,
-             category_name  = EXCLUDED.category_name,
-             uploaded_at    = NOW(),
-             uploaded_by    = $${chunk.length * COLS + 1}
+           ON CONFLICT (invoice_number, report_year, item_category_en, item_name_en) DO UPDATE SET
+             qty              = EXCLUDED.qty,
+             bad_return_qty   = EXCLUDED.bad_return_qty,
+             day              = EXCLUDED.day,
+             category_name    = EXCLUDED.category_name,
+             item_category_en = EXCLUDED.item_category_en,
+             item_name_en     = EXCLUDED.item_name_en,
+             net_revenue      = EXCLUDED.net_revenue,
+             uploaded_at      = NOW(),
+             uploaded_by      = $${chunk.length * COLS + 1}
            RETURNING id`,
           [...vals, req.user.id]
         );
@@ -321,7 +345,7 @@ router.post('/upload', verifyToken, applyRegionFilter, csvUpload.single('file'),
     // Clean up temp file
     try { fs.unlinkSync(req.file.path); } catch (_) {}
 
-    console.log(`[SalesActivity] inserted=${inserted}, deleted=${deleted}, months=${uploadMonths.join(',')}`);
+    console.log(`[SalesActivity] inserted=${inserted}, deleted=${deleted}, combos=${yearMonthPairs.map(p => `${p.month}/${p.year}`).join(',')}`);
     await pool.query(
       `UPDATE upload_batches SET status='success', row_count=$1 WHERE id=$2`,
       [inserted, batchId]
@@ -330,8 +354,8 @@ router.post('/upload', verifyToken, applyRegionFilter, csvUpload.single('file'),
       success: true,
       inserted,
       deleted,
-      months:  uploadMonths,
-      year:    uploadYear,
+      months:  [...new Set(yearMonthPairs.map(p => p.month))],
+      years:   [...new Set(yearMonthPairs.map(p => p.year))],
       total:   validRows.length,
       errors:  errors.slice(0, 50),
     });
@@ -374,12 +398,44 @@ function filterClause(branch, rep, startAt) {
   return { sql: conds.length ? ' AND ' + conds.join(' AND ') : '', vals };
 }
 
+// Parse comma-separated category list from a query param string
+function parseCats(str) {
+  return (str || '').split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+}
+
+// Extended filter: branch + rep + optional include/exclude on category_name
+function buildFilter(branch, rep, includeCats, excludeCats, startAt, alias = '') {
+  const conds = [];
+  const vals  = [];
+  let p = startAt;
+  if (branch) {
+    const bc = branchCondition(branch, p, alias);
+    conds.push(bc.sql.replace(/^ AND /, ''));
+    vals.push(bc.val);
+    p++;
+  }
+  const repCol = alias ? `${alias}salesrep_name` : 'salesrep_name';
+  if (rep) { conds.push(`${repCol} = $${p++}`); vals.push(rep); }
+  const catCol = alias ? `${alias}category_name` : 'category_name';
+  if (includeCats && includeCats.length) {
+    conds.push(`LOWER(TRIM(COALESCE(${catCol},''))) = ANY($${p++}::text[])`);
+    vals.push(includeCats);
+  }
+  if (excludeCats && excludeCats.length) {
+    conds.push(`LOWER(TRIM(COALESCE(${catCol},''))) != ALL($${p++}::text[])`);
+    vals.push(excludeCats);
+  }
+  return { sql: conds.length ? ' AND ' + conds.join(' AND ') : '', vals };
+}
+
 // ── GET /kpi ─────────────────────────────────────────────────
 router.get('/kpi', verifyToken, applyRegionFilter, async (req, res) => {
-  const year   = parseInt(req.query.year || '2026', 10);
-  let   branch = (req.query.branch || '').trim() || null;
-  const rep    = (req.query.rep    || '').trim() || null;
-  if (req.regionFilter) branch = await resolveRegionBranch(req.regionFilter);
+  const year        = parseInt(req.query.year || '2026', 10);
+  let   branch      = (req.query.branch || '').trim() || null;
+  const rep         = (req.query.rep    || '').trim() || null;
+  const includeCats = parseCats(req.query.include_cats);
+  const excludeCats = parseCats(req.query.exclude_cats);
+  if (req.regionFilter && req.regionFilter.length) branch = await resolveRegionBranch(req.regionFilter);
 
   try {
     // Max month & prev month (no filter needed here)
@@ -392,16 +448,17 @@ router.get('/kpi', verifyToken, applyRegionFilter, async (req, res) => {
 
     // Each query gets its own filter clause with correct parameter positions
     // Queries with only $1=year: filter starts at $2
-    const f1 = filterClause(branch, rep, 2);
+    const f1 = buildFilter(branch, rep, includeCats, excludeCats, 2);
     // Queries with $1=year, $2=month: filter starts at $3
-    const f2 = filterClause(branch, rep, 3);
+    const f2 = buildFilter(branch, rep, includeCats, excludeCats, 3);
     // Queries with $1=year, $2=prevMonth, $3=maxMonth: filter starts at $4
-    const f3 = filterClause(branch, rep, 4);
+    const f3 = buildFilter(branch, rep, includeCats, excludeCats, 4);
 
     const [totalInvRes, totalCustRes, byMonthRes, activeRes, stoppedRes, newRes] = await Promise.all([
-      // Total invoices
+      // Total invoices — DISTINCT invoice_number: sales_activity holds one row
+      // per invoice LINE (~2.3 per invoice), so COUNT(*) counts lines.
       pool.query(
-        `SELECT COUNT(*) AS cnt FROM sales_activity WHERE report_year=$1${f1.sql}`,
+        `SELECT COUNT(DISTINCT invoice_number) AS cnt FROM sales_activity WHERE report_year=$1${f1.sql}`,
         [year, ...f1.vals]
       ),
       // Total distinct customers
@@ -409,9 +466,10 @@ router.get('/kpi', verifyToken, applyRegionFilter, async (req, res) => {
         `SELECT COUNT(DISTINCT customer_code) AS cnt FROM sales_activity WHERE report_year=$1${f1.sql}`,
         [year, ...f1.vals]
       ),
-      // Invoices by month
+      // Invoices by month. Safe to sum against the yearly total: no invoice
+      // number appears in two different months (verified on production).
       pool.query(
-        `SELECT month_num, COUNT(*) AS cnt
+        `SELECT month_num, COUNT(DISTINCT invoice_number) AS cnt
          FROM sales_activity WHERE report_year=$1${f1.sql}
          GROUP BY month_num ORDER BY month_num`,
         [year, ...f1.vals]
@@ -473,10 +531,12 @@ router.get('/kpi', verifyToken, applyRegionFilter, async (req, res) => {
 
 // ── GET /region-stats ─────────────────────────────────────────
 router.get('/region-stats', verifyToken, applyRegionFilter, async (req, res) => {
-  const year   = parseInt(req.query.year || '2026', 10);
-  let   branch = (req.query.branch || '').trim() || null;
-  const rep    = (req.query.rep    || '').trim() || null;
-  if (req.regionFilter) branch = await resolveRegionBranch(req.regionFilter);
+  const year        = parseInt(req.query.year || '2026', 10);
+  let   branch      = (req.query.branch || '').trim() || null;
+  const rep         = (req.query.rep    || '').trim() || null;
+  const includeCats = parseCats(req.query.include_cats);
+  const excludeCats = parseCats(req.query.exclude_cats);
+  if (req.regionFilter && req.regionFilter.length) branch = await resolveRegionBranch(req.regionFilter);
 
   try {
     const maxRes = await pool.query(
@@ -489,11 +549,11 @@ router.get('/region-stats', verifyToken, applyRegionFilter, async (req, res) => 
     if (!maxMonth) return res.json({ maxMonth: 0, prevMonth: null, regions: [] });
 
     // Each query: $1=year, $2=month → filter starts at $3
-    const f2 = filterClause(branch, rep, 3);
+    const f2 = buildFilter(branch, rep, includeCats, excludeCats, 3);
     // Stopped query: $1=year, $2=prevMonth, $3=maxMonth → filter starts at $4
-    const f3 = filterClause(branch, rep, 4);
+    const f3 = buildFilter(branch, rep, includeCats, excludeCats, 4);
 
-    const f2prev = filterClause(branch, rep, 3);
+    const f2prev = buildFilter(branch, rep, includeCats, excludeCats, 3);
 
     // Run all region queries in parallel
     const [newByRegion, currentTotalByRegion, stoppedByRegionRes, prevTotalByRegionRes] = await Promise.all([
@@ -588,10 +648,12 @@ router.get('/region-stats', verifyToken, applyRegionFilter, async (req, res) => 
 // ── GET /stopped-customers ───────────────────────────────────
 // Customers active in prevMonth but NOT in current (max) month
 router.get('/stopped-customers', verifyToken, applyRegionFilter, async (req, res) => {
-  const year   = parseInt(req.query.year || '2026', 10);
-  let   branch = (req.query.branch || '').trim() || null;
-  const rep    = (req.query.rep    || '').trim() || null;
-  if (req.regionFilter) branch = await resolveRegionBranch(req.regionFilter);
+  const year        = parseInt(req.query.year || '2026', 10);
+  let   branch      = (req.query.branch || '').trim() || null;
+  const rep         = (req.query.rep    || '').trim() || null;
+  const includeCats = parseCats(req.query.include_cats);
+  const excludeCats = parseCats(req.query.exclude_cats);
+  if (req.regionFilter && req.regionFilter.length) branch = await resolveRegionBranch(req.regionFilter);
 
   try {
     const maxRes = await pool.query(
@@ -605,7 +667,7 @@ router.get('/stopped-customers', verifyToken, applyRegionFilter, async (req, res
       return res.json({ currentMonth, prevMonth: null, customers: [] });
 
     // $1=year, $2=prevMonth, $3=currentMonth → filter from $4
-    const f = filterClause(branch, rep, 4);
+    const f = buildFilter(branch, rep, includeCats, excludeCats, 4);
 
     const result = await pool.query(
       `SELECT
@@ -613,7 +675,7 @@ router.get('/stopped-customers', verifyToken, applyRegionFilter, async (req, res
          MAX(sa.customer_name)  AS customer_name,
          MAX(sa.branch_name)    AS branch_name,
          MAX(sa.salesrep_name)  AS salesrep_name,
-         COUNT(*)               AS invoice_count,
+         COUNT(DISTINCT sa.invoice_number) AS invoice_count,
          SUM(sa.qty)            AS total_qty
        FROM sales_activity sa
        WHERE sa.report_year = $1
@@ -649,16 +711,32 @@ router.get('/stopped-customers', verifyToken, applyRegionFilter, async (req, res
 
 // ── GET /report ──────────────────────────────────────────────
 router.get('/report', verifyToken, applyRegionFilter, async (req, res) => {
-  const year   = parseInt(req.query.year || '2026', 10);
-  let   branch = (req.query.branch || '').trim() || null;
-  const rep    = (req.query.rep    || '').trim() || null;
-  if (req.regionFilter) branch = await resolveRegionBranch(req.regionFilter);
+  const year        = parseInt(req.query.year || '2026', 10);
+  let   branch      = (req.query.branch || '').trim() || null;
+  const rep         = (req.query.rep    || '').trim() || null;
+  const includeCats = parseCats(req.query.include_cats);
+  const excludeCats = parseCats(req.query.exclude_cats);
+  const dateFrom    = (req.query.from || '').trim() || null;
+  const dateTo      = (req.query.to   || '').trim() || null;
+  if (req.regionFilter && req.regionFilter.length) branch = await resolveRegionBranch(req.regionFilter);
+
+  /* sales_activity stores the invoice date split across
+     report_year / month_num / day, so a real date has to be rebuilt to
+     filter on it. day is fully populated, but GREATEST(...,1) guards
+     against a stray 0 blowing up make_date(). */
+  const ROW_DATE = `make_date(sa.report_year::int, sa.month_num::int, GREATEST(COALESCE(sa.day,1),1)::int)`;
 
   try {
-    // Build WHERE conditions
-    const conditions = ['sa.report_year = $1'];
-    const params     = [year];
-    let   p          = 2;
+    /* A date range is authoritative and REPLACES the year scope — data
+       spans 2024-2026, so pinning report_year while the user picks 2024
+       dates would return nothing at all. Without a range, behaviour is
+       unchanged: the report stays scoped to `year`. */
+    const useDateRange = Boolean(dateFrom || dateTo);
+    const conditions = [];
+    const params     = [];
+    let   p          = 1;
+
+    if (!useDateRange) { conditions.push(`sa.report_year = $${p++}`); params.push(year); }
 
     if (branch) {
       if (Array.isArray(branch)) {
@@ -668,8 +746,18 @@ router.get('/report', verifyToken, applyRegionFilter, async (req, res) => {
       }
     }
     if (rep) { conditions.push(`sa.salesrep_name = $${p++}`); params.push(rep); }
+    if (includeCats.length) {
+      conditions.push(`LOWER(TRIM(COALESCE(sa.category_name,''))) = ANY($${p++}::text[])`);
+      params.push(includeCats);
+    }
+    if (excludeCats.length) {
+      conditions.push(`LOWER(TRIM(COALESCE(sa.category_name,''))) != ALL($${p++}::text[])`);
+      params.push(excludeCats);
+    }
+    if (dateFrom) { conditions.push(`${ROW_DATE} >= $${p++}::date`); params.push(dateFrom); }
+    if (dateTo)   { conditions.push(`${ROW_DATE} <= $${p++}::date`); params.push(dateTo); }
 
-    const where = conditions.join(' AND ');
+    const where = conditions.length ? conditions.join(' AND ') : 'TRUE';
 
     // Get max month (current month in the data)
     const maxMonthRes = await pool.query(
@@ -678,12 +766,27 @@ router.get('/report', verifyToken, applyRegionFilter, async (req, res) => {
     );
     const maxMonth = parseInt(maxMonthRes.rows[0].max_month, 10);
 
-    // Get all distinct months present in the data for this year
+    /* Month columns come from the SAME filtered set as the data, so a date
+       range of Mar–Apr renders two columns rather than twelve mostly-empty
+       ones that look like the customer stopped buying. Columns carry their
+       YEAR too: a range crossing a year boundary would otherwise collapse
+       Jan-2025 and Jan-2026 into one column and silently add them up. */
     const monthsRes = await pool.query(
-      `SELECT DISTINCT month_num FROM sales_activity WHERE report_year = $1 ORDER BY month_num`,
-      [year]
+      `SELECT DISTINCT sa.report_year, sa.month_num
+       FROM sales_activity sa WHERE ${where}
+       ORDER BY sa.report_year, sa.month_num`,
+      params
     );
-    const months = monthsRes.rows.map(r => parseInt(r.month_num, 10));
+    const months = monthsRes.rows.map(r => {
+      const y = parseInt(r.report_year, 10);
+      const m = parseInt(r.month_num, 10);
+      return { key: `${y}-${m}`, year: y, month: m };
+    });
+    const multiYear = new Set(months.map(m => m.year)).size > 1;
+    // Reference "latest" column used for the نشط / غير نشط flag.
+    const maxKey = useDateRange
+      ? (months.length ? months[months.length - 1].key : null)
+      : (maxMonth ? `${year}-${maxMonth}` : null);
 
     // Aggregate: customer × month → sum qty, count invoices, sum bad_return_qty
     const dataRes = await pool.query(
@@ -693,15 +796,32 @@ router.get('/report', verifyToken, applyRegionFilter, async (req, res) => {
          MAX(sa.branch_name)            AS branch_name,
          MAX(sa.salesrep_name)          AS salesrep_name,
          MAX(sa.category_name)          AS category_name,
+         sa.report_year,
          sa.month_num,
-         SUM(sa.qty)                    AS total_qty,
-         COUNT(*)                       AS invoice_count,
-         SUM(sa.bad_return_qty)         AS total_bad_return_qty
+         SUM(sa.qty)                              AS total_qty,
+         COUNT(DISTINCT sa.invoice_number)        AS invoice_count,
+         SUM(sa.bad_return_qty)                   AS total_bad_return_qty
        FROM sales_activity sa
        WHERE ${where}
-       GROUP BY sa.customer_code, sa.month_num`,
+       GROUP BY sa.customer_code, sa.report_year, sa.month_num`,
       params
     );
+
+    /* Last invoice date per customer — deliberately across ALL years and
+       ignoring the report's own filters, because the question this answers
+       is "when did this customer last buy at all", which is exactly what
+       you need when a row shows up as inactive. */
+    const lastInvRes = await pool.query(
+      `SELECT sa.customer_code, MAX(${ROW_DATE}) AS last_invoice_date
+       FROM sales_activity sa
+       GROUP BY sa.customer_code`
+    );
+    const lastInvMap = {};
+    for (const r of lastInvRes.rows) {
+      lastInvMap[r.customer_code] = r.last_invoice_date
+        ? new Date(r.last_invoice_date).toISOString().slice(0, 10)
+        : null;
+    }
 
     // Notes
     const notesRes = await pool.query(
@@ -724,21 +844,25 @@ router.get('/report', verifyToken, applyRegionFilter, async (req, res) => {
           category_name:       row.category_name,
           months:              {},
           total:               0,
+          total_qty:           0,
           total_bad_return_qty: 0,
         });
       }
-      const c  = custMap.get(code);
-      const mn = parseInt(row.month_num, 10);
-      c.months[mn]           = parseInt(row.invoice_count, 10);
+      const c   = custMap.get(code);
+      const key = `${parseInt(row.report_year, 10)}-${parseInt(row.month_num, 10)}`;
+      const qty = parseInt(row.total_qty || 0, 10);
+      c.months[key]          = { invoice_count: parseInt(row.invoice_count, 10), qty };
       c.total               += parseInt(row.invoice_count, 10);
+      c.total_qty            += qty;
       c.total_bad_return_qty += parseInt(row.total_bad_return_qty || 0, 10);
     }
 
     // Add note & active_current flag
     const customers = Array.from(custMap.values()).map(c => ({
       ...c,
-      active_current: Boolean(maxMonth && c.months[maxMonth] > 0),
-      note:           notesMap[c.customer_code] || '',
+      active_current:    Boolean(maxKey && c.months[maxKey]?.invoice_count > 0),
+      note:              notesMap[c.customer_code] || '',
+      last_invoice_date: lastInvMap[c.customer_code] || null,
     }));
 
     // Sort: inactive first (desc total), then active (desc total)
@@ -749,7 +873,7 @@ router.get('/report', verifyToken, applyRegionFilter, async (req, res) => {
       return b.total - a.total;
     });
 
-    res.json({ months, customers, maxMonth });
+    res.json({ months, customers, maxMonth, maxKey, multiYear });
 
   } catch (err) {
     console.error('[SalesActivity] report error:', err.message);
@@ -759,10 +883,12 @@ router.get('/report', verifyToken, applyRegionFilter, async (req, res) => {
 
 // ── GET /new-customers ───────────────────────────────────────
 router.get('/new-customers', verifyToken, applyRegionFilter, async (req, res) => {
-  const year   = parseInt(req.query.year || '2026', 10);
-  let   branch = (req.query.branch || '').trim() || null;
-  const rep    = (req.query.rep    || '').trim() || null;
-  if (req.regionFilter) branch = await resolveRegionBranch(req.regionFilter);
+  const year        = parseInt(req.query.year || '2026', 10);
+  let   branch      = (req.query.branch || '').trim() || null;
+  const rep         = (req.query.rep    || '').trim() || null;
+  const includeCats = parseCats(req.query.include_cats);
+  const excludeCats = parseCats(req.query.exclude_cats);
+  if (req.regionFilter && req.regionFilter.length) branch = await resolveRegionBranch(req.regionFilter);
 
   try {
     // Max month
@@ -780,6 +906,14 @@ router.get('/new-customers', verifyToken, applyRegionFilter, async (req, res) =>
 
     if (branch) { const bc = branchCondition(branch, p++, 'sa.'); filterConds.push(bc.sql.replace(/^ AND /, '')); filterParams.push(bc.val); }
     if (rep)    { filterConds.push(`sa.salesrep_name = $${p++}`); filterParams.push(rep); }
+    if (includeCats.length) {
+      filterConds.push(`LOWER(TRIM(COALESCE(sa.category_name,''))) = ANY($${p++}::text[])`);
+      filterParams.push(includeCats);
+    }
+    if (excludeCats.length) {
+      filterConds.push(`LOWER(TRIM(COALESCE(sa.category_name,''))) != ALL($${p++}::text[])`);
+      filterParams.push(excludeCats);
+    }
 
     const extraWhere = filterConds.length ? ' AND ' + filterConds.join(' AND ') : '';
 
@@ -790,7 +924,7 @@ router.get('/new-customers', verifyToken, applyRegionFilter, async (req, res) =>
          MAX(sa.customer_name)  AS customer_name,
          MAX(sa.branch_name)    AS branch_name,
          MAX(sa.salesrep_name)  AS salesrep_name,
-         COUNT(*)               AS invoice_count,
+         COUNT(DISTINCT sa.invoice_number) AS invoice_count,
          SUM(sa.qty)            AS total_qty
        FROM sales_activity sa
        WHERE sa.report_year = $1
@@ -844,7 +978,7 @@ router.get('/new-customers', verifyToken, applyRegionFilter, async (req, res) =>
 router.get('/meta', verifyToken, applyRegionFilter, async (req, res) => {
   const year   = parseInt(req.query.year || '2026', 10);
   let   branch = (req.query.branch || '').trim() || null;
-  if (req.regionFilter) branch = await resolveRegionBranch(req.regionFilter);
+  if (req.regionFilter && req.regionFilter.length) branch = await resolveRegionBranch(req.regionFilter);
 
   try {
     const bc2      = branchCondition(branch, 2);  // $2 position
@@ -865,7 +999,7 @@ router.get('/meta', verifyToken, applyRegionFilter, async (req, res) => {
           [year]
         );
 
-    const branchQuery = req.regionFilter
+    const branchQuery = (req.regionFilter && req.regionFilter.length)
       ? pool.query(
           `SELECT DISTINCT branch_name FROM sales_activity
            WHERE report_year = $1${bc2.sql} AND branch_name IS NOT NULL
@@ -879,18 +1013,25 @@ router.get('/meta', verifyToken, applyRegionFilter, async (req, res) => {
           [year]
         );
 
-    const [branchRes, repRes, yearsRes] = await Promise.all([
+    const [branchRes, repRes, yearsRes, custCatRes] = await Promise.all([
       branchQuery,
       repQuery,
       pool.query(
         `SELECT DISTINCT report_year FROM sales_activity ORDER BY report_year DESC`
       ),
+      pool.query(
+        `SELECT DISTINCT NULLIF(TRIM(category_name),'') AS val
+         FROM sales_activity WHERE report_year = $1 AND category_name IS NOT NULL
+         ORDER BY val`,
+        [year]
+      ),
     ]);
 
     res.json({
-      branches: branchRes.rows.map(r => r.branch_name),
-      reps:     repRes.rows.map(r => r.salesrep_name),
-      years:    yearsRes.rows.map(r => parseInt(r.report_year, 10)),
+      branches:           branchRes.rows.map(r => r.branch_name),
+      reps:               repRes.rows.map(r => r.salesrep_name),
+      years:              yearsRes.rows.map(r => parseInt(r.report_year, 10)),
+      customerCategories: custCatRes.rows.map(r => r.val).filter(Boolean),
     });
   } catch (err) {
     console.error('[SalesActivity] meta error:', err.message);
@@ -901,10 +1042,12 @@ router.get('/meta', verifyToken, applyRegionFilter, async (req, res) => {
 // ── GET /category-stats ──────────────────────────────────────
 // Returns customer-count per category for current month AND previous month
 router.get('/category-stats', verifyToken, applyRegionFilter, async (req, res) => {
-  const year   = parseInt(req.query.year || '2026', 10);
-  let   branch = (req.query.branch || '').trim() || null;
-  const rep    = (req.query.rep    || '').trim() || null;
-  if (req.regionFilter) branch = await resolveRegionBranch(req.regionFilter);
+  const year        = parseInt(req.query.year || '2026', 10);
+  let   branch      = (req.query.branch || '').trim() || null;
+  const rep         = (req.query.rep    || '').trim() || null;
+  const includeCats = parseCats(req.query.include_cats);
+  const excludeCats = parseCats(req.query.exclude_cats);
+  if (req.regionFilter && req.regionFilter.length) branch = await resolveRegionBranch(req.regionFilter);
 
   try {
     // Resolve max and prev months
@@ -916,7 +1059,7 @@ router.get('/category-stats', verifyToken, applyRegionFilter, async (req, res) =
     const prevMonth = maxMonth > 1 ? maxMonth - 1 : null;
 
     // filter clause starts at $3 (after $1=year, $2=month)
-    const { sql: filterSql, vals: filterVals } = filterClause(branch, rep, 3);
+    const { sql: filterSql, vals: filterVals } = buildFilter(branch, rep, includeCats, excludeCats, 3);
 
     function buildCats(rows) {
       const total = rows.reduce((s, r) => s + parseInt(r.customer_count, 10), 0);
@@ -1031,9 +1174,12 @@ router.get('/export', verifyToken, applyRegionFilter, async (req, res) => {
   const year   = parseInt(req.query.year || '2026', 10);
   let   branch = (req.query.branch || '').trim() || null;
   const rep    = (req.query.rep    || '').trim() || null;
-  if (req.regionFilter) branch = await resolveRegionBranch(req.regionFilter);
+  const dateFrom = (req.query.from || '').trim() || null;
+  const dateTo   = (req.query.to   || '').trim() || null;
+  if (req.regionFilter && req.regionFilter.length) branch = await resolveRegionBranch(req.regionFilter);
   // tab: 'report' (default) | 'new' | 'stopped'
   const tab    = (req.query.tab || 'report').trim();
+  const ROW_DATE = `make_date(sa.report_year::int, sa.month_num::int, GREATEST(COALESCE(sa.day,1),1)::int)`;
 
   const MONTH_AR = {
     1:'يناير',2:'فبراير',3:'مارس',4:'أبريل',5:'مايو',6:'يونيو',
@@ -1077,7 +1223,8 @@ router.get('/export', verifyToken, applyRegionFilter, async (req, res) => {
              MAX(sa.branch_name)    AS branch_name,
              MAX(sa.salesrep_name)  AS salesrep_name,
              MAX(sa.category_name)  AS category_name,
-             COUNT(*)               AS invoice_count
+             COUNT(DISTINCT sa.invoice_number) AS invoice_count,
+             SUM(sa.qty)            AS total_qty
            FROM sales_activity sa
            WHERE sa.report_year = $1 AND sa.month_num = $2${extraWhere}
              AND sa.customer_code NOT IN (
@@ -1104,7 +1251,7 @@ router.get('/export', verifyToken, applyRegionFilter, async (req, res) => {
 
         sheetRows = [
           ['#', 'اسم العميل', 'كود العميل', 'المنطقة', 'المندوب', 'التصنيف',
-           `فواتير ${MONTH_AR[maxMonth]}`, 'الحالة'],
+           `فواتير ${MONTH_AR[maxMonth]}`, 'صافي الكميات المباعة', 'الحالة'],
           ...result.rows.map((r, i) => [
             i + 1,
             r.customer_name,
@@ -1113,6 +1260,7 @@ router.get('/export', verifyToken, applyRegionFilter, async (req, res) => {
             r.salesrep_name || '',
             r.category_name || '',
             parseInt(r.invoice_count, 10),
+            parseInt(r.total_qty, 10) || 0,
             expReturning.has(r.customer_code) ? 'عميل عائد من عام سابق' : 'جديد',
           ]),
         ];
@@ -1136,7 +1284,7 @@ router.get('/export', verifyToken, applyRegionFilter, async (req, res) => {
              MAX(sa.branch_name)    AS branch_name,
              MAX(sa.salesrep_name)  AS salesrep_name,
              MAX(sa.category_name)  AS category_name,
-             COUNT(*)               AS invoice_count
+             COUNT(DISTINCT sa.invoice_number) AS invoice_count
            FROM sales_activity sa
            WHERE sa.report_year = $1 AND sa.month_num = $2${f.sql}
              AND sa.customer_code NOT IN (
@@ -1170,18 +1318,31 @@ router.get('/export', verifyToken, applyRegionFilter, async (req, res) => {
     } else {
       filename = `sales_report_${year}.xlsx`;
 
-      const conditions = ['sa.report_year = $1'];
-      const params     = [year];
-      let   p          = 2;
+      // A date range replaces the year scope — see the /report handler.
+      const useDateRange = Boolean(dateFrom || dateTo);
+      const conditions = [];
+      const params     = [];
+      let   p          = 1;
+      if (!useDateRange) { conditions.push(`sa.report_year = $${p++}`); params.push(year); }
       if (branch) { const bc = branchCondition(branch, p++, 'sa.'); conditions.push(bc.sql.replace(/^ AND /, '')); params.push(bc.val); }
       if (rep)    { conditions.push(`sa.salesrep_name = $${p++}`); params.push(rep); }
-      const where = conditions.join(' AND ');
+      if (dateFrom) { conditions.push(`${ROW_DATE} >= $${p++}::date`); params.push(dateFrom); }
+      if (dateTo)   { conditions.push(`${ROW_DATE} <= $${p++}::date`); params.push(dateTo); }
+      const where = conditions.length ? conditions.join(' AND ') : 'TRUE';
 
       const monthsRes = await pool.query(
-        `SELECT DISTINCT month_num FROM sales_activity WHERE report_year = $1 ORDER BY month_num`,
-        [year]
+        `SELECT DISTINCT sa.report_year, sa.month_num FROM sales_activity sa
+         WHERE ${where} ORDER BY sa.report_year, sa.month_num`,
+        params
       );
-      const months = monthsRes.rows.map(r => parseInt(r.month_num, 10));
+      const months = monthsRes.rows.map(r => ({
+        key: `${parseInt(r.report_year,10)}-${parseInt(r.month_num,10)}`,
+        year: parseInt(r.report_year,10), month: parseInt(r.month_num,10),
+      }));
+      const multiYear = new Set(months.map(m => m.year)).size > 1;
+      const maxKey = useDateRange
+        ? (months.length ? months[months.length - 1].key : null)
+        : (maxMonth ? `${year}-${maxMonth}` : null);
 
       const dataRes = await pool.query(
         `SELECT
@@ -1190,13 +1351,25 @@ router.get('/export', verifyToken, applyRegionFilter, async (req, res) => {
            MAX(sa.branch_name)     AS branch_name,
            MAX(sa.salesrep_name)   AS salesrep_name,
            MAX(sa.category_name)   AS category_name,
+           sa.report_year,
            sa.month_num,
-           COUNT(*)                AS invoice_count
+           COUNT(DISTINCT sa.invoice_number) AS invoice_count,
+           SUM(sa.qty)                       AS total_qty
          FROM sales_activity sa
          WHERE ${where}
-         GROUP BY sa.customer_code, sa.month_num`,
+         GROUP BY sa.customer_code, sa.report_year, sa.month_num`,
         params
       );
+
+      const lastInvRes = await pool.query(
+        `SELECT sa.customer_code, MAX(${ROW_DATE}) AS last_invoice_date
+         FROM sales_activity sa GROUP BY sa.customer_code`
+      );
+      const lastInvMap = {};
+      for (const r of lastInvRes.rows) {
+        lastInvMap[r.customer_code] = r.last_invoice_date
+          ? new Date(r.last_invoice_date).toISOString().slice(0, 10) : '';
+      }
 
       const notesRes = await pool.query(`SELECT customer_code, note_text FROM sales_activity_notes`);
       const notesMap = {};
@@ -1209,19 +1382,21 @@ router.get('/export', verifyToken, applyRegionFilter, async (req, res) => {
           custMap.set(code, {
             customer_code: code, customer_name: row.customer_name,
             branch_name: row.branch_name, salesrep_name: row.salesrep_name,
-            category_name: row.category_name, months: {}, total: 0,
+            category_name: row.category_name, months: {}, total: 0, total_qty: 0,
           });
         }
         const c = custMap.get(code);
-        const mn = parseInt(row.month_num, 10);
+        const mn = `${parseInt(row.report_year,10)}-${parseInt(row.month_num,10)}`;
         c.months[mn] = parseInt(row.invoice_count, 10);
         c.total += parseInt(row.invoice_count, 10);
+        c.total_qty += parseInt(row.total_qty || 0, 10);
       }
 
       const customers = Array.from(custMap.values()).map(c => ({
         ...c,
-        active_current: Boolean(maxMonth && c.months[maxMonth] > 0),
+        active_current: Boolean(maxKey && c.months[maxKey] > 0),
         note: notesMap[c.customer_code] || '',
+        last_invoice_date: lastInvMap[c.customer_code] || '',
       }));
       customers.sort((a, b) => {
         if (a.active_current !== b.active_current) return a.active_current ? 1 : -1;
@@ -1230,12 +1405,14 @@ router.get('/export', verifyToken, applyRegionFilter, async (req, res) => {
 
       sheetRows = [
         ['#', 'اسم العميل', 'كود العميل', 'المنطقة', 'المندوب', 'التصنيف',
-         ...months.map(m => MONTH_AR[m] || m), 'الإجمالي', 'الحالة', 'ملاحظات'],
+         ...months.map(m => `${MONTH_AR[m.month] || m.month}${multiYear ? ' ' + m.year : ''}`), 'إجمالي الفواتير', 'إجمالي صافي الكميات', 'تاريخ آخر فاتورة', 'الحالة', 'ملاحظات'],
         ...customers.map((c, i) => [
           i + 1, c.customer_name, c.customer_code,
           c.branch_name || '', c.salesrep_name || '', c.category_name || '',
-          ...months.map(m => c.months[m] || 0),
+          ...months.map(m => c.months[m.key] || 0),
           c.total,
+          c.total_qty,
+          c.last_invoice_date,
           c.active_current ? 'نشط' : 'غير نشط',
           c.note,
         ]),

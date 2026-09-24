@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import useCountUp     from '../../hooks/useCountUp';
 import useKPISettings, { CARD_IDS } from '../../hooks/useKPISettings';
+import { useLanguage } from '../../context/LanguageContext';
 import Skeleton       from '../UI/Skeleton';
 import './KPICards.css';
 
@@ -284,9 +285,9 @@ function KPICardsSkeleton() {
 
 /* ── Global settings toolbar ─────────────────────── */
 const SIZE_PRESETS = [
-  { key: 'compact', label: 'صغير' },
-  { key: 'normal',  label: 'عادي' },
-  { key: 'large',   label: 'كبير' },
+  { key: 'compact', label: 'صغير', labelEn: 'Small'  },
+  { key: 'normal',  label: 'عادي', labelEn: 'Normal' },
+  { key: 'large',   label: 'كبير', labelEn: 'Large'  },
 ];
 
 function KPISettingsBar({
@@ -294,6 +295,7 @@ function KPISettingsBar({
   editMode, setSize, fontUp, fontDown, toggleEditMode, reset,
   hiddenCount, canEdit,
 }) {
+  const { lang } = useLanguage();
   /* Non-admins: hide the entire bar */
   if (!canEdit) return null;
 
@@ -302,13 +304,13 @@ function KPISettingsBar({
       {/* Size presets */}
       <div className="kpi-settings-group">
         <span className="kpi-settings-lbl">
-          <Settings2 size={12} /> حجم عام
+          <Settings2 size={12} /> {lang === 'en' ? 'Card size' : 'حجم عام'}
         </span>
         <div className="kpi-size-btns">
           {SIZE_PRESETS.map(o => (
             <button key={o.key}
               className={`kpi-sz-btn${size === o.key ? ' active' : ''}`}
-              onClick={() => setSize(o.key)}>{o.label}
+              onClick={() => setSize(o.key)}>{lang === 'en' ? o.labelEn : o.label}
             </button>
           ))}
         </div>
@@ -318,13 +320,13 @@ function KPISettingsBar({
 
       {/* Font scale */}
       <div className="kpi-settings-group">
-        <span className="kpi-settings-lbl">الخط</span>
+        <span className="kpi-settings-lbl">{lang === 'en' ? 'Font' : 'الخط'}</span>
         <div className="kpi-font-btns">
-          <button className="kpi-font-btn" onClick={fontDown} disabled={!canFontDown} title="تصغير">
+          <button className="kpi-font-btn" onClick={fontDown} disabled={!canFontDown} title={lang === 'en' ? 'Smaller' : 'تصغير'}>
             A<sup>−</sup>
           </button>
           <span className="kpi-font-pct">{Math.round(fontScale * 100)}%</span>
-          <button className="kpi-font-btn" onClick={fontUp} disabled={!canFontUp} title="تكبير">
+          <button className="kpi-font-btn" onClick={fontUp} disabled={!canFontUp} title={lang === 'en' ? 'Larger' : 'تكبير'}>
             A<sup>+</sup>
           </button>
         </div>
@@ -336,17 +338,17 @@ function KPISettingsBar({
       <button
         className={`kpi-edit-toggle${editMode ? ' active' : ''}`}
         onClick={toggleEditMode}
-        title="تخصيص الكروت — ترتيب، حجم، عرض، إخفاء"
+        title={lang === 'en' ? 'Customize cards — order, size, span, visibility' : 'تخصيص الكروت — ترتيب، حجم، عرض، إخفاء'}
       >
         <Pencil size={11} />
-        {editMode ? 'إنهاء التخصيص' : 'تخصيص'}
+        {editMode ? (lang === 'en' ? 'Done' : 'إنهاء التخصيص') : (lang === 'en' ? 'Customize' : 'تخصيص')}
         {!editMode && hiddenCount > 0 && (
           <span className="kpi-hidden-badge">{hiddenCount}</span>
         )}
       </button>
 
       {/* Reset */}
-      <button className="kpi-reset-btn" onClick={reset} title="إعادة الضبط">
+      <button className="kpi-reset-btn" onClick={reset} title={lang === 'en' ? 'Reset' : 'إعادة الضبط'}>
         <RotateCcw size={12} />
       </button>
     </div>
@@ -355,6 +357,7 @@ function KPISettingsBar({
 
 /* ── Exported component ──────────────────────────── */
 export default function KPICards({ data, loading }) {
+  const { lang } = useLanguage();
   const {
     size, fontScale, cardOrder, editMode, canEdit,
     setSize, fontUp, fontDown, canFontUp, canFontDown,
@@ -415,14 +418,15 @@ export default function KPICards({ data, loading }) {
   /* ── Early return AFTER all hooks ── */
   if (loading) return <KPICardsSkeleton />;
 
+  const en = lang === 'en';
   const CARD_DEFS = {
-    invoices_total: { icon: <FileText size={20} />,   label: 'إجمالي الفواتير',  value: totalAmount,  unit: 'SAR', trend: 4.8, trendUp: true,  delay: 1, iconBg: 'var(--color-info-bg)',          iconColor: 'var(--color-info)',            foot: { bar: 100,       text: `${invoices.toLocaleString('en-SA')} فاتورة` } },
-    paid_total:     { icon: <CheckCircle size={20} />, label: 'إجمالي المسدد',    value: totalPaid,    unit: 'SAR', trend: 7.2, trendUp: true,  delay: 2, iconBg: 'var(--color-success-bg)',       iconColor: 'var(--color-success)',         valueColor: 'var(--color-brand-green)', foot: { bar: paidPct,    text: `${paidPct.toFixed(1)}% مسدد` } },
-    balance:        { icon: <AlertCircle size={20} />, label: 'الرصيد المستحق',   value: totalBalance, unit: 'SAR', deltaChip,  delay: 3, iconBg: 'var(--color-danger-bg)', iconColor: 'var(--color-danger)', pulse: true, valueColor: 'var(--color-brand-red)', glow: deltaChip?.isUp === true,
-                      foot: { bar: balancePct, text: `${balancePct.toFixed(1)}% متبقي`, prev: prevBalance != null ? `أمس: SAR ${fmtSARShort(prevBalance)}` : null } },
-    rate:           { icon: <TrendingUp size={20} />,  label: 'معدل التحصيل',     value: rate,         unit: '',    ring: rate,                  delay: 4, iconBg: 'var(--color-brand-green-pale)', iconColor: rateColor,                      foot: { text: 'نسبة التحصيل الكلية' } },
-    customers:      { icon: <Users size={20} />,       label: 'عدد العملاء',      value: customers,    unit: '',    trend: 3,   trendUp: true,  delay: 5, iconBg: 'var(--color-brand-gold-light)', iconColor: '#B8860B',                      foot: { text: `${customers.toLocaleString('en-SA')} عميل` } },
-    invoice_count:  { icon: <Hash size={20} />,        label: 'عدد الفواتير',     value: invoices,     unit: '',    trend: 9,   trendUp: true,  delay: 6, iconBg: 'var(--color-bg-alt)',           iconColor: 'var(--color-text-secondary)', foot: { text: `${invoices.toLocaleString('en-SA')} فاتورة` } },
+    invoices_total: { icon: <FileText size={20} />,   label: en ? 'Total Invoices'   : 'إجمالي الفواتير',  value: totalAmount,  unit: 'SAR', trend: 4.8, trendUp: true,  delay: 1, iconBg: 'var(--color-info-bg)',          iconColor: 'var(--color-info)',            foot: { bar: 100,       text: en ? `${invoices.toLocaleString('en-SA')} invoices` : `${invoices.toLocaleString('en-SA')} فاتورة` } },
+    paid_total:     { icon: <CheckCircle size={20} />, label: en ? 'Total Paid'       : 'إجمالي المسدد',    value: totalPaid,    unit: 'SAR', trend: 7.2, trendUp: true,  delay: 2, iconBg: 'var(--color-success-bg)',       iconColor: 'var(--color-success)',         valueColor: 'var(--color-brand-green)', foot: { bar: paidPct,    text: en ? `${paidPct.toFixed(1)}% paid` : `${paidPct.toFixed(1)}% مسدد` } },
+    balance:        { icon: <AlertCircle size={20} />, label: en ? 'Outstanding Balance' : 'الرصيد المستحق',   value: totalBalance, unit: 'SAR', deltaChip,  delay: 3, iconBg: 'var(--color-danger-bg)', iconColor: 'var(--color-danger)', pulse: true, valueColor: 'var(--color-brand-red)', glow: deltaChip?.isUp === true,
+                      foot: { bar: balancePct, text: en ? `${balancePct.toFixed(1)}% remaining` : `${balancePct.toFixed(1)}% متبقي`, prev: prevBalance != null ? (en ? `Yesterday: SAR ${fmtSARShort(prevBalance)}` : `أمس: SAR ${fmtSARShort(prevBalance)}`) : null } },
+    rate:           { icon: <TrendingUp size={20} />,  label: en ? 'Collection Rate'  : 'معدل التحصيل',     value: rate,         unit: '',    ring: rate,                  delay: 4, iconBg: 'var(--color-brand-green-pale)', iconColor: rateColor,                      foot: { text: en ? 'Overall collection rate' : 'نسبة التحصيل الكلية' } },
+    customers:      { icon: <Users size={20} />,       label: en ? 'Customer Count'   : 'عدد العملاء',      value: customers,    unit: '',    trend: 3,   trendUp: true,  delay: 5, iconBg: 'var(--color-brand-gold-light)', iconColor: '#B8860B',                      foot: { text: en ? `${customers.toLocaleString('en-SA')} customers` : `${customers.toLocaleString('en-SA')} عميل` } },
+    invoice_count:  { icon: <Hash size={20} />,        label: en ? 'Invoice Count'    : 'عدد الفواتير',     value: invoices,     unit: '',    trend: 9,   trendUp: true,  delay: 6, iconBg: 'var(--color-bg-alt)',           iconColor: 'var(--color-text-secondary)', foot: { text: en ? `${invoices.toLocaleString('en-SA')} invoices` : `${invoices.toLocaleString('en-SA')} فاتورة` } },
   };
 
   const hiddenCount = CARD_IDS.filter(id => !isCardVisible(id)).length;
@@ -464,7 +468,7 @@ export default function KPICards({ data, loading }) {
       {editMode && (
         <p className="kpi-edit-hint">
           <GripVertical size={11} />
-          اسحب لإعادة الترتيب — الحجم والعرض لكل كرت مستقل — الكروت المخفية تظهر كإطار شفاف
+          {en ? 'Drag to reorder — size and span are independent per card — hidden cards show as a transparent frame' : 'اسحب لإعادة الترتيب — الحجم والعرض لكل كرت مستقل — الكروت المخفية تظهر كإطار شفاف'}
         </p>
       )}
     </div>

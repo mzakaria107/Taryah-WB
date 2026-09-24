@@ -22,11 +22,11 @@ function isAdmin(user) { return ADMIN_ROLES.includes(user?.role); }
 
 function formatDate(d) {
   if (!d) return null;
-  return new Date(d).toLocaleDateString('ar-SA', { year:'numeric', month:'short', day:'numeric' });
+  return new Date(d).toLocaleDateString('ar-SA-u-nu-latn', { year:'numeric', month:'short', day:'numeric' });
 }
 function formatDateTime(d) {
   if (!d) return null;
-  return new Date(d).toLocaleString('ar-SA', { year:'numeric', month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' });
+  return new Date(d).toLocaleString('ar-SA-u-nu-latn', { year:'numeric', month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' });
 }
 function dueClass(dateStr, status) {
   if (!dateStr || ['completed','cancelled'].includes(status)) return '';
@@ -355,12 +355,12 @@ function SupervisorModal({ editing, regions, onClose, onSaved }) {
 /* ═══════════════════════════════════════════════════════
    CREATE TASK MODAL
    ═══════════════════════════════════════════════════════ */
-function CreateTaskModal({ regions, assignees = [], userRegionId, onClose, onCreated }) {
+function CreateTaskModal({ regions, assignees = [], userRegionIds = [], onClose, onCreated }) {
   const { user } = useAuth();
   const admin = isAdmin(user);
 
   const [form, setForm] = useState({
-    title: '', description: '', region_id: admin ? '' : String(userRegionId || ''),
+    title: '', description: '', region_id: admin ? '' : String(userRegionIds[0] || ''),
     assignee_combined_id: '', due_date: '', priority: 'medium',
     assigner_email: '', assignee_email: '', cc_emails: '',
   });
@@ -467,8 +467,14 @@ function CreateTaskModal({ regions, assignees = [], userRegionId, onClose, onCre
                   <option value="">— اختر المنطقة —</option>
                   {regions.map(r => <option key={r.id} value={r.id}>{r.name_ar}</option>)}
                 </select>
+              ) : userRegionIds.length > 1 ? (
+                <select className="stp-select" value={form.region_id} onChange={e => onRegionChange(e.target.value)}>
+                  {regions.filter(r => userRegionIds.map(String).includes(String(r.id))).map(r => (
+                    <option key={r.id} value={r.id}>{r.name_ar}</option>
+                  ))}
+                </select>
               ) : (
-                <input className="stp-input" readOnly value={regions.find(r => String(r.id) === String(userRegionId))?.name_ar || '—'} />
+                <input className="stp-input" readOnly value={regions.find(r => String(r.id) === String(userRegionIds[0]))?.name_ar || '—'} />
               )}
             </div>
             <div className="stp-form-group">
@@ -1103,7 +1109,7 @@ function TasksTab({ regions, supervisors, assignees = [] }) {
         <CreateTaskModal
           regions={regions}
           assignees={assignees}
-          userRegionId={user?.region_id}
+          userRegionIds={(Array.isArray(user?.region_ids) && user.region_ids.length) ? user.region_ids : (user?.region_id ? [user.region_id] : [])}
           onClose={() => setShowCreate(false)}
           onCreated={() => { qc.invalidateQueries({ queryKey:['tasks'] }); setShowCreate(false); }}
         />
@@ -1135,7 +1141,7 @@ export default function SalesTasksPage() {
 
   const handlePrint = useCallback(() => {
     const prev = document.title;
-    document.title = `مهام فريق المبيعات — ${new Date().toLocaleDateString('ar-SA', { year:'numeric', month:'long', day:'numeric' })}`;
+    document.title = `مهام فريق المبيعات — ${new Date().toLocaleDateString('ar-SA-u-nu-latn', { year:'numeric', month:'long', day:'numeric' })}`;
     window.print();
     window.onafterprint = () => { document.title = prev; window.onafterprint = null; };
   }, []);
@@ -1145,14 +1151,16 @@ export default function SalesTasksPage() {
       <div className="stp-print-header">
         <span>📋</span>
         <span className="stp-print-title">مهام فريق المبيعات</span>
-        <span className="stp-print-date">{new Date().toLocaleDateString('ar-SA',{year:'numeric',month:'long',day:'numeric',weekday:'long'})}</span>
+        <span className="stp-print-date">{new Date().toLocaleDateString('ar-SA-u-nu-latn',{year:'numeric',month:'long',day:'numeric',weekday:'long'})}</span>
       </div>
       <div className="stp-header">
         <div className="stp-title">
           📋 مهام فريق المبيعات
-          {!admin && user?.region_id && (
-            <span>{regions.find(r => r.id === user.region_id)?.name_ar}</span>
-          )}
+          {!admin && (() => {
+            const ids = (Array.isArray(user?.region_ids) && user.region_ids.length) ? user.region_ids : (user?.region_id ? [user.region_id] : []);
+            const names = regions.filter(r => ids.includes(r.id)).map(r => r.name_ar);
+            return names.length ? <span>{names.join(' · ')}</span> : null;
+          })()}
         </div>
         <div style={{ display:'flex', alignItems:'center', gap:8 }}>
           <div className="stp-tabs">

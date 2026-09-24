@@ -19,6 +19,9 @@ const ROLES = {
   fridge_admin:   { label: 'موظف إداري (ثلاجات)',   color: 'role-fridge'    },
   accounts:       { label: 'الحسابات',              color: 'role-accounts'  },
   viewer:         { label: 'مستعرض',                color: 'role-viewer'    },
+  carrefour_rep:  { label: 'مروج كارفور',           color: 'role-carrefour' },
+  quality_returns_monitor: { label: 'مراقب مرتجعات جودة', color: 'role-quality' },
+  fleet_supervisor: { label: 'مشرف حركة', color: 'role-fleet' },
 };
 
 /* ── Permission matrix ────────────────────────────── */
@@ -53,7 +56,7 @@ function fmtLastSeen(lastSeen) {
   if (diffMin < 60) return `منذ ${diffMin} د`;
   const diffH = Math.floor(diffMin / 60);
   if (diffH < 24)   return `منذ ${diffH} س`;
-  return d.toLocaleDateString('ar-SA', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+  return d.toLocaleDateString('ar-SA-u-nu-latn', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
 const PERM_ICON = {
@@ -64,7 +67,7 @@ const PERM_ICON = {
   4: { icon: '📍', cls: 'pm-own'  },
 };
 
-const EMPTY_FORM = { name:'', email:'', password:'', role:'viewer', region_id:'' };
+const EMPTY_FORM = { name:'', email:'', password:'', role:'viewer', region_ids:[] };
 
 /* ── Helpers ──────────────────────────────────────── */
 function Avatar({ name, email }) {
@@ -83,6 +86,31 @@ function Field({ label, children }) {
     <div className="u-field">
       <label className="u-field-label">{label}</label>
       {children}
+    </div>
+  );
+}
+
+/* ── Multi-region picker ──────────────────────────── */
+function RegionMultiSelect({ regions, selected, onChange }) {
+  const toggle = (id) => {
+    const idStr = String(id);
+    const has = selected.map(String).includes(idStr);
+    onChange(has ? selected.filter(s => String(s) !== idStr) : [...selected, id]);
+  };
+  return (
+    <div className="u-region-multiselect">
+      {selected.length === 0 && <span className="u-region-multiselect-hint">بدون تحديد = كل المناطق</span>}
+      <div className="u-region-options">
+        {regions.map(r => {
+          const checked = selected.map(String).includes(String(r.id));
+          return (
+            <label key={r.id} className={`u-region-option${checked ? ' u-region-option--checked' : ''}`}>
+              <input type="checkbox" checked={checked} onChange={() => toggle(r.id)} />
+              {r.name_ar}
+            </label>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -132,7 +160,7 @@ export default function Users() {
     try {
       await client.post('/auth/register', {
         ...form,
-        region_id: form.region_id || null,
+        region_ids: form.region_ids,
       });
       setShowCreate(false);
       setForm(EMPTY_FORM);
@@ -146,7 +174,7 @@ export default function Users() {
   /* ── Start edit ───────────────────────────────── */
   const startEdit = (u) => {
     setEditId(u.id);
-    setEditForm({ name: u.name, email: u.email, role: u.role, region_id: u.region_id || '', password: '' });
+    setEditForm({ name: u.name, email: u.email, role: u.role, region_ids: (u.regions || []).map(r => r.id), password: '' });
     setEditErr('');
     setShowEditPwd(false);
   };
@@ -157,7 +185,7 @@ export default function Users() {
     setEditErr('');
     setSaving(true);
     try {
-      const body = { name: editForm.name, email: editForm.email, role: editForm.role, region_id: editForm.region_id || null };
+      const body = { name: editForm.name, email: editForm.email, role: editForm.role, region_ids: editForm.region_ids };
       if (editForm.password) body.password = editForm.password;
       await client.put(`/users/${editId}`, body);
       setEditId(null);
@@ -329,11 +357,9 @@ export default function Users() {
                   ))}
                 </select>
               </Field>
-              <Field label="المنطقة المخصصة">
-                <select className="u-input" value={form.region_id} onChange={f('region_id')}>
-                  <option value="">كل المناطق</option>
-                  {regions.map(r => <option key={r.id} value={r.id}>{r.name_ar}</option>)}
-                </select>
+              <Field label="المناطق المخصصة">
+                <RegionMultiSelect regions={regions} selected={form.region_ids}
+                  onChange={ids => setForm(p => ({ ...p, region_ids: ids }))} />
               </Field>
 
               {/* Role hint */}
@@ -412,8 +438,8 @@ export default function Users() {
 
                       {/* Region */}
                       <td className="u-region-cell">
-                        {u.region_name_ar
-                          ? <span className="u-region-chip">{u.region_name_ar}</span>
+                        {u.regions && u.regions.length
+                          ? u.regions.map(r => <span key={r.id} className="u-region-chip">{r.name_ar}</span>)
                           : <span className="u-region-all">كل المناطق</span>}
                       </td>
 
@@ -433,7 +459,7 @@ export default function Users() {
 
                       {/* Created at */}
                       <td className="u-date-cell">
-                        {u.created_at ? new Date(u.created_at).toLocaleDateString('ar-SA') : '—'}
+                        {u.created_at ? new Date(u.created_at).toLocaleDateString('ar-SA-u-nu-latn') : '—'}
                       </td>
 
                       {/* Actions */}
@@ -482,11 +508,9 @@ export default function Users() {
                                   ))}
                                 </select>
                               </Field>
-                              <Field label="المنطقة">
-                                <select className="u-input" value={editForm.region_id} onChange={ef('region_id')}>
-                                  <option value="">كل المناطق</option>
-                                  {regions.map(r => <option key={r.id} value={r.id}>{r.name_ar}</option>)}
-                                </select>
+                              <Field label="المناطق">
+                                <RegionMultiSelect regions={regions} selected={editForm.region_ids || []}
+                                  onChange={ids => setEditForm(p => ({ ...p, region_ids: ids }))} />
                               </Field>
                               <Field label="كلمة مرور جديدة (اختياري)">
                                 <div className="u-pwd-wrap">

@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Eye, EyeOff } from 'lucide-react';
+import { Eye, EyeOff, Languages } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { useLanguage } from '../context/LanguageContext';
 import './Login.css';
 // Login page — branded scaleIn card, logoBounce logo, gold divider
 
 export default function Login() {
   const { login, loading } = useAuth();
+  const { lang, setLang, t } = useLanguage();
   const navigate = useNavigate();
   const [email, setEmail]       = useState('');
   const [password, setPassword] = useState('');
@@ -23,12 +25,19 @@ export default function Login() {
 
   return (
     <div className="login-bg">
+      <button
+        type="button"
+        className="login-lang-btn"
+        onClick={() => setLang(lang === 'ar' ? 'en' : 'ar')}
+      >
+        <Languages size={14} /> {lang === 'ar' ? 'EN' : 'ع'}
+      </button>
       <div className="login-card">
         {/* Logo */}
         <div className="login-logo-wrap">
           <img
             src="/Logo.png"
-            alt="طرية"
+            alt={t('logo')}
             className="login-logo"
             onError={(e) => {
               e.currentTarget.onerror = null; // prevent repeated retries
@@ -40,8 +49,8 @@ export default function Login() {
         </div>
 
         {/* Title */}
-        <h1 className="login-title">مرحباً بك</h1>
-        <p className="login-sub">دواجن طرية Dashboard — سجّل دخولك للمتابعة</p>
+        <h1 className="login-title">{t('loginWelcome')}</h1>
+        <p className="login-sub">{t('loginSub')}</p>
 
         {/* Gold divider */}
         <div className="login-divider" />
@@ -50,7 +59,7 @@ export default function Login() {
         <form className="login-form" onSubmit={handleSubmit} noValidate>
           {/* Email */}
           <label className="login-field">
-            <span className="login-label">البريد الإلكتروني</span>
+            <span className="login-label">{t('loginEmail')}</span>
             <input
               type="email"
               className="login-input"
@@ -65,7 +74,7 @@ export default function Login() {
 
           {/* Password */}
           <label className="login-field">
-            <span className="login-label">كلمة المرور</span>
+            <span className="login-label">{t('loginPassword')}</span>
             <div className="login-pw-wrap">
               <input
                 type={showPw ? 'text' : 'password'}
@@ -81,7 +90,7 @@ export default function Login() {
                 type="button"
                 className="login-pw-eye"
                 onClick={() => setShowPw((s) => !s)}
-                aria-label={showPw ? 'إخفاء كلمة المرور' : 'إظهار كلمة المرور'}
+                aria-label={showPw ? t('loginHidePw') : t('loginShowPw')}
               >
                 {showPw ? <EyeOff size={16} /> : <Eye size={16} />}
               </button>
@@ -100,8 +109,8 @@ export default function Login() {
             disabled={loading}
           >
             {loading
-              ? <><span className="login-spinner" />جاري تسجيل الدخول…</>
-              : 'تسجيل الدخول'}
+              ? <><span className="login-spinner" />{t('loginSubmitting')}</>
+              : t('loginSubmit')}
           </button>
         </form>
       </div>

@@ -1,16 +1,23 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import ReactDOM from 'react-dom';
 import { Link } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
-import { Printer, ClockArrowUp, X, ExternalLink, ChevronUp, ChevronDown, ChevronsUpDown, FileSpreadsheet } from 'lucide-react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { Printer, ClockArrowUp, X, ExternalLink, ChevronUp, ChevronDown, ChevronsUpDown, FileSpreadsheet, RefreshCw } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import api from '../api/client';
 import './AgingPage.css';
 
 /* ── Helpers ─────────────────────────────────────────────────── */
 const fmt = n =>
-  n == null ? '—' : Number(n).toLocaleString('ar-SA', { maximumFractionDigits: 0 });
+  n == null ? '—' : Number(n).toLocaleString('en-SA', { maximumFractionDigits: 0 });
 const fmtDate = iso => iso ? new Date(iso + 'T12:00:00').toLocaleDateString('ar-SA-u-nu-latn', { year: 'numeric', month: 'short', day: 'numeric' }) : '—';
+// NetSuite SuiteQL returns dates as "31/3/2026" (D/M/YYYY), not ISO
+const fmtNsDate = s => {
+  if (!s) return '—';
+  const m = String(s).match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (!m) return fmtDate(s);
+  return fmtDate(`${m[3]}-${String(m[2]).padStart(2, '0')}-${String(m[1]).padStart(2, '0')}`);
+};
 
 const BUCKETS = [
   { key: 'b_1_15',    label: '1-15 يوم',      cls: 'age-cell--b1', badge: 'age-badge--b1' },
@@ -54,11 +61,25 @@ async function fetchMeta() {
   const { data } = await api.get('/invoices/meta');
   return data;
 }
+async function fetchCollections(params) {
+  const { data } = await api.get('/aging/collections', { params });
+  return data;
+}
+async function resetSnapshot(date_from, date_to) {
+  const { data } = await api.post('/aging/collections/reset-snapshot', { date_from, date_to });
+  return data;
+}
+async function fetchCollectionPayments(customerId, date) {
+  const { data } = await api.get(`/aging/collections/payments/${customerId}`, { params: date ? { date } : {} });
+  return data;
+}
 
 /* ═══════════════════════════════════════════════════════════════
    Main Page
 ═══════════════════════════════════════════════════════════════ */
 export default function AgingPage() {
+  const qc = useQueryClient();
+
   /* ── Filters ─────────────────────────────────────────────────── */
   const [regionId,      setRegionId]      = useState('');
   const [routeId,       setRouteId]       = useState('');
@@ -68,11 +89,27 @@ export default function AgingPage() {
   const [excludeDirect, setExcludeDirect] = useState(true); // ON by default
   const [sortBy,       setSortBy]       = useState('total_balance');
   const [sortDir,      setSortDir]      = useState('DESC');
-  const [activeTab,    setActiveTab]    = useState('customers'); // 'customers' | 'regions'
+  const [activeTab,    setActiveTab]    = useState('customers'); // 'customers' | 'regions' | 'collections'
   const [bucketFilter, setBucketFilter] = useState(''); // '' | b_1_15 | b_16_30 | …
 
   /* ── Modal state ─────────────────────────────────────────────── */
   const [modalCustomer, setModalCustomer] = useState(null); // {id, name}
+  const [paymentModal, setPaymentModal] = useState(null);   // {id, name, date|null}
+
+  /* ── Old-debt collection tracker tab — own filters, independent
+       of the aging-bucket filters above (a different period concept:
+       here the period selects WHICH invoices count as "old debt",
+       not a snapshot date). ── */
+  const [colDateFrom, setColDateFrom] = useState(() => {
+    const d = new Date(); d.setDate(d.getDate() - 90);
+    return d.toLocaleDateString('en-CA');
+  });
+  const [colDateTo, setColDateTo] = useState(() => {
+    const d = new Date(); d.setDate(d.getDate() - 30);
+    return d.toLocaleDateString('en-CA');
+  });
+  const [colRegionId, setColRegionId] = useState('');
+  const [colSalesRep, setColSalesRep] = useState('');
 
   /* ── Meta (routes + reps lists) ─────────────────────────────── */
   const { data: meta } = useQuery({
@@ -80,6 +117,15 @@ export default function AgingPage() {
     queryFn:  fetchMeta,
     staleTime: 300_000,
   });
+
+  /* Carrefour: one hypermarket group, 13 branches, ~560K of the open balance
+     on long agreed terms — big enough to dominate the ageing buckets. OFF by
+     default: it is real debt, and hiding it unasked would understate the book.
+     ONE switch drives both the ageing tabs and the old-debt tracker, so the
+     tabs can never show contradictory totals. Matching is on the Arabic name
+     pattern ("كارفور الرياض بارك") plus the English column server-side —
+     invoices.branch_name carries no literal "Carrefour" value. */
+  const [excludeCarrefour, setExcludeCarrefour] = useState(false);
 
   /* ── Query ───────────────────────────────────────────────────── */
   const qParams = useMemo(() => {
@@ -91,8 +137,9 @@ export default function AgingPage() {
     // excludeDirect overrides the manual custType filter
     if (excludeDirect)  p.customer_type = 'route';
     else if (custType)  p.customer_type = custType;
+    if (excludeCarrefour) p.exclude_carrefour = '1';
     return p;
-  }, [regionId, routeId, salesRep, search, custType, excludeDirect, sortBy, sortDir]);
+  }, [regionId, routeId, salesRep, search, custType, excludeDirect, excludeCarrefour, sortBy, sortDir]);
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['aging', qParams],
@@ -118,6 +165,79 @@ export default function AgingPage() {
     return all.filter(c => parseFloat(c[bucketFilter] || 0) > 0);
   }, [data?.customers, bucketFilter]);
 
+  /* ── Old-debt collection tracker query ────────────────────────── */
+  const colParams = useMemo(() => {
+    const p = { date_from: colDateFrom, date_to: colDateTo };
+    if (colRegionId) p.region_id      = colRegionId;
+    if (colSalesRep) p.sales_rep_name = colSalesRep;
+    if (excludeCarrefour) p.exclude_carrefour = '1';
+    return p;
+  }, [colDateFrom, colDateTo, colRegionId, colSalesRep, excludeCarrefour]);
+
+  const { data: colData, isLoading: colLoading, isError: colError } = useQuery({
+    queryKey: ['aging-collections', colParams],
+    queryFn:  () => fetchCollections(colParams),
+    enabled:  activeTab === 'collections' && !!colDateFrom && !!colDateTo,
+    keepPreviousData: true,
+    staleTime: 60_000,
+  });
+
+  // Customers whose frozen snapshot ("دين الفواتير") is zero — their old
+  // invoices were already fully settled by the time the snapshot was
+  // taken, so they add no useful signal to a collection-progress report.
+  const [excludeZeroDebt, setExcludeZeroDebt] = useState(false);
+  const colCustomersVisible = useMemo(() => {
+    let list = colData?.customers || [];
+    if (excludeCarrefour) list = list.filter(c => !(c.customer_name || '').includes('كارفور'));
+    if (excludeZeroDebt)  list = list.filter(c => parseFloat(c.total_debt || 0) > 0);
+    return list;
+  }, [colData, excludeCarrefour, excludeZeroDebt]);
+
+  // Pivot the flat {customer_id, pay_date, amount} payment list into a
+  // sparse day axis (only days with ANY collection activity, not every
+  // calendar day — with a 90-day window that could otherwise mean ~90
+  // mostly-empty columns) plus a lookup map for O(1) per-cell reads.
+  // Scoped to the currently-visible customer set so the Carrefour
+  // toggle also affects the daily columns/totals, not just the rows.
+  const colMatrix = useMemo(() => {
+    if (!colData) return null;
+    const visibleIds = new Set(colCustomersVisible.map(c => c.customer_id));
+    const relevantPayments = colData.payments.filter(pm => visibleIds.has(pm.customer_id));
+    const days = [...new Set(relevantPayments.map(pm => pm.pay_date))].sort();
+    const byCustDay = {};
+    const dayTotals = {};
+    relevantPayments.forEach(pm => {
+      byCustDay[`${pm.customer_id}-${pm.pay_date}`] = Number(pm.amount);
+      dayTotals[pm.pay_date] = (dayTotals[pm.pay_date] || 0) + Number(pm.amount);
+    });
+    return { days, byCustDay, dayTotals };
+  }, [colData, colCustomersVisible]);
+
+  const colIsDirty = colRegionId || colSalesRep || excludeCarrefour || excludeZeroDebt;
+  const handleColReset = () => { setColRegionId(''); setColSalesRep(''); setExcludeCarrefour(false); setExcludeZeroDebt(false); };
+
+  /* ── Re-open the frozen "دين الفواتير" baseline for the period on
+     screen — deletes it from old_debt_snapshots so the next fetch
+     re-freezes every customer in this exact period at today's live
+     balance. Confirmed first: it discards the "collected since" reference
+     point for the WHOLE period, not just the filtered rows on screen. ── */
+  const [snapResetting, setSnapResetting] = useState(false);
+  const handleResetSnapshot = async () => {
+    if (!window.confirm(
+      `سيتم تحديث اللقطة الثابتة للفترة ${colDateFrom} → ${colDateTo} إلى أرصدة اليوم — ` +
+      'سيُفقد مرجع "تحصّل كذا منذ اللقطة" الحالي لكل عملاء هذه الفترة (وليس فقط المعروضين بالفلتر الحالي). متابعة؟'
+    )) return;
+    setSnapResetting(true);
+    try {
+      await resetSnapshot(colDateFrom, colDateTo);
+      await qc.invalidateQueries({ queryKey: ['aging-collections'] });
+    } catch (err) {
+      alert(err.response?.data?.error || 'تعذّر تحديث اللقطة');
+    } finally {
+      setSnapResetting(false);
+    }
+  };
+
   /* ── Reset ───────────────────────────────────────────────────── */
   const isDirty = regionId || routeId || salesRep || search || custType;
   const handleReset = () => { setRegionId(''); setRouteId(''); setSalesRep(''); setSearch(''); setCustType(''); };
@@ -130,8 +250,62 @@ export default function AgingPage() {
     window.onafterprint = () => { document.title = prev; };
   };
 
-  /* ── Excel export ────────────────────────────────────────────── */
+  /* ── Excel export — exports whichever tab is currently active ── */
+  const handleExportCollections = () => {
+    if (!colCustomersVisible.length) return;
+    const wb = XLSX.utils.book_new();
+    const days = colMatrix?.days || [];
+    const fmtDayHeader = iso => {
+      const d = new Date(iso + 'T12:00:00');
+      return d.toLocaleDateString('ar-SA-u-nu-latn', { month: 'short', day: 'numeric' });
+    };
+
+    const header = [
+      'العميل', 'المندوب', 'المنطقة',
+      'دين الفواتير (لقطة ثابتة)', 'عدد الفواتير غير المسددة',
+      ...days.map(fmtDayHeader),
+      'الرصيد الحالي',
+    ];
+    const rows = colCustomersVisible.flatMap(c => {
+      const mainRow = [
+        c.customer_name, c.sales_rep_name || '', c.region_name || '',
+        parseFloat(c.total_debt || 0), parseInt(c.unpaid_count || 0, 10),
+        ...days.map(d => colMatrix.byCustDay[`${c.customer_id}-${d}`] || 0),
+        parseFloat(c.current_balance || 0),
+      ];
+      const isSplit = activeRepShareCount(c.rep_breakdown) > 1;
+      const repRows = isSplit ? mergeRepBreakdown(c.rep_breakdown).map(rb => [
+        `  └ ${c.customer_name}`, rb.sales_rep_name, c.region_name || '',
+        rb.total_debt, rb.unpaid_count,
+        ...days.map(() => ''),
+        rb.current_balance,
+      ]) : [];
+      return [mainRow, ...repRows];
+    });
+    const totals = colCustomersVisible.reduce((acc, c) => {
+      acc.total_debt      += parseFloat(c.total_debt || 0);
+      acc.unpaid_count    += parseInt(c.unpaid_count || 0, 10);
+      acc.current_balance += parseFloat(c.current_balance || 0);
+      return acc;
+    }, { total_debt: 0, unpaid_count: 0, current_balance: 0 });
+    rows.push([
+      'الإجمالي', '', '',
+      totals.total_debt, totals.unpaid_count,
+      ...days.map(d => colMatrix.dayTotals[d] || 0),
+      totals.current_balance,
+    ]);
+
+    const ws = XLSX.utils.aoa_to_sheet([header, ...rows]);
+    ws['!cols'] = [
+      { wch: 28 }, { wch: 18 }, { wch: 14 }, { wch: 18 }, { wch: 16 },
+      ...days.map(() => ({ wch: 10 })), { wch: 14 },
+    ];
+    XLSX.utils.book_append_sheet(wb, ws, 'تتبع سداد المديونية القديمة');
+    XLSX.writeFile(wb, `تتبع_سداد_المديونية_القديمة_${colDateFrom}_${colDateTo}.xlsx`);
+  };
+
   const handleExport = () => {
+    if (activeTab === 'collections') { handleExportCollections(); return; }
     if (!data) return;
     const wb = XLSX.utils.book_new();
 
@@ -242,6 +416,10 @@ export default function AgingPage() {
         <div className="age-print-title">أعمار المديونيات</div>
         <div className="age-print-meta">
           {new Date().toLocaleDateString('ar-SA-u-nu-latn', { year: 'numeric', month: 'long', day: 'numeric' })}
+          {/* A printed report that silently omits 560K of debt would mislead
+              whoever reads it away from the screen — state the exclusions. */}
+          {excludeDirect && <span> · مديونية المندوب مستبعدة</span>}
+          {excludeCarrefour && <span> · مديونية كارفور مستبعدة</span>}
         </div>
       </div>
 
@@ -252,7 +430,7 @@ export default function AgingPage() {
         <button
           className="age-export-btn"
           onClick={handleExport}
-          disabled={!data}
+          disabled={activeTab === 'collections' ? !colCustomersVisible.length : !data}
           title="تصدير إلى Excel"
         >
           <FileSpreadsheet size={16} /> تصدير Excel
@@ -272,6 +450,16 @@ export default function AgingPage() {
         >
           <span className={`age-exclude-dot${excludeDirect ? ' age-exclude-dot--on' : ''}`} />
           {excludeDirect ? '✕ مديونية المندوب مستبعدة' : '⊕ عرض مديونية المندوب'}
+        </button>
+
+        {/* ── زر استبعاد مديونية كارفور ── */}
+        <button
+          className={`age-exclude-direct-btn age-exclude-carrefour-btn${excludeCarrefour ? ' age-exclude-direct-btn--on' : ''}`}
+          onClick={() => setExcludeCarrefour(v => !v)}
+          title="كارفور مجموعة واحدة بفروع متعددة وشروط سداد طويلة متفق عليها — استبعادها يُظهر سلوك بقية العملاء"
+        >
+          <span className={`age-exclude-dot${excludeCarrefour ? ' age-exclude-dot--on' : ''}`} />
+          {excludeCarrefour ? '✕ مديونية كارفور مستبعدة' : '⊕ استبعاد مديونية كارفور'}
         </button>
 
         <div className="age-filter-group">
@@ -391,7 +579,77 @@ export default function AgingPage() {
             <button className={`age-tab${activeTab === 'regions' ? ' age-tab--active' : ''}`} onClick={() => setActiveTab('regions')}>
               ملخص المناطق
             </button>
+            <button className={`age-tab${activeTab === 'collections' ? ' age-tab--active' : ''}`} onClick={() => setActiveTab('collections')}>
+              تتبع سداد المديونية القديمة
+            </button>
           </div>
+
+          {/* ── Old-debt collection tracker filters ──────────────── */}
+          {activeTab === 'collections' && (
+            <div className="age-filters age-no-print">
+              <button
+                className={`age-exclude-direct-btn${excludeCarrefour ? ' age-exclude-direct-btn--on' : ''}`}
+                onClick={() => setExcludeCarrefour(v => !v)}
+              >
+                <span className={`age-exclude-dot${excludeCarrefour ? ' age-exclude-dot--on' : ''}`} />
+                {excludeCarrefour ? '✕ عملاء كارفور مستبعدون' : '⊕ استبعاد عملاء كارفور'}
+              </button>
+              <button
+                className={`age-exclude-direct-btn${excludeZeroDebt ? ' age-exclude-direct-btn--on' : ''}`}
+                onClick={() => setExcludeZeroDebt(v => !v)}
+              >
+                <span className={`age-exclude-dot${excludeZeroDebt ? ' age-exclude-dot--on' : ''}`} />
+                {excludeZeroDebt ? '✕ العملاء بدين صفري مستبعدون' : '⊕ استبعاد العملاء بدين صفري'}
+              </button>
+              <div className="age-filter-group">
+                <span className="age-filter-label">من تاريخ (فاتورة)</span>
+                <input
+                  type="date" className="age-filter-input"
+                  value={colDateFrom} onChange={e => setColDateFrom(e.target.value)}
+                />
+              </div>
+              <div className="age-filter-group">
+                <span className="age-filter-label">إلى تاريخ (فاتورة)</span>
+                <input
+                  type="date" className="age-filter-input"
+                  value={colDateTo} onChange={e => setColDateTo(e.target.value)}
+                />
+              </div>
+              <div className="age-filter-group">
+                <span className="age-filter-label">المنطقة</span>
+                <select className="age-filter-select" value={colRegionId} onChange={e => setColRegionId(e.target.value)}>
+                  <option value="">كل المناطق</option>
+                  {(data?.by_region || []).map(r => (
+                    <option key={r.region_id} value={r.region_id}>{r.region_name || `منطقة ${r.region_id}`}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="age-filter-group">
+                <span className="age-filter-label">المندوب</span>
+                <select className="age-filter-select" value={colSalesRep} onChange={e => setColSalesRep(e.target.value)}>
+                  <option value="">كل المندوبين</option>
+                  {(meta?.reps || []).map(r => (
+                    <option key={r} value={r}>{r}</option>
+                  ))}
+                </select>
+              </div>
+              {colIsDirty && (
+                <button className="age-filter-reset" onClick={handleColReset}>إعادة تعيين</button>
+              )}
+              <button
+                className="age-snapshot-reset-btn"
+                onClick={handleResetSnapshot}
+                disabled={snapResetting || colLoading}
+                title="يحدّث دين الفواتير (اللقطة الثابتة) لهذه الفترة إلى أرصدة اليوم"
+              >
+                <RefreshCw size={13} className={snapResetting ? 'age-spin' : ''}/>
+                {snapResetting ? 'جارٍ التحديث…' : 'تحديث اللقطة الثابتة لليوم'}
+              </button>
+              <span className="age-col-hint">
+                * الأعمدة اليومية تعرض التحصيل خلال الشهر الحالي فقط
+              </span>
+            </div>
+          )}
 
           {/* ── Customer matrix table ─────────────────────────────── */}
           <div style={{ display: activeTab === 'customers' ? 'block' : 'none' }}>
@@ -423,12 +681,40 @@ export default function AgingPage() {
               </div>
             )}
           </div>
+
+          {/* ── Old-debt collection tracker ──────────────────────── */}
+          {activeTab === 'collections' && (
+            <>
+              {colLoading && <div className="age-loading">جاري تحميل بيانات التحصيل…</div>}
+              {colError   && <div className="age-loading">حدث خطأ في تحميل البيانات</div>}
+              {!colLoading && !colError && colData && (
+                !colCustomersVisible.length ? (
+                  <div className="age-empty">
+                    {(excludeCarrefour || excludeZeroDebt) ? 'لا يوجد عملاء مطابقون بعد تطبيق الفلاتر' : 'لا توجد فواتير بتاريخ ضمن هذه الفترة'}
+                  </div>
+                ) : (
+                  <div className="age-table-wrap">
+                    <CollectionsTable
+                      customers={colCustomersVisible}
+                      matrix={colMatrix}
+                      onOpenPayments={setPaymentModal}
+                    />
+                  </div>
+                )
+              )}
+            </>
+          )}
         </>
       )}
 
       {/* ── Invoice Detail Modal ──────────────────────────────────── */}
       {modalCustomer && (
         <InvoiceModal customer={modalCustomer} onClose={() => setModalCustomer(null)} />
+      )}
+
+      {/* ── Payment Detail Modal (collection tracker cells) ───────── */}
+      {paymentModal && (
+        <PaymentModal payment={paymentModal} onClose={() => setPaymentModal(null)} />
       )}
     </div>
   );
@@ -445,7 +731,7 @@ function SortIcon({ col, sortBy, sortDir }) {
 }
 
 function CustomerTable({ customers, kpis, sortBy, sortDir, onSort, onOpenModal }) {
-  const fmtN = n => n ? Number(n).toLocaleString('ar-SA', { maximumFractionDigits: 0 }) : '';
+  const fmtN = n => n ? Number(n).toLocaleString('en-SA', { maximumFractionDigits: 0 }) : '';
 
   // Footer totals
   const foot = kpis;
@@ -625,7 +911,7 @@ function AvgAgeBadge({ days }) {
    RegionTable
 ═══════════════════════════════════════════════════════════════ */
 function RegionTable({ regions, total }) {
-  const fmtN = n => n ? Number(n).toLocaleString('ar-SA', { maximumFractionDigits: 0 }) : '—';
+  const fmtN = n => n ? Number(n).toLocaleString('en-SA', { maximumFractionDigits: 0 }) : '—';
   return (
     <table className="age-table">
       <thead>
@@ -672,6 +958,353 @@ function RegionTable({ regions, total }) {
 }
 
 /* ═══════════════════════════════════════════════════════════════
+   CollectionsTable — old-debt collection tracker matrix
+═══════════════════════════════════════════════════════════════ */
+/* Defensive merge by rep name, shared by the on-screen sub-rows and the
+   Excel export: the backend's GROUP BY (customer_id, sales_rep_name)
+   already makes a duplicate rep row for the same customer structurally
+   impossible, but neither display path should ever print the same
+   مندوب+عميل combination twice even if that ever stopped holding — any
+   accidental duplicates are summed into one line instead of shown twice. */
+/* A customer counts as "split" only when more than one rep actually
+   carries a non-zero share of the frozen debt. historical_rep_count from
+   the backend counts every rep who EVER had an invoice for this customer,
+   including ones now fully settled (0 balance) — treating that as a split
+   made the parent row's total print again, verbatim, as that single real
+   rep's own sub-row underneath it (plus a "0" row for the settled rep that
+   adds nothing), which is exactly what read as duplicated values. */
+function activeRepShareCount(breakdown) {
+  return mergeRepBreakdown(breakdown).length;
+}
+
+function mergeRepBreakdown(breakdown) {
+  const byRep = new Map();
+  (breakdown || []).forEach(rb => {
+    const existing = byRep.get(rb.sales_rep_name);
+    if (existing) {
+      existing.total_debt      += rb.total_debt;
+      existing.current_balance += rb.current_balance;
+      existing.invoice_count   += rb.invoice_count;
+      existing.unpaid_count    += rb.unpaid_count;
+    } else {
+      byRep.set(rb.sales_rep_name, { ...rb });
+    }
+  });
+  // A rep now holding zero debt (fully settled since their last invoice)
+  // adds nothing once the row is already flagged "split" for its ACTIVE
+  // reps — printing it anyway is exactly what made 17,606.87 look
+  // duplicated: the parent total, one real rep's identical share, and a
+  // "0" line for a rep who no longer carries any of it.
+  return [...byRep.values()].filter(rb => rb.total_debt !== 0);
+}
+
+function CollectionsTable({ customers, matrix, onOpenPayments }) {
+  const [expanded, setExpanded] = useState(() => new Set());
+  const toggleExpand = id => setExpanded(prev => {
+    const next = new Set(prev);
+    next.has(id) ? next.delete(id) : next.add(id);
+    return next;
+  });
+  const fmtN = n => n ? Number(n).toLocaleString('en-SA', { maximumFractionDigits: 0 }) : '—';
+  const days = matrix?.days || [];
+  const fmtDay = iso => {
+    const d = new Date(iso + 'T12:00:00');
+    return d.toLocaleDateString('ar-SA-u-nu-latn', { month: 'short', day: 'numeric' });
+  };
+  const fmtSnapDate = iso => iso
+    ? new Date(iso).toLocaleDateString('ar-SA-u-nu-latn', { year: 'numeric', month: 'short', day: 'numeric' })
+    : null;
+
+  const totals = customers.reduce((acc, c) => {
+    acc.total_debt      += parseFloat(c.total_debt || 0);
+    acc.unpaid_count    += parseInt(c.unpaid_count || 0, 10);
+    acc.current_balance += parseFloat(c.current_balance || 0);
+    return acc;
+  }, { total_debt: 0, unpaid_count: 0, current_balance: 0 });
+
+  return (
+    <table className="age-table">
+      <thead>
+        <tr>
+          <th>العميل</th>
+          <th>المندوب</th>
+          <th>المنطقة</th>
+          <th title="قيمة ثابتة — تُسجَّل عند أول عرض لهذه الفترة ولا تتغير بعدها">دين الفواتير (لقطة ثابتة)</th>
+          <th>عدد الفواتير غير المسددة</th>
+          {days.map(d => <th key={d} className="age-col-day-th">{fmtDay(d)}</th>)}
+          <th>الرصيد الحالي</th>
+        </tr>
+      </thead>
+      <tbody>
+        {customers.map(c => {
+          const activeCount = activeRepShareCount(c.rep_breakdown);
+          const isSplit = activeCount > 1;
+          const isOpen  = expanded.has(c.customer_id);
+          return (
+          <React.Fragment key={c.customer_id}>
+          <tr>
+            <td>{c.customer_name}</td>
+            <td>
+              {isSplit ? (
+                <button
+                  type="button"
+                  className="age-multi-rep-toggle"
+                  onClick={() => toggleExpand(c.customer_id)}
+                  title="مقسَّمة بين أكثر من مندوب — اضغط لعرض حصة كل مندوب"
+                >
+                  {c.sales_rep_name || '—'}
+                  <span className="age-multi-rep-flag">{isOpen ? '▲' : '▼'} +{activeCount - 1}</span>
+                </button>
+              ) : (c.sales_rep_name || '—')}
+            </td>
+            <td>{c.region_name || '—'}</td>
+            <td title={fmtSnapDate(c.snapshot_taken_at) ? `ثابتة منذ ${fmtSnapDate(c.snapshot_taken_at)}` : undefined}>
+              {fmtN(c.total_debt)}
+            </td>
+            <td className={parseInt(c.unpaid_count || 0, 10) === 0 ? 'age-cell--zero' : ''}>{fmtN(c.unpaid_count)}</td>
+            {days.map(d => {
+              const v = matrix.byCustDay[`${c.customer_id}-${d}`] || 0;
+              return (
+                <td
+                  key={d}
+                  className={v === 0 ? 'age-cell--zero' : 'age-col-day-cell age-col-day-cell--clickable'}
+                  title={v !== 0 ? 'اضغط لعرض تفاصيل السدادات' : undefined}
+                  onClick={v !== 0 ? () => onOpenPayments({ id: c.customer_id, name: c.customer_name, date: d }) : undefined}
+                >
+                  {v === 0 ? '—' : fmtN(v)}
+                </td>
+              );
+            })}
+            <td style={{ fontWeight: 700, color: parseFloat(c.current_balance || 0) > 0 ? '#dc2626' : '#15803d' }}>
+              {fmtN(c.current_balance)}
+              {(() => {
+                const collected = parseFloat(c.total_debt || 0) - parseFloat(c.current_balance || 0);
+                return collected > 0
+                  ? (
+                    <div
+                      className="age-col-collected age-col-collected--clickable"
+                      title="اضغط لعرض كل سدادات الشهر الحالي"
+                      onClick={() => onOpenPayments({ id: c.customer_id, name: c.customer_name, date: null })}
+                    >
+                      ✓ تحصّل {fmtN(collected)} منذ اللقطة
+                    </div>
+                  )
+                  : null;
+              })()}
+            </td>
+          </tr>
+          {isSplit && isOpen && mergeRepBreakdown(c.rep_breakdown).map((rb, i) => (
+            <tr key={`${c.customer_id}-${rb.sales_rep_name}-${i}`} className="age-rep-subrow">
+              <td className="age-rep-subrow__label">└ حصة هذا المندوب</td>
+              <td>{rb.sales_rep_name}</td>
+              <td>{c.region_name || '—'}</td>
+              <td>{fmtN(rb.total_debt)}</td>
+              <td className={rb.unpaid_count === 0 ? 'age-cell--zero' : ''}>{fmtN(rb.unpaid_count)}</td>
+              {days.map(d => <td key={d} className="age-cell--zero">—</td>)}
+              <td style={{ fontWeight: 600, color: rb.current_balance > 0 ? '#dc2626' : '#15803d' }}>
+                {fmtN(rb.current_balance)}
+              </td>
+            </tr>
+          ))}
+          </React.Fragment>
+          );
+        })}
+      </tbody>
+      <tfoot>
+        <tr>
+          <td>الإجمالي</td>
+          <td>—</td>
+          <td>—</td>
+          <td>{fmtN(totals.total_debt)}</td>
+          <td>{fmtN(totals.unpaid_count)}</td>
+          {days.map(d => <td key={d}>{fmtN(matrix.dayTotals[d] || 0)}</td>)}
+          <td style={{ fontWeight: 800 }}>{fmtN(totals.current_balance)}</td>
+        </tr>
+      </tfoot>
+    </table>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   PaymentModal — payment documents behind one daily collection cell
+   (payment: {id, name, date|null} — null date = whole current month)
+═══════════════════════════════════════════════════════════════ */
+function PaymentModal({ payment, onClose }) {
+  const { data, isLoading, isError, refetch } = useQuery({
+    queryKey: ['aging-col-payments', payment.id, payment.date],
+    queryFn:  () => fetchCollectionPayments(payment.id, payment.date),
+    staleTime: 60_000,
+    retry: 1,
+  });
+
+  useEffect(() => {
+    const handler = e => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', handler);
+    return () => document.removeEventListener('keydown', handler);
+  }, [onClose]);
+
+  const fmtN = n => n != null ? Number(n).toLocaleString('en-SA', { maximumFractionDigits: 0 }) : '—';
+  const payments = data?.payments || [];
+  const totalPaid = payments.reduce((s, p) => s + parseFloat(p.total_paid || 0), 0);
+
+  const methodLabel = p => {
+    const parts = [];
+    if (parseFloat(p.cash || 0)      > 0) parts.push(`نقدي ${fmtN(p.cash)}`);
+    if (parseFloat(p.cheque || 0)    > 0) parts.push(`شيك ${fmtN(p.cheque)}`);
+    if (parseFloat(p.bank_tran || 0) > 0) parts.push(`تحويل ${fmtN(p.bank_tran)}`);
+    if (parseFloat(p.pos || 0)       > 0) parts.push(`شبكة ${fmtN(p.pos)}`);
+    return parts.length ? parts.join(' · ') : '—';
+  };
+
+  return ReactDOM.createPortal(
+    <div className="age-modal-overlay" onClick={onClose}>
+      <div className="age-modal" onClick={e => e.stopPropagation()}>
+        <div className="age-modal-header">
+          <ClockArrowUp size={18} color="#15803d" />
+          <div>
+            <div className="age-modal-customer-name">{payment.name}</div>
+            <div className="age-modal-customer-sub">
+              تفاصيل السدادات — {payment.date ? fmtDate(payment.date) : 'الشهر الحالي'}
+            </div>
+          </div>
+          <button className="age-modal-close" onClick={onClose}>
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="age-modal-body">
+          {isLoading && <div className="age-loading">جاري التحميل…</div>}
+
+          {isError && (
+            <div className="age-empty" style={{ color: '#dc2626' }}>
+              حدث خطأ في تحميل بيانات السدادات
+              <button
+                onClick={() => refetch()}
+                style={{ marginRight: 10, padding: '4px 12px', borderRadius: 6, border: '1px solid #dc2626', background: 'none', color: '#dc2626', cursor: 'pointer' }}
+              >
+                إعادة المحاولة
+              </button>
+            </div>
+          )}
+
+          {!isLoading && !isError && payments.length === 0 && (
+            <div className="age-empty">لا توجد سدادات في هذا اليوم</div>
+          )}
+
+          {!isLoading && !isError && payments.length > 0 && (
+            <>
+              <div style={{ display: 'flex', gap: 10, marginBottom: 14, flexWrap: 'wrap', alignItems: 'center' }}>
+                <span style={{ fontSize: '0.83rem', color: 'var(--color-text-muted)' }}>
+                  {payments.length} مستند سداد
+                </span>
+                <span style={{ fontSize: '0.83rem', fontWeight: 700, color: '#15803d' }}>
+                  إجمالي المسدد: {fmtN(totalPaid)} ر.س
+                </span>
+              </div>
+
+              <table className="age-inv-table">
+                <thead>
+                  <tr>
+                    <th>رقم المستند</th>
+                    <th>تاريخ السداد</th>
+                    <th>رقم الفاتورة المسددة</th>
+                    <th>تاريخ الفاتورة</th>
+                    <th>قيمة الفاتورة</th>
+                    <th>طريقة الدفع</th>
+                    <th>قيمة السداد</th>
+                    <th>رصيد الفاتورة الحالي</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {payments.flatMap((p, i) => {
+                    // Preferred path: real applications resolved live from
+                    // NetSuite (one row per settled invoice, with the exact
+                    // amount applied to each).
+                    if (p.applications?.length) {
+                      return p.applications.map((a, j) => (
+                        <tr key={`${p.document_number}-${j}`}>
+                          <td style={{ fontFamily: 'monospace', direction: 'ltr', textAlign: 'right' }}>
+                            {j === 0 ? p.document_number : ''}
+                          </td>
+                          <td>{j === 0 ? fmtDate(p.tran_date) : ''}</td>
+                          <td style={{ fontFamily: 'monospace', direction: 'ltr', textAlign: 'right' }}>
+                            {a.invoice_number}
+                            <span className="age-ns-badge" title="مطابقة فعلية من NetSuite — الفاتورة التي طُبّق عليها هذا السداد">NetSuite ✓</span>
+                          </td>
+                          <td>{fmtNsDate(a.invoice_date)}</td>
+                          <td>{fmtN(a.invoice_total)}</td>
+                          <td style={{ fontSize: '0.78rem' }}>{j === 0 ? methodLabel(p) : ''}</td>
+                          <td style={{ color: '#15803d', fontWeight: 700 }}>{fmtN(a.applied_amount)}</td>
+                          <td>
+                            {a.invoice_balance != null
+                              ? <span style={{ color: parseFloat(a.invoice_balance) > 0 ? '#dc2626' : '#15803d', fontWeight: 600 }}>{fmtN(a.invoice_balance)}</span>
+                              : <span className="age-closed-badge">فاتورة مغلقة</span>}
+                          </td>
+                        </tr>
+                      ));
+                    }
+                    // Fallback: Excel reference only (NetSuite unavailable
+                    // or no application links found for this document).
+                    return [(
+                    <tr key={p.document_number || i}>
+                      <td style={{ fontFamily: 'monospace', direction: 'ltr', textAlign: 'right' }}>{p.document_number}</td>
+                      <td>{fmtDate(p.tran_date)}</td>
+                      <td style={{ fontFamily: 'monospace', direction: 'ltr', textAlign: 'right' }}>
+                        {p.invoice_number || <span className="age-cell--zero">غير محدد</span>}
+                      </td>
+                      <td>
+                        {p.invoice_date
+                          ? fmtDate(p.invoice_date)
+                          : p.closed_invoice
+                            ? (
+                              <span className="age-closed-badge" title="فاتورة حقيقية مسددة بالكامل ولم تعد ضمن ملف المديونيات الحالي — التاريخ مُستدل من سجل حركة المبيعات">
+                                فاتورة مغلقة{p.closed_invoice_date ? ` · ${fmtDate(p.closed_invoice_date)}` : ''}
+                              </span>
+                            )
+                            : (p.invoice_number
+                              ? <span className="age-cell--zero" title="هذا المرجع منقول كما هو من ملف التحصيل في NetSuite لكنه لا يطابق أي فاتورة مسجلة بالنظام — غالباً مستند تسوية أو دفعة مقدمة وليس فاتورة مبيعات">مرجع غير مطابق لفاتورة</span>
+                              : '—')}
+                      </td>
+                      <td>
+                        {p.invoice_amount != null
+                          ? fmtN(p.invoice_amount)
+                          : p.closed_invoice
+                            ? (p.closed_invoice_amount != null
+                              ? <span title="قيمة مُستدلة من سجل حركة المبيعات">{fmtN(p.closed_invoice_amount)}</span>
+                              : <span className="age-closed-badge">فاتورة مغلقة</span>)
+                            : (p.invoice_number
+                              ? <span className="age-cell--zero" title="هذا المرجع منقول كما هو من ملف التحصيل في NetSuite لكنه لا يطابق أي فاتورة مسجلة بالنظام — غالباً مستند تسوية أو دفعة مقدمة وليس فاتورة مبيعات">مرجع غير مطابق لفاتورة</span>
+                              : '—')}
+                      </td>
+                      <td style={{ fontSize: '0.78rem' }}>{methodLabel(p)}</td>
+                      <td style={{ color: '#15803d', fontWeight: 700 }}>{fmtN(p.total_paid)}</td>
+                      <td>
+                        {p.invoice_balance != null
+                          ? <span style={{ color: parseFloat(p.invoice_balance) > 0 ? '#dc2626' : '#15803d', fontWeight: 600 }}>{fmtN(p.invoice_balance)}</span>
+                          : '—'}
+                      </td>
+                    </tr>
+                    )];
+                  })}
+                </tbody>
+                <tfoot>
+                  <tr>
+                    <td colSpan={6} style={{ fontWeight: 700 }}>الإجمالي</td>
+                    <td style={{ color: '#15803d', fontWeight: 700 }}>{fmtN(totalPaid)}</td>
+                    <td />
+                  </tr>
+                </tfoot>
+              </table>
+            </>
+          )}
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════
    InvoiceModal — invoice-level detail for one customer
 ═══════════════════════════════════════════════════════════════ */
 function InvoiceModal({ customer, onClose }) {
@@ -689,7 +1322,7 @@ function InvoiceModal({ customer, onClose }) {
     return () => document.removeEventListener('keydown', handler);
   }, [onClose]);
 
-  const fmtN = n => n != null ? Number(n).toLocaleString('ar-SA', { maximumFractionDigits: 0 }) : '—';
+  const fmtN = n => n != null ? Number(n).toLocaleString('en-SA', { maximumFractionDigits: 0 }) : '—';
   const invoices = data?.invoices || [];
 
   return ReactDOM.createPortal(

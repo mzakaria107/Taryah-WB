@@ -23,14 +23,25 @@ const fridgesRoutes       = require('./routes/fridges');
 const stockRoutes         = require('./routes/stock');
 const currentStockRoutes  = require('./routes/currentStock');
 const permissionsRoutes        = require('./routes/permissions');
-const profitabilityRoutes      = require('./routes/profitability');
 const reconciliationsRoutes    = require('./routes/reconciliations');
 const salesReportRoutes        = require('./routes/salesReport');
 const coverageRoutes           = require('./routes/coverage');
 const summaryRoutes            = require('./routes/summary');
 const hypermarketsRoutes       = require('./routes/hypermarkets');
+const categoryPerformanceRoutes = require('./routes/categoryPerformance');
+const regionPerformanceRoutes  = require('./routes/regionPerformance');
+const qualityIssuesRoutes      = require('./routes/qualityIssues');
 const collectionsRoutes        = require('./routes/collections');
 const agingRoutes              = require('./routes/aging');
+const salesRepsRoutes          = require('./routes/salesReps');
+const performanceDashboardRoutes = require('./routes/performanceDashboard');
+const commissionsRoutes        = require('./routes/commissions');
+const targetApprovalsRoutes    = require('./routes/targetApprovals');
+const profitabilityRoutes      = require('./routes/profitability');
+const discountShopsRoutes      = require('./routes/discountShops');
+const carrefourDamageRoutes    = require('./routes/carrefourDamage');
+const qualityReturnsRoutes     = require('./routes/qualityReturns');
+const fleetRoutes              = require('./routes/fleet');
 
 /* ── Auto-run pending DB migrations on startup ── */
 async function runMigrations() {
@@ -55,6 +66,15 @@ async function runMigrations() {
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+/* Bind address. Defaults to every interface because under Docker the nginx
+   container reaches the backend across the container network — a loopback
+   bind would make it unreachable there.
+   On the Windows production box BIND_HOST=127.0.0.1: IIS is the only client,
+   and a WILDCARD bind is what let another service (WaNotifyServer, on
+   127.0.0.1:3001) silently take over the loopback address IIS proxies to
+   while PM2 still reported us "online". Claiming the specific address makes
+   that collision impossible — a second binder now fails loudly instead. */
+const BIND_HOST = process.env.BIND_HOST || '0.0.0.0';
 
 // Trust the nginx reverse proxy (needed for express-rate-limit with X-Forwarded-For)
 app.set('trust proxy', 1);
@@ -65,10 +85,17 @@ app.use(helmet());
 app.use(cors({ origin: true, credentials: true }));
 
 // Rate limiting
+// IIS ARR forwards the client address as "IP:port" which express-rate-limit
+// rejects (ERR_ERL_INVALID_IP_ADDRESS) — strip the port and disable the check.
 app.use('/api/auth', rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 20,
   message: { error: 'محاولات كثيرة جداً، يرجى المحاولة لاحقاً' },
+  keyGenerator: (req) => {
+    const raw = req.ip || req.socket?.remoteAddress || 'unknown';
+    return raw.replace(/^(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}):\d+$/, '$1');
+  },
+  validate: { ip: false },
 }));
 
 app.use(express.json({ limit: '10mb' }));
@@ -93,27 +120,25 @@ app.use('/api/fridges',       fridgesRoutes);
 app.use('/api/stock',         stockRoutes);
 app.use('/api/current-stock', currentStockRoutes);
 app.use('/api/permissions',      permissionsRoutes);
-app.use('/api/profitability',    profitabilityRoutes);
 app.use('/api/reconciliations',  reconciliationsRoutes);
 app.use('/api/sales-report',     salesReportRoutes);
 app.use('/api/coverage',         coverageRoutes);
 app.use('/api/summary',          summaryRoutes);
 app.use('/api/hypermarkets',     hypermarketsRoutes);
+app.use('/api/category-performance', categoryPerformanceRoutes);
+app.use('/api/region-performance',   regionPerformanceRoutes);
+app.use('/api/quality-issues',       qualityIssuesRoutes);
 app.use('/api/collections',      collectionsRoutes);
 app.use('/api/aging',            agingRoutes);
-
-/* ── Daily profitability snapshot — 11:59 PM every day ──────── */
-const cron = require('node-cron');
-const { fetchFromNetSuite } = require('./routes/profitability');
-cron.schedule('59 23 * * *', async () => {
-  console.log('[Cron] Daily profitability snapshot starting...');
-  try {
-    await fetchFromNetSuite();
-    console.log('[Cron] Daily profitability snapshot complete.');
-  } catch (err) {
-    console.error('[Cron] Profitability snapshot failed:', err.message);
-  }
-}, { timezone: 'Asia/Riyadh' });
+app.use('/api/sales-reps',       salesRepsRoutes);
+app.use('/api/performance-dashboard', performanceDashboardRoutes);
+app.use('/api/commissions',      commissionsRoutes);
+app.use('/api/target-approvals', targetApprovalsRoutes);
+app.use('/api/profitability',    profitabilityRoutes);
+app.use('/api/discount-shops',   discountShopsRoutes);
+app.use('/api/carrefour-damage', carrefourDamageRoutes);
+app.use('/api/quality-returns',  qualityReturnsRoutes);
+app.use('/api/fleet',            fleetRoutes);
 
 // Last-upload timestamps for the three daily reports
 const { verifyToken: _vt } = require('./middleware/auth');
@@ -146,13 +171,26 @@ app.use((err, _req, res, _next) => {
   res.status(500).json({ error: 'خطأ داخلي في الخادم' });
 });
 
+/* ── Daily profitability snapshot — 11:59 PM every day ──────── */
+const cron = require('node-cron');
+const { fetchFromNetSuite } = require('./routes/profitability');
+cron.schedule('59 23 * * *', async () => {
+  console.log('[Cron] Daily profitability snapshot starting...');
+  try {
+    await fetchFromNetSuite();
+    console.log('[Cron] Daily profitability snapshot complete.');
+  } catch (err) {
+    console.error('[Cron] Profitability snapshot failed:', err.message);
+  }
+}, { timezone: 'Asia/Riyadh' });
+
 runMigrations()
   .then(() => {
-    app.listen(PORT, () => console.log(`✓ Server running on port ${PORT}`));
+    app.listen(PORT, BIND_HOST, () => console.log(`✓ Server running on ${BIND_HOST}:${PORT}`));
   })
   .catch(err => {
     console.error('Migration failed, starting anyway:', err.message);
-    app.listen(PORT, () => console.log(`✓ Server running on port ${PORT}`));
+    app.listen(PORT, BIND_HOST, () => console.log(`✓ Server running on ${BIND_HOST}:${PORT}`));
   });
 
 module.exports = app;

@@ -86,6 +86,19 @@
 }
 .age-filter-reset:hover { background: #fee2e2; }
 
+.age-snapshot-reset-btn {
+  display: flex; align-items: center; gap: 6px;
+  padding: 8px 14px; background: transparent;
+  border: 1.5px solid var(--color-primary, #2563eb);
+  border-radius: 8px; color: var(--color-primary, #2563eb);
+  font-size: 0.83rem; font-weight: 600; cursor: pointer;
+  align-self: flex-end; transition: all 0.15s; white-space: nowrap;
+}
+.age-snapshot-reset-btn:hover:not(:disabled) { background: #eff6ff; }
+.age-snapshot-reset-btn:disabled { opacity: 0.6; cursor: default; }
+.age-spin { animation: age-spin-rotate 0.8s linear infinite; }
+@keyframes age-spin-rotate { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
 /* ── KPI cards ───────────────────────────────────────────────── */
 .age-kpis {
   display: grid;
@@ -231,6 +244,44 @@
   align-items: center; gap: 5px;
 }
 .age-customer-link:hover { text-decoration: underline; }
+
+/* ── Old-debt collection tracker — daily columns ──────────────── */
+.age-col-day-th   { white-space: nowrap; font-size: 0.72rem; }
+.age-col-day-cell { color: #15803d; font-weight: 600; white-space: nowrap; }
+.age-col-hint     { font-size: 0.76rem; color: var(--color-text-muted); align-self: center; }
+
+.age-multi-rep-flag {
+  display: inline-flex; align-items: center; gap: 2px;
+  margin-inline-start: 4px;
+  padding: 0 5px; border-radius: 999px;
+  background: #fef3c7; color: #92400e;
+  font-size: 0.68rem; font-weight: 700;
+  vertical-align: middle;
+}
+.age-multi-rep-toggle {
+  display: inline-flex; align-items: center;
+  background: none; border: none; padding: 0;
+  font: inherit; color: inherit; cursor: pointer;
+}
+.age-multi-rep-toggle:hover .age-multi-rep-flag { background: #fde68a; }
+.age-rep-subrow { background: #f8fafc; }
+.age-rep-subrow td { color: var(--color-text-muted); font-size: 0.85em; }
+.age-rep-subrow__label { padding-inline-start: 20px !important; font-style: italic; }
+.age-col-collected { font-size: 0.68rem; font-weight: 600; color: #15803d; white-space: nowrap; margin-top: 2px; }
+.age-col-day-cell--clickable { cursor: pointer; text-decoration: underline dotted; text-underline-offset: 3px; }
+.age-col-day-cell--clickable:hover { background: #f0fdf4 !important; }
+.age-col-collected--clickable { cursor: pointer; }
+.age-col-collected--clickable:hover { text-decoration: underline; }
+.age-closed-badge {
+  display: inline-block; padding: 2px 8px; border-radius: 10px;
+  background: #f0fdf4; border: 1px solid #bbf7d0; color: #15803d;
+  font-size: 0.72rem; font-weight: 700; white-space: nowrap;
+}
+.age-ns-badge {
+  display: inline-block; margin-inline-start: 6px; padding: 1px 6px;
+  border-radius: 8px; background: #eff6ff; border: 1px solid #bfdbfe;
+  color: #1d4ed8; font-size: 0.64rem; font-weight: 700; vertical-align: middle;
+}
 
 /* ── Bucket cell colors ──────────────────────────────────────── */
 .age-cell--zero { color: var(--color-text-muted); opacity: 0.35; }
@@ -396,3 +447,8 @@
   print-color-adjust: exact;
   -webkit-print-color-adjust: exact;
 }
+
+/* «استبعاد مديونية كارفور» — same pill as the direct-debt toggle, tinted
+   differently so the two are not mistaken for each other at a glance. */
+.age-exclude-carrefour-btn { border-color: #c7d2fe; color: #4338ca; background: #eef2ff; }
+.age-exclude-carrefour-btn.age-exclude-direct-btn--on { border-color: #4338ca; }

@@ -1,5 +1,6 @@
 import React from 'react';
 import Skeleton from '../UI/Skeleton';
+import { useLanguage } from '../../context/LanguageContext';
 import './YearStrip.css';
 
 const fmtInt = (n) => Math.round(Number(n)).toLocaleString('en-SA');
@@ -15,6 +16,8 @@ function getColor(year) {
 }
 
 export default function YearStrip({ data = [], loading, activeYear, activeYears, onSelect, vertical = false }) {
+  const { lang } = useLanguage();
+  const en = lang === 'en';
   const stripClass = `year-strip${vertical ? ' vertical' : ''}`;
 
   if (loading) {
@@ -33,7 +36,7 @@ export default function YearStrip({ data = [], loading, activeYear, activeYears,
   }
 
   return (
-    <div className={stripClass} role="list" aria-label="بيانات السنوات">
+    <div className={stripClass} role="list" aria-label={en ? 'Year data' : 'بيانات السنوات'}>
       {data.map((d, idx) => {
         const year    = Number(d.year);
         const c       = getColor(year);
@@ -64,24 +67,24 @@ export default function YearStrip({ data = [], loading, activeYear, activeYears,
           >
             <div className="year-card-head">
               <div className="year-num">{year}</div>
-              <div className="year-badge">{invoices.toLocaleString('en-SA')} فاتورة</div>
+              <div className="year-badge">{invoices.toLocaleString('en-SA')} {en ? 'invoices' : 'فاتورة'}</div>
             </div>
 
             <div className="year-grid">
               <div className="year-stat">
-                <div className="lbl">الإجمالي</div>
+                <div className="lbl">{en ? 'Total' : 'الإجمالي'}</div>
                 <div className="val">{fmtInt(original)}</div>
               </div>
               <div className="year-stat">
-                <div className="lbl">المسدد</div>
+                <div className="lbl">{en ? 'Paid' : 'المسدد'}</div>
                 <div className="val">{fmtInt(paid)}</div>
               </div>
               <div className="year-stat bal">
-                <div className="lbl">الرصيد</div>
+                <div className="lbl">{en ? 'Balance' : 'الرصيد'}</div>
                 <div className="val">{fmtInt(balance)}</div>
               </div>
               <div className="year-stat rate">
-                <div className="lbl">المعدل</div>
+                <div className="lbl">{en ? 'Rate' : 'المعدل'}</div>
                 <div className="val">{rate.toFixed(1)}%</div>
               </div>
             </div>

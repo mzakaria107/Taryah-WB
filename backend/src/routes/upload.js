@@ -1,4 +1,5 @@
 const express = require('express');
+const fs = require('fs');
 const xlsx = require('xlsx');
 const { v4: uuidv4 } = require('uuid');
 const pool = require('../db/pool');
@@ -39,6 +40,33 @@ function deriveStatus(balance, original) {
   if (bal <= 0) return 'paid';
   if (bal >= orig && orig > 0) return 'unpaid';
   return 'partial';
+}
+
+/**
+ * Re-link every fridge to the sales rep + route of the customer's most
+ * recent invoice (by invoice_date). Runs after every customer_balance
+ * upload so fridge assignments stay in sync with whoever last sold to
+ * that customer, without needing a manual admin action.
+ */
+async function syncFridgeAssignmentsFromInvoices() {
+  const { rowCount } = await pool.query(`
+    WITH latest_inv AS (
+      SELECT DISTINCT ON (i.customer_id)
+        i.customer_id, i.sales_rep_name, i.route_id
+      FROM invoices i
+      WHERE i.customer_id IS NOT NULL
+      ORDER BY i.customer_id, i.invoice_date DESC, i.updated_at DESC
+    )
+    UPDATE fridges f
+    SET salesrep_name = li.sales_rep_name,
+        route_code    = li.route_id,
+        updated_at    = NOW()
+    FROM latest_inv li
+    WHERE li.customer_id = f.customer_code
+      AND (f.salesrep_name IS DISTINCT FROM li.sales_rep_name
+           OR f.route_code IS DISTINCT FROM li.route_id)
+  `);
+  console.log(`[Upload] Synced ${rowCount} fridge(s) to latest invoice rep/route`);
 }
 
 /**
@@ -283,6 +311,13 @@ router.post(
         [processed, batchId]
       );
 
+      try {
+        await syncFridgeAssignmentsFromInvoices();
+      } catch (syncErr) {
+        // Non-fatal — the invoice upload itself already succeeded.
+        console.warn('[Upload] Fridge rep/route sync failed (non-fatal):', syncErr.message);
+      }
+
       res.json({
         success: true,
         rowsProcessed: processed,
@@ -525,6 +560,392 @@ router.post(
 // ─────────────────────────────────────────────
 // GET /api/upload/batches[?file_type=xxx]
 // ─────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /api/upload/customer-list
+// Reads the "Customer List - CM" export → upserts the `customers` master.
+//
+// The export is a periodic FULL list, so the load is an upsert keyed on the
+// customer code — never a truncate-and-replace. A customer missing from a
+// later export is left untouched rather than deleted: a partial or filtered
+// download would otherwise wipe half the master, and this file is the only
+// place supervisor / category / creation-source data exists at all.
+//
+// Column names are matched flexibly (the same approach as route-master) and
+// whatever was matched is echoed back in the response, so a renamed column
+// shows up as a reported mismatch instead of silently importing nulls.
+// ─────────────────────────────────────────────────────────────────────────────
+router.post(
+  '/customer-list',
+  verifyToken,
+  requireRoles('super_admin', 'it_admin'),
+  upload.single('file'),
+  async (req, res) => {
+    if (!req.file) return res.status(400).json({ error: 'لم يتم رفع ملف' });
+
+    const batchId = uuidv4();
+    await pool.query(
+      `INSERT INTO upload_batches (id, file_name, file_type, uploaded_by, status)
+       VALUES ($1, $2, 'customer_list', $3, 'processing')`,
+      [batchId, req.file.originalname, req.user.id]
+    );
+
+    const fail = async (status, body) => {
+      await pool.query(
+        `UPDATE upload_batches SET status='failed', error_message=$2 WHERE id=$1`,
+        [batchId, String(body.error).slice(0, 500)]
+      );
+      return res.status(status).json(body);
+    };
+
+    try {
+      const workbook = xlsx.readFile(req.file.path, { cellDates: true, raw: false });
+      const sheet    = workbook.Sheets[workbook.SheetNames[0]];
+      const rows     = xlsx.utils.sheet_to_json(sheet, { defval: '' });
+      if (!rows.length) return fail(400, { error: 'الملف فارغ' });
+
+      const cols = Object.keys(rows[0]);
+      const norm = s => String(s).trim().toLowerCase().replace(/[\s_]+/g, ' ');
+      /* The header row of this export arrives truncated in places
+         ("Customer Co…", "Supervisor Co…", "Route Cod…"), so matching is done in
+         tiers: exact first, then a shared-prefix match that tolerates ONE lost
+         final character. Among prefix candidates the LONGEST column name wins —
+         otherwise "Customer Category Name" would bind to the "Customer Category"
+         code column, which sits earlier in the file, and the category code would
+         be imported as the category name. */
+      const sharedLen = (a, b) => { let i = 0; while (i < a.length && i < b.length && a[i] === b[i]) i++; return i; };
+      const pick = (...cands) => {
+        for (const c of cands) {
+          const hit = cols.find(k => norm(k) === norm(c));
+          if (hit) return hit;
+        }
+        for (const c of cands) {
+          const nc = norm(c);
+          let best = null, bestLen = -1;
+          for (const k of cols) {
+            const nk = norm(k);
+            const sh = sharedLen(nk, nc);
+            const short = Math.min(nk.length, nc.length);
+            if (short < 4) continue;
+            const ok = sh === short || (short >= 6 && sh >= short - 1);
+            if (ok && nk.length > bestLen) { best = k; bestLen = nk.length; }
+          }
+          if (best) return best;
+        }
+        return null;
+      };
+
+      const map = {
+        customer_code:   pick('Customer Code', 'Customer Co', 'customer_code', 'كود العميل', 'رقم العميل'),
+        /* 'Customer Name English' listed explicitly (not left to the prefix-
+           match fallback) — the simpler "names-only" update file uses that
+           exact header instead of the full CM export's plain 'Customer
+           Name', and relying on prefix-matching alone to land on the right
+           column over 'Customer Name Arabic' would be a coincidence of the
+           two words' lengths, not a real guarantee. */
+        customer_name:   pick('Customer Name', 'Customer Name English', 'Customer Name Eng', 'اسم العميل'),
+        /* Listed with its own candidates so it can never be confused with the
+           English column: 'Customer Name Arabic' also PREFIX-matches
+           'Customer Name', so exact matching must resolve both first. */
+        customer_name_ar: pick('Customer Name Arabic', 'Customer Name Ar', 'Customer Name AR',
+                               'Customer Name Arab', 'اسم العميل بالعربي', 'الاسم العربي'),
+        branch_code:     pick('Branch Code', 'Branch Cod', 'كود الفرع'),
+        branch_name_en:  pick('Branch Name Eng', 'Branch Name English', 'Branch Name', 'اسم الفرع'),
+        route_code:      pick('Route Code', 'Route Cod', 'كود الخط', 'رقم الخط'),
+        route_name_en:   pick('Route Name English', 'Route Name Eng', 'Route Name', 'اسم الخط'),
+        salesman_code:   pick('Salesman Code', 'Salesman Co', 'كود المندوب'),
+        salesman_name:   pick('Salesman Name', 'اسم المندوب'),
+        category_code:   pick('Customer Category', 'فئة العميل'),
+        category_name:   pick('Customer Category Name', 'Customer Category Na', 'اسم فئة العميل'),
+        supervisor_code: pick('Supervisor Code', 'Supervisor Co', 'كود المشرف'),
+        supervisor_name: pick('Supervisor Name', 'اسم المشرف'),
+        created_on:      pick('Datetime Created', 'Date Created', 'Created Date', 'تاريخ الإنشاء'),
+        from_hht:        pick('Is Created From HHT', 'Is Created From H', 'Created From HHT'),
+      };
+
+      /* Two fields resolving to the SAME column means one of them is importing
+         the wrong value. Reported rather than guessed at. */
+      const byCol = {};
+      Object.entries(map).forEach(([f, c]) => { if (c) (byCol[c] = byCol[c] || []).push(f); });
+      const duplicateBindings = Object.entries(byCol).filter(([, fs]) => fs.length > 1)
+        .map(([c, fs]) => ({ column: c, fields: fs }));
+
+      /* The code and the name are the only columns the master cannot be built
+         without — everything else is enrichment and may legitimately be blank. */
+      if (!map.customer_code) {
+        return fail(422, { error: 'لم يتم العثور على عمود كود العميل (Customer Code)', availableColumns: cols, matched: map });
+      }
+      if (!map.customer_name) {
+        return fail(422, { error: 'لم يتم العثور على عمود اسم العميل (Customer Name)', availableColumns: cols, matched: map });
+      }
+
+      /* Branch name → region_id. regions.name_ar stores the ENGLISH branch
+         identifier on this database (see the region-name gotcha), so both
+         columns are tried. */
+      const regRes = await pool.query('SELECT id, name_ar, name_en FROM regions');
+      const regionByName = new Map();
+      regRes.rows.forEach(r => {
+        [r.name_ar, r.name_en].filter(Boolean)
+          .forEach(n => regionByName.set(String(n).trim().toLowerCase(), r.id));
+      });
+
+      const S = (row, key, max) => {
+        if (!map[key]) return null;
+        const v = String(row[map[key]] ?? '').trim();
+        if (!v) return null;
+        return max ? v.slice(0, max) : v;
+      };
+      const truthy = v => {
+        if (v == null) return null;
+        const s = String(v).trim().toLowerCase();
+        if (!s) return null;
+        if (['yes', 'true', '1', 'y', 'نعم'].includes(s)) return true;
+        if (['no', 'false', '0', 'n', 'لا'].includes(s)) return false;
+        return null;
+      };
+
+      const parsed = new Map();   // last row wins for a repeated code
+      let skipped = 0, unmatchedRegions = new Set();
+
+      for (const row of rows) {
+        const code = S(row, 'customer_code', 100);
+        if (!code) { skipped++; continue; }
+
+        const branchName = S(row, 'branch_name_en', 200);
+        const regionId = branchName ? (regionByName.get(branchName.toLowerCase()) ?? null) : null;
+        if (branchName && regionId == null) unmatchedRegions.add(branchName);
+
+        const routeRaw = S(row, 'route_code');
+        const routeNum = routeRaw ? parseInt(String(routeRaw).replace(/[^\d-]/g, ''), 10) : NaN;
+
+        let createdOn = null;
+        if (map.created_on) {
+          const raw = row[map.created_on];
+          const d = raw instanceof Date ? raw : (raw ? new Date(String(raw)) : null);
+          if (d && !isNaN(d.getTime())) createdOn = d.toISOString();
+        }
+
+        parsed.set(code, [
+          code,
+          S(row, 'customer_name', 300),
+          S(row, 'customer_name_ar', 300),
+          S(row, 'branch_code', 50),
+          branchName,
+          regionId,
+          Number.isFinite(routeNum) ? routeNum : null,
+          S(row, 'route_name_en', 200),
+          S(row, 'salesman_code', 50),
+          S(row, 'salesman_name', 200),
+          S(row, 'category_code', 50),
+          S(row, 'category_name', 200),
+          S(row, 'supervisor_code', 50),
+          S(row, 'supervisor_name', 200),
+          createdOn,
+          truthy(map.from_hht ? row[map.from_hht] : null),
+        ]);
+      }
+
+      if (!parsed.size) {
+        return fail(422, { error: 'لا توجد صفوف صالحة في الملف', availableColumns: cols, matched: map });
+      }
+
+      const before = await pool.query('SELECT COUNT(*)::int AS n FROM customers');
+
+      const client = await pool.connect();
+      let inserted = 0, updated = 0;
+      try {
+        await client.query('BEGIN');
+        for (const vals of parsed.values()) {
+          const { rows: r } = await client.query(
+            `INSERT INTO customers
+               (customer_code, customer_name, customer_name_ar, branch_code, branch_name_en, region_id,
+                route_code, route_name_en, salesman_code, salesman_name,
+                category_code, category_name, supervisor_code, supervisor_name,
+                created_on_source, created_from_hht, updated_by, upload_batch_id)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
+             ON CONFLICT (customer_code) DO UPDATE SET
+               customer_name     = COALESCE(EXCLUDED.customer_name, customers.customer_name),
+               customer_name_ar  = COALESCE(EXCLUDED.customer_name_ar, customers.customer_name_ar),
+               branch_code       = COALESCE(EXCLUDED.branch_code, customers.branch_code),
+               branch_name_en    = COALESCE(EXCLUDED.branch_name_en, customers.branch_name_en),
+               region_id         = COALESCE(EXCLUDED.region_id, customers.region_id),
+               route_code        = COALESCE(EXCLUDED.route_code, customers.route_code),
+               route_name_en     = COALESCE(EXCLUDED.route_name_en, customers.route_name_en),
+               salesman_code     = COALESCE(EXCLUDED.salesman_code, customers.salesman_code),
+               salesman_name     = COALESCE(EXCLUDED.salesman_name, customers.salesman_name),
+               category_code     = COALESCE(EXCLUDED.category_code, customers.category_code),
+               category_name     = COALESCE(EXCLUDED.category_name, customers.category_name),
+               supervisor_code   = COALESCE(EXCLUDED.supervisor_code, customers.supervisor_code),
+               supervisor_name   = COALESCE(EXCLUDED.supervisor_name, customers.supervisor_name),
+               created_on_source = COALESCE(EXCLUDED.created_on_source, customers.created_on_source),
+               created_from_hht  = COALESCE(EXCLUDED.created_from_hht, customers.created_from_hht),
+               updated_at        = NOW(),
+               updated_by        = EXCLUDED.updated_by,
+               upload_batch_id   = EXCLUDED.upload_batch_id
+             RETURNING (xmax = 0) AS was_insert`,
+            [...vals, req.user.id, batchId]
+          );
+          if (r[0].was_insert) inserted++; else updated++;
+        }
+        await client.query('COMMIT');
+      } catch (e) {
+        await client.query('ROLLBACK');
+        throw e;
+      } finally {
+        client.release();
+      }
+
+      /* upload_batches carries a single `row_count` — there are no
+         total/success/error columns on this table (the other handlers use
+         row_count too). */
+      await pool.query(
+        `UPDATE upload_batches SET status='success', row_count=$2 WHERE id=$1`,
+        [batchId, parsed.size]
+      );
+
+      const withAr = [...parsed.values()].filter(v => v[2]).length;
+
+      res.json({
+        message: 'تم تحديث بيانات العملاء',
+        with_arabic_name: withAr,
+        file_rows: rows.length,
+        customers_in_file: parsed.size,
+        inserted, updated, skipped,
+        total_customers: before.rows[0].n + inserted,
+        /* Reported, not hidden: a branch name with no matching region leaves
+           region_id null, and the operator needs to know which ones. */
+        unmatched_branches: [...unmatchedRegions],
+        matched_columns: map,
+        duplicate_bindings: duplicateBindings,
+        available_columns: cols,
+      });
+    } catch (err) {
+      console.error('[CustomerList] upload failed:', err);
+      await pool.query(
+        `UPDATE upload_batches SET status='failed', error_message=$2 WHERE id=$1`,
+        [batchId, String(err.message).slice(0, 500)]
+      );
+      res.status(500).json({ error: 'فشل تحديث بيانات العملاء: ' + err.message });
+    } finally {
+      try { fs.unlinkSync(req.file.path); } catch (_) {}
+    }
+  }
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /api/upload/data-integrity
+// Does every file actually link up? All four sources key on the customer code:
+//   customers (Customer List - CM)  ← the master, carries route + salesman
+//   invoices  (customerBalanceDues) ← debt
+//   payments  (Route Invoice Collection Payment) ← collection
+//   sales_activity (تقرير العملاء المتعاملة) ← quantities
+// This reports, per region, where a link is MISSING — the case that made
+// Jeddah's debt invisible on the dashboard: 74 customers in the master, live
+// payments and sales, and zero rows in the balance file.
+// ─────────────────────────────────────────────────────────────────────────────
+router.get('/data-integrity', verifyToken, async (req, res) => {
+  try {
+    const [byRegion, orphans, routesRes, freshRes, repRes] = await Promise.all([
+      /* Set-based, NOT correlated EXISTS per customer: the first version ran an
+         EXISTS against sales_activity (457K rows) once per customer and hung
+         the request. Three DISTINCT scans hash-joined instead. */
+      pool.query(`
+        WITH inv AS (SELECT DISTINCT customer_id  AS code FROM invoices),
+             pay AS (SELECT DISTINCT customer_code AS code FROM payments),
+             sal AS (SELECT DISTINCT customer_code AS code FROM sales_activity),
+             debt AS (SELECT region_id, ROUND(SUM(balance)::numeric,2) AS debt
+                        FROM invoices GROUP BY region_id)
+        SELECT r.id AS region_id, r.name_ar AS region,
+               COUNT(c.customer_code)::int                                  AS customers,
+               COUNT(*) FILTER (WHERE inv.code IS NOT NULL)::int            AS with_invoices,
+               COUNT(*) FILTER (WHERE pay.code IS NOT NULL)::int            AS with_payments,
+               COUNT(*) FILTER (WHERE sal.code IS NOT NULL)::int            AS with_sales,
+               COUNT(*) FILTER (WHERE c.route_code IS NULL
+                                  AND c.customer_code IS NOT NULL)::int     AS no_route,
+               COUNT(*) FILTER (WHERE c.salesman_name IS NULL
+                                  AND c.customer_code IS NOT NULL)::int     AS no_salesman,
+               COALESCE(MAX(debt.debt), 0)                                  AS debt
+        FROM regions r
+        LEFT JOIN customers c ON c.region_id = r.id
+        LEFT JOIN inv  ON inv.code = c.customer_code
+        LEFT JOIN pay  ON pay.code = c.customer_code
+        LEFT JOIN sal  ON sal.code = c.customer_code
+        LEFT JOIN debt ON debt.region_id = r.id
+        GROUP BY r.id, r.name_ar
+        ORDER BY customers DESC`),
+      /* codes present in a transactional file but absent from the master —
+         these can never be enriched with a route or a salesman */
+      pool.query(`
+        SELECT 'payments' AS source, p.customer_code, MAX(p.customer_name) AS customer_name
+          FROM payments p LEFT JOIN customers c ON c.customer_code = p.customer_code
+         WHERE c.customer_code IS NULL GROUP BY 1,2
+        UNION ALL
+        SELECT 'sales_activity', s.customer_code, MAX(s.customer_name)
+          FROM sales_activity s LEFT JOIN customers c ON c.customer_code = s.customer_code
+         WHERE c.customer_code IS NULL GROUP BY 1,2
+        UNION ALL
+        SELECT 'invoices', i.customer_id, MAX(i.customer_name)
+          FROM invoices i LEFT JOIN customers c ON c.customer_code = i.customer_id
+         WHERE c.customer_code IS NULL GROUP BY 1,2
+        ORDER BY 1,2`),
+      pool.query(`
+        SELECT COUNT(DISTINCT c.route_code)::int AS master_routes,
+               COUNT(DISTINCT c.route_code) FILTER (WHERE rt.route_id IS NULL)::int AS missing_from_routes
+          FROM customers c LEFT JOIN routes rt ON rt.route_id = c.route_code
+         WHERE c.route_code IS NOT NULL`),
+      pool.query(`
+        SELECT 'customers' AS source, MAX(updated_at) AS newest FROM customers
+        UNION ALL SELECT 'invoices',       MAX(updated_at)  FROM invoices
+        UNION ALL SELECT 'payments',       MAX(uploaded_at) FROM payments
+        UNION ALL SELECT 'sales_activity', MAX(uploaded_at) FROM sales_activity`),
+      /* The master's salesman vs the reps the sales file actually reports.
+         Compared as two SETS. The first version used NOT EXISTS with TRIM() on
+         both sides, which defeats idx_sa_rep and scanned all 457K sales rows
+         once per customer — it ran for over three minutes and hung the whole
+         endpoint. */
+      pool.query(`
+        WITH reps AS (
+          SELECT DISTINCT TRIM(salesrep_name) AS name FROM sales_activity
+           WHERE salesrep_name IS NOT NULL AND TRIM(salesrep_name) <> ''),
+        ms AS (
+          SELECT DISTINCT TRIM(salesman_name) AS name FROM customers
+           WHERE salesman_name IS NOT NULL AND TRIM(salesman_name) <> '')
+        SELECT (SELECT COUNT(*)::int FROM ms) AS master_salesmen,
+               (SELECT COUNT(*)::int FROM ms LEFT JOIN reps ON reps.name = ms.name
+                 WHERE reps.name IS NULL) AS not_seen_in_sales`),
+    ]);
+
+    const regions = byRegion.rows.map(r => ({
+      ...r,
+      /* The signal that matters: the region has customers on the books but the
+         debt file knows none of them, so its debt reads zero everywhere. */
+      missing_from_debt_file: r.customers > 0 && r.with_invoices === 0,
+    }));
+
+    const orphanBySource = {};
+    orphans.rows.forEach(o => {
+      (orphanBySource[o.source] = orphanBySource[o.source] || []).push(
+        { customer_code: o.customer_code, customer_name: o.customer_name });
+    });
+
+    res.json({
+      regions,
+      alerts: regions.filter(r => r.missing_from_debt_file).map(r => ({
+        region: r.region,
+        message: `${r.customers} عميل بالسجل و${r.with_sales} لديهم مبيعات، ولا يوجد أي صف لهم في ملف الأرصدة — لن تظهر مديونية ${r.region}`,
+      })),
+      orphans: Object.entries(orphanBySource).map(([source, rows]) => ({
+        source, count: rows.length, sample: rows.slice(0, 20),
+      })),
+      routes: routesRes.rows[0],
+      salesmen: repRes.rows[0],
+      freshness: freshRes.rows,
+    });
+  } catch (e) {
+    console.error('[Upload] data-integrity:', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 router.get('/batches', verifyToken, requireRoles('super_admin', 'it_admin'), async (req, res) => {
   try {
     const { file_type } = req.query;

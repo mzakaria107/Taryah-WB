@@ -229,33 +229,69 @@ function buildHierarchy(rawRows) {
 }
 
 /* ── Region helpers ─────────────────────────────────────────── */
+
+// Maps English DB region names → Arabic keywords that appear in NetSuite location strings
+const EN_TO_AR_REGION = {
+  'riyadh':         'الرياض',
+  'al-qassem':      'القصيم',
+  'al qassem':      'القصيم',
+  'shaqraa':        'شقراء',
+  'shaqra':         'شقراء',
+  'al duwadmi':     'الدوادمي',
+  'duwadmi':        'الدوادمي',
+  'hael':           'حائل',
+  'ha\'el':         'حائل',
+  'arar':           'عرعر',
+  'madinah':        'المدينة',
+  'al madinah':     'المدينة',
+  'hafir el batin': 'حفر الباطن',
+  'hafr al batin':  'حفر الباطن',
+  'dammam':         'الدمام',
+  'al dammam':      'الدمام',
+  'jeddah':         'جدة',
+  'jedda':          'جدة',
+};
+
+// regionId may be a single id or an array of ids (a user can now be
+// assigned more than one region) — returns the list of resolved Arabic
+// region names to match against NetSuite branch labels.
 async function resolveRegionName(regionId) {
-  if (!regionId) return null;
+  if (!regionId || (Array.isArray(regionId) && !regionId.length)) return null;
+  const ids = Array.isArray(regionId) ? regionId : [regionId];
   try {
-    const res = await pool.query('SELECT name_ar FROM regions WHERE id = $1', [regionId]);
-    return res.rows[0]?.name_ar || null;
+    const res = await pool.query('SELECT name_ar, name_en FROM regions WHERE id = ANY($1::int[])', [ids]);
+    if (!res.rows.length) return null;
+    const names = res.rows.map(row => {
+      // name_ar/name_en currently stored as English — map to Arabic for NetSuite matching
+      const enName = (row.name_ar || row.name_en || '').toLowerCase().trim();
+      return EN_TO_AR_REGION[enName] || row.name_ar || null;
+    }).filter(Boolean);
+    return names.length ? names : null;
   } catch { return null; }
 }
 
-function filterByRegion(data, regionName) {
-  if (!regionName || !data) return data;
+function filterByRegion(data, regionNames) {
+  if (!regionNames || !data) return data;
+  const names = Array.isArray(regionNames) ? regionNames : [regionNames];
+  if (!names.length) return data;
 
   // Normalize: collapse whitespace, strip diacritics for comparison
   const norm = s => String(s).trim().replace(/\s+/g, ' ');
-  const dbName = norm(regionName);
+  const dbNames = names.map(norm);
 
   const filteredRegions = data.regions.filter(r => {
     const rName = norm(r.regionName);
-    if (rName === dbName) return true;
-    if (rName.includes(dbName)) return true;
-    if (dbName.includes(rName)) return true;
-    // Word-level: any significant word (>1 char) from dbName appears in rName
-    const words = dbName.split(/\s+/).filter(w => w.length > 1);
-    if (words.some(w => rName.includes(w))) return true;
-    return false;
+    return dbNames.some(dbName => {
+      if (rName === dbName) return true;
+      if (rName.includes(dbName)) return true;
+      if (dbName.includes(rName)) return true;
+      // Word-level: any significant word (>1 char) from dbName appears in rName
+      const words = dbName.split(/\s+/).filter(w => w.length > 1);
+      return words.some(w => rName.includes(w));
+    });
   });
 
-  console.log(`[SalesReport] filterByRegion "${dbName}": ${filteredRegions.length}/${data.regions.length} matched`);
+  console.log(`[SalesReport] filterByRegion "${dbNames.join(', ')}": ${filteredRegions.length}/${data.regions.length} matched`);
   // Recompute KPI from filtered regions
   const allItems = filteredRegions.flatMap(r => r.reps.flatMap(rep => rep.items));
   const posItems = allItems.filter(i => i.qty > 0);
@@ -358,6 +394,267 @@ router.get('/monthly/refresh', verifyToken, applyRegionFilter, async (req, res) 
     res.json({ ok: true, ...data });
   } catch (err) {
     res.status(502).json({ error: err.message });
+  }
+});
+
+/* ── Arabic first-letter → Latin phoneme (for fuzzy matching) ── */
+const AR_INIT = {
+  'أ':'a','ا':'a','إ':'i','آ':'a','ء':'a','ع':'a',
+  'ب':'b','ت':'t','ث':'t',
+  'ج':'j','ح':'h','خ':'k',
+  'د':'d','ذ':'d','ر':'r','ز':'z',
+  'س':'s','ش':'s','ص':'s','ض':'d',
+  'ط':'t','ظ':'d','غ':'g',
+  'ف':'f','ق':'k','ك':'k','ل':'l',
+  'م':'m','ن':'n','ه':'h','ة':'h',
+  'و':'w','ي':'y','ى':'y',
+};
+function wordInitials(name) {
+  return (name || '').trim().split(/\s+/)
+    .filter(w => w.length > 0)
+    .map(w => AR_INIT[w[0]] || w[0].toLowerCase())
+    .join('');
+}
+function initSimilarity(a, b) {
+  if (!a || !b) return 0;
+  const shorter = a.length < b.length ? a : b;
+  const longer  = a.length < b.length ? b : a;
+  let matches = 0;
+  for (let i = 0; i < shorter.length; i++) {
+    if (shorter[i] === longer[i]) matches++;
+  }
+  return matches / longer.length;
+}
+/* Build fuzzy alias: for each Arabic rep name, find best DB English match */
+function buildAliasMap(dbRepCategories) {
+  const dbKeys = Object.keys(dbRepCategories);
+  const dbInitials = dbKeys.map(k => ({ key: k, initials: wordInitials(k) }));
+  return function resolveAlias(repName) {
+    const key = (repName || '').toLowerCase().trim().replace(/\s+/g, ' ');
+    if (dbRepCategories[key]) return dbRepCategories[key]; // exact match
+    // Fuzzy: compute initials signature and find best DB match
+    const sig = wordInitials(key);
+    let best = null, bestScore = 0;
+    for (const db of dbInitials) {
+      const score = initSimilarity(sig, db.initials);
+      if (score > bestScore && score >= 0.75) { best = db.key; bestScore = score; }
+    }
+    return best ? dbRepCategories[best] : null;
+  };
+}
+
+/* ── GET /sales-report/rep-categories ──────────────────────── */
+router.get('/rep-categories', verifyToken, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT DISTINCT
+         LOWER(TRIM(COALESCE(salesrep_name,''))) AS rep,
+         NULLIF(TRIM(category_name),'')          AS category
+       FROM sales_activity
+       WHERE TRIM(COALESCE(salesrep_name,'')) <> ''
+         AND TRIM(COALESCE(category_name,''))  <> ''
+       ORDER BY rep, category`
+    );
+    const repCategories = {};
+    const allCats = new Set();
+    for (const r of rows) {
+      if (!r.rep || !r.category) continue;
+      allCats.add(r.category);
+      if (!repCategories[r.rep]) repCategories[r.rep] = [];
+      if (!repCategories[r.rep].includes(r.category))
+        repCategories[r.rep].push(r.category);
+    }
+    // Build initials index for fuzzy matching (Arabic↔English)
+    const initialsIndex = Object.entries(repCategories).map(([rep, cats]) => ({
+      rep, cats, initials: wordInitials(rep),
+    }));
+    res.json({ repCategories, categories: [...allCats].sort(), initialsIndex });
+  } catch (err) {
+    console.error('[SalesReport] rep-categories error:', err.message);
+    res.status(500).json({ error: 'خطأ في الخادم' });
+  }
+});
+
+/* ══════════════════════════════════════════════════════════════
+   GET /sales-report/branch-summary — drillable Branch → Rep →
+   Category → Customer summary table (Qty / Value / Avg Price / Returns /
+   Quality Issue / Customers / Collections), built from OUR OWN data —
+   sales_activity + payments + quality_issues — NOT the live NetSuite feed
+   the rest of this file pulls from.
+
+   Modeled on a NetSuite inventory-adjustment report that also carries
+   Free/Good Return/Expire columns; those three have NO equivalent in
+   sales_activity (only a single undifferentiated bad_return_qty exists,
+   with no "جيد/تالف/منتهي الصلاحية" split) and are deliberately left out
+   rather than shown as a fabricated zero — "لا يوجد مصدر لها" is meta.qty_caveat.
+
+   Quality Issue is branch-level ONLY (from quality_issues, which carries a
+   region_id but no salesman/category/customer dimension) — every deeper
+   level returns quality_issue: null, same caveat the reference report
+   itself carries for its own Quality Issue column.
+   ══════════════════════════════════════════════════════════════ */
+const BS_LEVELS = ['branch', 'rep', 'category', 'customer'];
+
+router.get('/branch-summary', verifyToken, applyRegionFilter, async (req, res) => {
+  const year      = parseInt(req.query.year) || new Date().getFullYear();
+  const fromMonth = Math.max(1,  parseInt(req.query.from_month) || 1);
+  const toMonth   = Math.min(12, parseInt(req.query.to_month)   || 12);
+  /* An explicit calendar range (date_from/date_to) overrides year/month
+     entirely and can span multiple months or years — sales_activity has
+     no real date column, so it's reconstructed per row via make_date()
+     from report_year/month_num/day (day is NOT NULL on every row). */
+  const dateFrom = (req.query.date_from || '').trim();
+  const dateTo   = (req.query.date_to   || '').trim();
+  const useRange = !!(dateFrom && dateTo);
+  const level     = BS_LEVELS.includes(req.query.level) ? req.query.level : 'branch';
+  const pBranch   = (req.query.branch   || '').trim() || null;
+  const pRep      = (req.query.rep      || '').trim() || null;
+  const pCategory = (req.query.category || '').trim() || null;
+
+  if (useRange && dateTo < dateFrom) return res.status(400).json({ error: 'نطاق التاريخ غير صحيح' });
+  if (!useRange && toMonth < fromMonth) return res.status(400).json({ error: 'نطاق الأشهر غير صحيح' });
+  if (level !== 'branch' && !pBranch) return res.status(400).json({ error: 'المنطقة مطلوبة لهذا المستوى' });
+  if (level === 'category' || level === 'customer') {
+    if (!pRep) return res.status(400).json({ error: 'المندوب مطلوب لهذا المستوى' });
+  }
+  if (level === 'customer' && !pCategory) return res.status(400).json({ error: 'فئة العميل مطلوبة لهذا المستوى' });
+
+  try {
+    /* RBAC: a region_manager's own branch always wins over whatever the
+       client asked for, exactly like every other region-scoped report. */
+    let branch = pBranch;
+    if (req.regionFilter && req.regionFilter.length) {
+      const r = await pool.query('SELECT name_ar FROM regions WHERE id = ANY($1::int[])', [req.regionFilter]);
+      const allowed = r.rows.map(x => x.name_ar);
+      if (!branch || !allowed.includes(branch)) branch = allowed[0] || null;
+    }
+    if (level !== 'branch' && !branch) return res.status(400).json({ error: 'المنطقة مطلوبة لهذا المستوى' });
+
+    const groupExpr = {
+      branch:   `COALESCE(NULLIF(TRIM(sa.branch_name),''),'غير محدد')`,
+      rep:      `COALESCE(NULLIF(TRIM(sa.salesrep_name),''),'غير محدد')`,
+      category: `COALESCE(NULLIF(TRIM(sa.category_name),''),'غير محدد')`,
+      customer: `sa.customer_code || '|' || COALESCE(NULLIF(TRIM(sa.customer_name),''),sa.customer_code)`,
+    }[level];
+
+    let params, saDateWhere, payDateWhere, qiDateWhere;
+    if (useRange) {
+      params       = [dateFrom, dateTo];
+      saDateWhere  = `make_date(sa.report_year::int, sa.month_num::int, sa.day::int) BETWEEN $1::date AND $2::date`;
+      payDateWhere = `p.tran_date BETWEEN $1::date AND $2::date`;
+      qiDateWhere  = `qi.issue_date BETWEEN $1::date AND $2::date`;
+    } else {
+      params       = [year, fromMonth, toMonth];
+      saDateWhere  = `sa.report_year = $1 AND sa.month_num BETWEEN $2 AND $3`;
+      payDateWhere = `EXTRACT(YEAR FROM p.tran_date) = $1 AND EXTRACT(MONTH FROM p.tran_date) BETWEEN $2 AND $3`;
+      qiDateWhere  = `EXTRACT(YEAR FROM qi.issue_date) = $1 AND EXTRACT(MONTH FROM qi.issue_date) BETWEEN $2 AND $3`;
+    }
+    let where = saDateWhere;
+    if (branch)     { params.push(branch);     where += ` AND TRIM(sa.branch_name) = $${params.length}`; }
+    if (pRep)       { params.push(pRep);       where += ` AND TRIM(sa.salesrep_name) = $${params.length}`; }
+    if (pCategory)  { params.push(pCategory);  where += ` AND TRIM(sa.category_name) = $${params.length}`; }
+
+    const aggQ = pool.query(`
+      SELECT ${groupExpr} AS label,
+             COALESCE(SUM(sa.qty),0)::bigint            AS qty,
+             COALESCE(SUM(sa.net_revenue),0)::numeric   AS value,
+             COALESCE(SUM(sa.bad_return_qty),0)::bigint AS returns,
+             COUNT(DISTINCT sa.customer_code)::int      AS customers
+      FROM sales_activity sa
+      WHERE ${where}
+      GROUP BY ${groupExpr}
+      ORDER BY value DESC
+    `, params);
+
+    /* Collections: each customer attributed to the ONE label (within this
+       exact scope) where they moved the most qty — same "dominant bucket"
+       rule regionPerformance.js uses for multi-region customers — so a
+       customer split across two reps this period is not double-counted
+       into both reps' collection totals. */
+    const collQ = pool.query(`
+      WITH cust_totals AS (
+        SELECT sa.customer_code, ${groupExpr} AS label, SUM(sa.qty) AS qty
+        FROM sales_activity sa
+        WHERE ${where}
+        GROUP BY sa.customer_code, ${groupExpr}
+      ), cust_label AS (
+        SELECT DISTINCT ON (customer_code) customer_code, label
+        FROM cust_totals ORDER BY customer_code, qty DESC
+      )
+      SELECT cl.label, COALESCE(SUM(p.total_paid),0)::numeric AS collected
+      FROM cust_label cl
+      JOIN payments p ON p.customer_code = cl.customer_code
+      WHERE ${payDateWhere}
+      GROUP BY cl.label
+    `, params);
+
+    /* Quality issue — branch level only, region_id resolved the same way
+       every other route in this app does: regions.name_ar stores the
+       English branch identifier that sales_activity.branch_name also
+       uses, so the two columns match directly. */
+    const qiQ = level === 'branch'
+      ? pool.query(`
+          SELECT r.name_ar AS label, COALESCE(SUM(ABS(qi.quantity)),0)::bigint AS quantity
+          FROM quality_issues qi
+          JOIN regions r ON r.id = qi.region_id
+          WHERE ${qiDateWhere}
+          GROUP BY r.name_ar
+        `, params)
+      : Promise.resolve({ rows: [] });
+
+    const [{ rows: aggRows }, { rows: collRows }, { rows: qiRows }] = await Promise.all([aggQ, collQ, qiQ]);
+
+    const collByLabel = Object.fromEntries(collRows.map(r => [r.label, Number(r.collected)]));
+    const qiByLabel   = Object.fromEntries(qiRows.map(r => [r.label, Number(r.quantity)]));
+
+    const rows = aggRows.map(r => {
+      const qty = Number(r.qty);
+      const value = Number(r.value);
+      const [customerCode, customerName] = level === 'customer' ? r.label.split('|') : [null, null];
+      return {
+        label:        level === 'customer' ? (customerName || customerCode) : r.label,
+        customer_code: customerCode,
+        qty,
+        value: +value.toFixed(2),
+        avg_price: qty > 0 ? +(value / qty).toFixed(2) : 0,
+        returns: Number(r.returns),
+        quality_issue: level === 'branch' ? (qiByLabel[r.label] ?? 0) : null,
+        customers: Number(r.customers),
+        // collQ groups by the SAME groupExpr as aggQ at every level (including
+        // "customer_code|customer_name" for level=customer), so r.label is
+        // always the right join key — splitting it into customerCode here
+        // was a stale leftover that made every customer-level lookup miss.
+        collections: +(collByLabel[r.label] ?? 0).toFixed(2),
+        drillable: level !== 'customer',
+      };
+    });
+
+    const totals = rows.reduce((t, r) => ({
+      qty: t.qty + r.qty,
+      value: t.value + r.value,
+      returns: t.returns + r.returns,
+      quality_issue: level === 'branch' ? t.quality_issue + (r.quality_issue || 0) : null,
+      customers: t.customers + r.customers,
+      collections: t.collections + r.collections,
+    }), { qty: 0, value: 0, returns: 0, quality_issue: 0, customers: 0, collections: 0 });
+    totals.avg_price = totals.qty > 0 ? +(totals.value / totals.qty).toFixed(2) : 0;
+    totals.value = +totals.value.toFixed(2);
+    totals.collections = +totals.collections.toFixed(2);
+
+    res.json({
+      level, rows, totals,
+      meta: {
+        year, from_month: fromMonth, to_month: toMonth,
+        use_range: useRange, date_from: useRange ? dateFrom : null, date_to: useRange ? dateTo : null,
+        branch: branch || null, rep: pRep, category: pCategory,
+        next_level: level === 'branch' ? 'rep' : level === 'rep' ? 'category' : level === 'category' ? 'customer' : null,
+        qty_caveat: 'الكمية الإجمالية والقيمة من مبيعات النظام؛ لا يتوفر لدينا مصدر لأعمدة Free / Good Return / Expire — التوالف المعروضة هي bad_return_qty فقط، دون تمييز جيد/تالف/منتهي الصلاحية.',
+        quality_issue_caveat: 'توالف الجودة متاحة على مستوى المنطقة فقط — تعديلات المخزون في NetSuite لا تحمل بُعد مندوب/فئة/عميل.',
+      },
+    });
+  } catch (err) {
+    console.error('[SalesReport] branch-summary error:', err.message);
+    res.status(500).json({ error: 'خطأ في الخادم' });
   }
 });
 

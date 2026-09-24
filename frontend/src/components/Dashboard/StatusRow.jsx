@@ -4,14 +4,15 @@ import MonthlyBalanceChart    from './MonthlyBalanceChart';
 import CombinedStatusKPICard from './CombinedStatusKPICard';
 import YearStrip              from './YearStrip';
 import useStatusRowSettings, { SIZE_WEIGHTS, HEIGHT_OPTS, SR_FONT_STEPS } from '../../hooks/useStatusRowSettings';
+import { useLanguage } from '../../context/LanguageContext';
 import './StatusRow.css';
 
 /* ── Width labels ── */
 const WIDTH_OPTS = [
-  { val: 'compact', label: 'ضيق'  },
-  { val: 'normal',  label: 'عادي' },
-  { val: 'large',   label: 'واسع' },
-  { val: 'wide',    label: 'عريض' },
+  { val: 'compact', label: 'ضيق',  labelEn: 'Narrow' },
+  { val: 'normal',  label: 'عادي', labelEn: 'Normal' },
+  { val: 'large',   label: 'واسع', labelEn: 'Wide'   },
+  { val: 'wide',    label: 'عريض', labelEn: 'Widest' },
 ];
 
 /* ── Draggable panel wrapper ── */
@@ -21,6 +22,8 @@ function DraggablePanel({
   onDragStart, onDragOver, onDrop, onDragEnd,
   children,
 }) {
+  const { lang } = useLanguage();
+  const en = lang === 'en';
   const weight = SIZE_WEIGHTS[size] || 1;
 
   return (
@@ -40,7 +43,7 @@ function DraggablePanel({
     >
       {editMode && (
         <div className="sr-edit-bar">
-          <span className="sr-drag-handle" title="اسحب لإعادة الترتيب">
+          <span className="sr-drag-handle" title={en ? 'Drag to reorder' : 'اسحب لإعادة الترتيب'}>
             <GripVertical size={15} />
           </span>
           <div className="sr-width-btns">
@@ -51,7 +54,7 @@ function DraggablePanel({
                 onMouseDown={e => e.stopPropagation()}
                 onClick={e => { e.stopPropagation(); onSizeChange(id, o.val); }}
               >
-                {o.label}
+                {en ? o.labelEn : o.label}
               </button>
             ))}
           </div>
@@ -73,6 +76,8 @@ export default function StatusRow({
   monthlySummaryPrev, monthlyLoadingPrev,
   years, activeYears, availableYears, onYearSelect,
 }) {
+  const { lang } = useLanguage();
+  const en = lang === 'en';
   const {
     order, editMode, rowHeight, fontScale, canEdit,
     toggleEditMode, setPanelSize, panelSizeOf,
@@ -136,7 +141,7 @@ export default function StatusRow({
       {/* Settings bar */}
       <div className="sr-settings-bar">
         <span className="sr-settings-lbl">
-          <Pencil size={11} /> تخصيص البوكسات
+          <Pencil size={11} /> {en ? 'Customize panels' : 'تخصيص البوكسات'}
         </span>
 
         {/* Edit toggle */}
@@ -144,24 +149,24 @@ export default function StatusRow({
           className={`sr-edit-toggle${activeEditMode ? ' active' : ''}`}
           onClick={toggleEditMode}
         >
-          {activeEditMode ? 'إنهاء التخصيص ✓' : 'تخصيص'}
+          {activeEditMode ? (en ? 'Done ✓' : 'إنهاء التخصيص ✓') : (en ? 'Customize' : 'تخصيص')}
         </button>
 
         {activeEditMode && (
-          <button className="sr-reset-btn" onClick={reset} title="إعادة الضبط">
-            <RotateCcw size={11} /> إعادة ضبط
+          <button className="sr-reset-btn" onClick={reset} title={en ? 'Reset' : 'إعادة الضبط'}>
+            <RotateCcw size={11} /> {en ? 'Reset' : 'إعادة ضبط'}
           </button>
         )}
 
         {/* ── Font scale ── */}
         <div className="sr-settings-group">
-          <span className="sr-settings-sublbl">الخط</span>
+          <span className="sr-settings-sublbl">{en ? 'Font' : 'الخط'}</span>
           <div className="sr-font-btns">
-            <button className="sr-font-btn" onClick={fontDown} disabled={!canFontDown} title="تصغير">
+            <button className="sr-font-btn" onClick={fontDown} disabled={!canFontDown} title={en ? 'Smaller' : 'تصغير'}>
               A<sup>−</sup>
             </button>
             <span className="sr-font-pct">{Math.round(fontScale * 100)}%</span>
-            <button className="sr-font-btn" onClick={fontUp} disabled={!canFontUp} title="تكبير">
+            <button className="sr-font-btn" onClick={fontUp} disabled={!canFontUp} title={en ? 'Larger' : 'تكبير'}>
               A<sup>+</sup>
             </button>
           </div>
@@ -172,7 +177,7 @@ export default function StatusRow({
         {/* ── Height controls ── */}
         <div className="sr-height-group">
           <span className="sr-settings-sublbl" style={{ gap: 3 }}>
-            <ChevronsUpDown size={11} /> الطول
+            <ChevronsUpDown size={11} /> {en ? 'Height' : 'الطول'}
           </span>
           <div className="sr-height-btns">
             {HEIGHT_OPTS.map(o => (
@@ -193,7 +198,7 @@ export default function StatusRow({
 
         {activeEditMode && (
           <span className="sr-hint">
-            <GripVertical size={11} /> اسحب لإعادة الترتيب — اختر العرض لكل بوكس
+            <GripVertical size={11} /> {en ? 'Drag to reorder — choose the width per panel' : 'اسحب لإعادة الترتيب — اختر العرض لكل بوكس'}
           </span>
         )}
       </div>

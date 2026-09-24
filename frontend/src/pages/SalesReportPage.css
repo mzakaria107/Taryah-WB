@@ -58,6 +58,13 @@
 }
 .srp-btn--refresh:hover:not(:disabled) { background: #1e40af; }
 
+.srp-btn--excel {
+  background: #15803d;
+  color: #fff;
+}
+.srp-btn--excel:hover:not(:disabled) { background: #166534; }
+.srp-btn--excel:disabled { opacity: 0.5; cursor: not-allowed; }
+
 .srp-btn--print {
   background: #0f172a;
   color: #fff;
@@ -833,6 +840,27 @@
 .srp-type-reset:hover:not(:disabled) { background: #f1f5f9; }
 .srp-type-reset:disabled { opacity: 0.6; cursor: default; }
 
+/* ── Category note ───────────────────────────────────────────── */
+.srp-cat-note {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: 8px;
+  margin-bottom: 8px;
+  font-size: 13px;
+  color: #92400e;
+  direction: rtl;
+}
+.srp-cat-note-icon { font-size: 15px; }
+.srp-cat-note-link {
+  color: #b45309;
+  font-weight: 700;
+  text-decoration: underline;
+}
+
 /* ── Filters bar ─────────────────────────────────────────────── */
 .srp-filters {
   display: flex;
@@ -1093,3 +1121,71 @@
   .srp-item-row:hover { background: #1e293b; }
   .srp-tfoot-row { background: #1e293b; }
 }
+
+/* ── Branch Summary tab (ملخص المبيعات) ──────────────────────── */
+.srp-breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 12px;
+  font-size: 0.83rem;
+  flex-wrap: wrap;
+  color: var(--color-text-muted, #64748b);
+}
+.srp-breadcrumb__crumb {
+  background: none;
+  border: none;
+  padding: 3px 6px;
+  border-radius: 6px;
+  color: #1d4ed8;
+  font-weight: 600;
+  cursor: pointer;
+}
+.srp-breadcrumb__crumb:hover { background: #eff6ff; }
+.srp-breadcrumb__crumb:last-child { color: var(--color-text, #1e293b); cursor: default; }
+
+.srp-row--drillable { cursor: pointer; }
+.srp-row--drillable:hover { background: #eff6ff; }
+.srp-td-name { font-weight: 600; }
+.srp-dash { color: #cbd5e1; }
+
+.srp-tf-row {
+  background: #0f172a;
+  color: #fff;
+  font-weight: 700;
+}
+.srp-tf-row td { padding: 8px 10px; }
+
+.srp-caveat {
+  margin-top: 12px;
+  padding: 10px 14px;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: 8px;
+  font-size: 0.75rem;
+  color: #92400e;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+@media print {
+  .srp-breadcrumb { display: none !important; }
+}
+
+/* ── Calendar range toggle (Branch Summary tab) ──────────────── */
+.srp-range-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--color-text, #1e293b);
+  cursor: pointer;
+  padding: 6px 10px;
+  border: 1px solid var(--color-border, #e2e8f0);
+  border-radius: 7px;
+  background: #fff;
+  align-self: flex-end;
+}
+.srp-range-toggle input { cursor: pointer; }

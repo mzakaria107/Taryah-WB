@@ -12,8 +12,8 @@ function buildConditions(q, req) {
   const conditions = [], params = [];
   let p = 1;
 
-  if (req.regionFilter) {
-    conditions.push(`region_id = $${p++}`); params.push(req.regionFilter);
+  if (req.regionFilter && req.regionFilter.length) {
+    conditions.push(`region_id = ANY($${p++}::int[])`); params.push(req.regionFilter);
   } else if (region_id) {
     conditions.push(`region_id = $${p++}`); params.push(parseInt(region_id, 10));
   }
@@ -77,7 +77,7 @@ router.get('/excel', tokenFromQuery, verifyToken, applyRegionFilter, async (req,
          COUNT(*)                                           AS "عدد الفواتير",
          COALESCE(SUM(i.original_amount),0)::FLOAT          AS "إجمالي المعاملات",
          COALESCE(SUM(i.paid_amount),0)::FLOAT              AS "إجمالي المدفوع",
-         COALESCE(SUM(i.balance),0)::FLOAT                  AS "إجمالي الرصيد",
+         COALESCE(SUM(i.balance),0)::FLOAT AS "إجمالي الرصيد",
          CASE WHEN SUM(i.original_amount)>0
               THEN ROUND(SUM(i.paid_amount)/SUM(i.original_amount)*100,2)::FLOAT
               ELSE 0 END                                    AS "نسبة التحصيل %",
@@ -175,7 +175,7 @@ router.get('/csv', tokenFromQuery, verifyToken, applyRegionFilter, async (req, r
          COUNT(*)                                           AS invoice_count,
          COALESCE(SUM(i.original_amount),0)::FLOAT          AS total_amount,
          COALESCE(SUM(i.paid_amount),0)::FLOAT              AS total_paid,
-         COALESCE(SUM(i.balance),0)::FLOAT                  AS total_balance,
+         COALESCE(SUM(i.balance),0)::FLOAT AS total_balance,
          CASE WHEN SUM(i.original_amount)>0
               THEN ROUND(SUM(i.paid_amount)/SUM(i.original_amount)*100,2)::FLOAT
               ELSE 0 END                                    AS collection_rate,

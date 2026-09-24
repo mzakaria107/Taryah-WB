@@ -1,5 +1,7 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom';
+import { ExternalLink } from 'lucide-react';
 import client from '../api/client';
 import './SummaryPage.css';
 
@@ -16,11 +18,11 @@ const YEARS = [currentYear - 1, currentYear, currentYear + 1];
 /* ── Helpers ──────────────────────────────────────────────── */
 function fmt(n, decimals = 0) {
   if (n == null) return '—';
-  return Number(n).toLocaleString('ar-SA', { maximumFractionDigits: decimals });
+  return Number(n).toLocaleString('en-SA', { maximumFractionDigits: decimals });
 }
 function fmtCurrency(n) {
   if (n == null) return '—';
-  return Number(n).toLocaleString('ar-SA', { maximumFractionDigits: 0 }) + ' ر.س';
+  return Number(n).toLocaleString('en-SA', { maximumFractionDigits: 0 }) + ' ر.س';
 }
 function devSign(pct) {
   if (pct == null) return null;
@@ -43,7 +45,7 @@ function DevBadge({ pct, invert = false }) {
 }
 
 /* ── CSS Bar Chart ────────────────────────────────────────── */
-function BarChart({ rows, valueKey, labelKey, colorClass = 'sm-bar--primary', maxBars = 12 }) {
+function BarChart({ rows, valueKey, labelKey, colorClass = 'sm-bar--primary', maxBars = 12, onLabelClick }) {
   const capped = rows.slice(0, maxBars);
   const max    = Math.max(...capped.map(r => Number(r[valueKey]) || 0), 1);
   return (
@@ -53,7 +55,13 @@ function BarChart({ rows, valueKey, labelKey, colorClass = 'sm-bar--primary', ma
         const pct = (val / max * 100).toFixed(1);
         return (
           <div key={i} className="sm-barchart__row">
-            <span className="sm-barchart__label" title={r[labelKey]}>{r[labelKey]}</span>
+            <span
+              className={`sm-barchart__label${onLabelClick ? ' sm-barchart__label--link' : ''}`}
+              title={r[labelKey]}
+              onClick={onLabelClick ? () => onLabelClick(r) : undefined}
+            >
+              {r[labelKey]}
+            </span>
             <div className="sm-barchart__track">
               <div
                 className={`sm-barchart__fill ${colorClass}`}
@@ -104,14 +112,18 @@ function Th({ col, sortCol, sortDir, onSort, children, align = 'right' }) {
    Main Page
 ═══════════════════════════════════════════════════════════ */
 export default function SummaryPage() {
+  const navigate = useNavigate();
   /* ── Filter state ─────────────────────────────────────── */
-  const [year,       setYear]       = useState(currentYear);
-  const [month,      setMonth]      = useState(currentMonth);
-  const [branchName, setBranchName] = useState('');
-  const [repName,    setRepName]    = useState('');
-  const [filterFrom, setFilterFrom] = useState('');
-  const [filterTo,   setFilterTo]   = useState('');
+  const [year,         setYear]         = useState(currentYear);
+  const [month,        setMonth]        = useState(currentMonth);
+  const [branchName,   setBranchName]   = useState('');
+  const [repName,      setRepName]      = useState('');
+  const [customerType, setCustomerType] = useState('');
+  const [categoryName, setCategoryName] = useState('');
+  const [filterFrom,   setFilterFrom]   = useState('');
+  const [filterTo,     setFilterTo]     = useState('');
   const [activeTab,  setActiveTab]  = useState('overview'); // overview | regions | reps | debt
+  const [excludeCarrefour, setExcludeCarrefour] = useState(false);
 
   /* ── Rep sort ─────────────────────────────────────────── */
   const [repSortCol, setRepSortCol] = useState('total_qty');
@@ -120,16 +132,6 @@ export default function SummaryPage() {
     setRepSortCol(c => {
       if (c === col) { setRepSortDir(d => d === 'desc' ? 'asc' : 'desc'); return col; }
       setRepSortDir('desc'); return col;
-    });
-  }, []);
-
-  /* ── Debt rep sort ────────────────────────────────────── */
-  const [debtRepSortCol, setDebtRepSortCol] = useState('total_balance');
-  const [debtRepSortDir, setDebtRepSortDir] = useState('desc');
-  const handleDebtRepSort = useCallback(col => {
-    setDebtRepSortCol(c => {
-      if (c === col) { setDebtRepSortDir(d => d === 'desc' ? 'asc' : 'desc'); return col; }
-      setDebtRepSortDir('desc'); return col;
     });
   }, []);
 
@@ -149,13 +151,16 @@ export default function SummaryPage() {
 
   /* ── API: summary data ───────────────────────────────── */
   const params = new URLSearchParams({ year, month });
-  if (branchName) params.set('branch_name', branchName);
-  if (repName)    params.set('salesrep_name', repName);
-  if (filterFrom) params.set('date_from', filterFrom);
-  if (filterTo)   params.set('date_to',   filterTo);
+  if (branchName)   params.set('branch_name',    branchName);
+  if (repName)      params.set('salesrep_name',  repName);
+  if (customerType) params.set('cust_category',  customerType);
+  if (categoryName) params.set('item_category_en', categoryName);
+  if (filterFrom)   params.set('date_from',       filterFrom);
+  if (filterTo)     params.set('date_to',         filterTo);
+  if (excludeCarrefour) params.set('exclude_carrefour', '1');
 
   const { data, isLoading, isError } = useQuery({
-    queryKey: ['summary', year, month, branchName, repName, filterFrom, filterTo],
+    queryKey: ['summary', year, month, branchName, repName, customerType, categoryName, filterFrom, filterTo, excludeCarrefour],
     queryFn: () => client.get(`/summary?${params}`).then(r => r.data),
     staleTime: 2 * 60 * 1000,
   });
@@ -169,9 +174,8 @@ export default function SummaryPage() {
 
   const sortedDebtReps = useMemo(() => {
     if (!data?.debt?.by_rep) return [];
-    const dir = debtRepSortDir === 'desc' ? -1 : 1;
-    return [...data.debt.by_rep].sort((a, b) => (Number(b[debtRepSortCol]) - Number(a[debtRepSortCol])) * dir);
-  }, [data, debtRepSortCol, debtRepSortDir]);
+    return [...data.debt.by_rep].sort((a, b) => Number(b.total_balance) - Number(a.total_balance));
+  }, [data]);
 
   /* ── Handle branch change ─────────────────────────────── */
   function handleBranchChange(v) {
@@ -195,6 +199,8 @@ export default function SummaryPage() {
   function resetFilters() {
     setBranchName('');
     setRepName('');
+    setCustomerType('');
+    setCategoryName('');
     setFilterFrom('');
     setFilterTo('');
   }
@@ -216,6 +222,7 @@ export default function SummaryPage() {
   const s    = data?.sales;
   const col  = data?.collections;
   const debt = data?.debt;
+  const asp  = data?.asp;
 
   return (
     <div className="sm-page">
@@ -267,6 +274,24 @@ export default function SummaryPage() {
             {repOptions.map(r => <option key={r.name} value={r.name}>{r.name}</option>)}
           </select>
         </div>
+        <div className="sm-filter-group">
+          <label>النوع</label>
+          <select value={customerType} onChange={e => setCustomerType(e.target.value)}>
+            <option value="">الكل</option>
+            {(filters?.customerCategories || []).map(c => (
+              <option key={c} value={c}>{c}</option>
+            ))}
+          </select>
+        </div>
+        <div className="sm-filter-group">
+          <label>فئة الأصناف</label>
+          <select value={categoryName} onChange={e => setCategoryName(e.target.value)}>
+            <option value="">جميع الفئات</option>
+            {(filters?.categories || []).map(c => (
+              <option key={c} value={c}>{c}</option>
+            ))}
+          </select>
+        </div>
 
         {/* ── Date range inputs ─────────────────────────── */}
         <div className="sm-filter-divider" />
@@ -290,7 +315,7 @@ export default function SummaryPage() {
           />
         </div>
 
-        {(branchName || repName || filterFrom || filterTo) && (
+        {(branchName || repName || customerType || categoryName || filterFrom || filterTo) && (
           <button className="sm-btn sm-btn--ghost sm-no-print" onClick={resetFilters}>✕ إعادة تعيين</button>
         )}
       </div>
@@ -300,11 +325,11 @@ export default function SummaryPage() {
         <div className="sm-date-range-badge sm-no-print">
           <span>📅 فلتر التاريخ:</span>
           <span className="sm-date-range-from">
-            {filterFrom ? new Date(filterFrom + 'T00:00:00').toLocaleDateString('ar-SA', { day: '2-digit', month: 'long', year: 'numeric' }) : '…'}
+            {filterFrom ? new Date(filterFrom + 'T00:00:00').toLocaleDateString('ar-SA-u-nu-latn', { day: '2-digit', month: 'long', year: 'numeric' }) : '…'}
           </span>
           <span className="sm-date-range-sep">←</span>
           <span className="sm-date-range-to">
-            {filterTo ? new Date(filterTo + 'T00:00:00').toLocaleDateString('ar-SA', { day: '2-digit', month: 'long', year: 'numeric' }) : '…'}
+            {filterTo ? new Date(filterTo + 'T00:00:00').toLocaleDateString('ar-SA-u-nu-latn', { day: '2-digit', month: 'long', year: 'numeric' }) : '…'}
           </span>
           {filterFrom && filterTo && (() => {
             const days = Math.round((new Date(filterTo) - new Date(filterFrom)) / 86400000) + 1;
@@ -333,11 +358,11 @@ export default function SummaryPage() {
               <>
                 <span className="sm-period-cur sm-period-cur--range">
                   {filterFrom
-                    ? new Date(filterFrom + 'T00:00:00').toLocaleDateString('ar-SA', { day: '2-digit', month: 'long' })
+                    ? new Date(filterFrom + 'T00:00:00').toLocaleDateString('ar-SA-u-nu-latn', { day: '2-digit', month: 'long' })
                     : '…'}
                   {' — '}
                   {filterTo
-                    ? new Date(filterTo + 'T00:00:00').toLocaleDateString('ar-SA', { day: '2-digit', month: 'long', year: 'numeric' })
+                    ? new Date(filterTo + 'T00:00:00').toLocaleDateString('ar-SA-u-nu-latn', { day: '2-digit', month: 'long', year: 'numeric' })
                     : '…'}
                 </span>
                 <span className="sm-period-vs">التحصيل في هذه الفترة</span>
@@ -448,6 +473,75 @@ export default function SummaryPage() {
               value={fmtCurrency(debt?.grand_balance)}
               sub={`تشمل جميع الفترات`}
             />
+          </div>
+
+          {/* ── KPI Row 4: ASP ─────────────────────────────
+              متوسط السعر العام، ومتوسط السعر بعد استبعاد المقطعات ودجاج
+              المجمد — نفس نطاق فلاتر الصفحة (منطقة/مندوب/فئة عميل). */}
+          <div className="sm-section-title">متوسط السعر</div>
+          <div className="sm-kpi-row">
+            <KpiCard
+              icon="💵"
+              accent="blue"
+              label="متوسط السعر العام للمناطق"
+              value={asp?.cur?.asp != null ? `${fmt(asp.cur.asp, 2)} ر.س` : '—'}
+              sub={`الشهر الماضي: ${asp?.prev?.asp != null ? `${fmt(asp.prev.asp, 2)} ر.س` : '—'}`}
+              deviation={asp?.deviation_pct}
+            />
+            <KpiCard
+              icon="🐔"
+              accent="blue"
+              label="متوسط السعر بدون مقطعات وبدون دجاج مجمد"
+              value={asp?.cur?.asp_ex_parts_frozen != null ? `${fmt(asp.cur.asp_ex_parts_frozen, 2)} ر.س` : '—'}
+              sub={`الشهر الماضي: ${asp?.prev?.asp_ex_parts_frozen != null ? `${fmt(asp.prev.asp_ex_parts_frozen, 2)} ر.س` : '—'}`}
+              deviation={asp?.deviation_pct_ex}
+            />
+          </div>
+
+          {/* ── Detailed per-region ASP card ───────────────
+              Each region's own overall ASP and its "بدون مقطعات وبدون
+              دجاج مجمد" reading side by side, so a region dragging the
+              company average down (or up) is visible at a glance instead
+              of hiding inside the two blended KPI cards above. */}
+          <div className="sm-table-wrap">
+            <table className="sm-table">
+              <thead>
+                <tr>
+                  <th>المنطقة</th>
+                  <th>متوسط السعر العام</th>
+                  <th>الشهر الماضي</th>
+                  <th>الانحراف</th>
+                  <th>بدون مقطعات وبدون مجمد</th>
+                  <th>الشهر الماضي</th>
+                  <th>الانحراف</th>
+                </tr>
+              </thead>
+              <tbody>
+                {[...(data.regions || [])]
+                  .sort((a, b) => (b.asp ?? -1) - (a.asp ?? -1))
+                  .map((r, i) => {
+                    const dev = r.prev_asp > 0 && r.asp != null
+                      ? +((r.asp - r.prev_asp) / r.prev_asp * 100).toFixed(1) : null;
+                    const devEx = r.prev_asp_ex_parts_frozen > 0 && r.asp_ex_parts_frozen != null
+                      ? +((r.asp_ex_parts_frozen - r.prev_asp_ex_parts_frozen) / r.prev_asp_ex_parts_frozen * 100).toFixed(1)
+                      : null;
+                    return (
+                      <tr key={i}>
+                        <td className="sm-td-name">{r.branch_name}</td>
+                        <td className="sm-td-num">{r.asp != null ? `${fmt(r.asp, 2)} ر.س` : <span className="sm-dash">—</span>}</td>
+                        <td className="sm-td-num sm-td-muted">{r.prev_asp != null ? `${fmt(r.prev_asp, 2)} ر.س` : <span className="sm-dash">—</span>}</td>
+                        <td className="sm-td-num"><DevBadge pct={dev} /></td>
+                        <td className="sm-td-num">{r.asp_ex_parts_frozen != null ? `${fmt(r.asp_ex_parts_frozen, 2)} ر.س` : <span className="sm-dash">—</span>}</td>
+                        <td className="sm-td-num sm-td-muted">{r.prev_asp_ex_parts_frozen != null ? `${fmt(r.prev_asp_ex_parts_frozen, 2)} ر.س` : <span className="sm-dash">—</span>}</td>
+                        <td className="sm-td-num"><DevBadge pct={devEx} /></td>
+                      </tr>
+                    );
+                  })}
+                {(data.regions || []).length === 0 && (
+                  <tr><td colSpan={7} className="sm-empty">لا توجد بيانات</td></tr>
+                )}
+              </tbody>
+            </table>
           </div>
 
           {/* ── Tabs ─────────────────────────────────────── */}
@@ -621,6 +715,9 @@ export default function SummaryPage() {
                     <col />
                     <col />
                     <col />
+                    <col />
+                    <col />
+                    <col />
                   </colgroup>
                   <thead>
                     <tr>
@@ -628,9 +725,12 @@ export default function SummaryPage() {
                       <th>المندوب</th>
                       <th>المنطقة</th>
                       <Th col="total_qty"        sortCol={repSortCol} sortDir={repSortDir} onSort={handleRepSort}>الكمية</Th>
+                      <Th col="daily_avg_qty"    sortCol={repSortCol} sortDir={repSortDir} onSort={handleRepSort}>متوسط مبيعات يومي</Th>
                       <Th col="prev_qty"         sortCol={repSortCol} sortDir={repSortDir} onSort={handleRepSort}>الشهر الماضي</Th>
                       <th>الانحراف</th>
                       <Th col="active_customers" sortCol={repSortCol} sortDir={repSortDir} onSort={handleRepSort}>العملاء</Th>
+                      <Th col="total_visits"     sortCol={repSortCol} sortDir={repSortDir} onSort={handleRepSort}>إجمالي الزيارات</Th>
+                      <Th col="avg_visits"       sortCol={repSortCol} sortDir={repSortDir} onSort={handleRepSort}>متوسط الزيارات</Th>
                       <Th col="total_returns"    sortCol={repSortCol} sortDir={repSortDir} onSort={handleRepSort}>المرتجعات</Th>
                       <th>نسبة المرتجعات</th>
                     </tr>
@@ -652,16 +752,19 @@ export default function SummaryPage() {
                           <td className="sm-td-name">{r.salesrep_name}</td>
                           <td className="sm-td-muted sm-td-branch">{r.branch_name}</td>
                           <td className="sm-td-num sm-td-bold">{fmt(r.total_qty)}</td>
+                          <td className="sm-td-num sm-td-muted">{fmt(r.daily_avg_qty, 1)}</td>
                           <td className="sm-td-num sm-td-muted">{fmt(r.prev_qty)}</td>
                           <td className="sm-td-num"><DevBadge pct={dev} /></td>
                           <td className="sm-td-num">{fmt(r.active_customers)}</td>
+                          <td className="sm-td-num">{fmt(r.total_visits)}</td>
+                          <td className="sm-td-num sm-td-muted">{fmt(r.avg_visits, 1)}</td>
                           <td className="sm-td-num">{r.total_returns > 0 ? fmt(r.total_returns) : <span className="sm-dash">—</span>}</td>
                           <td className="sm-td-num">{retPct > 0 ? <span className="sm-ret-badge">{retPct}%</span> : <span className="sm-dash">—</span>}</td>
                         </tr>
                       );
                     })}
                     {sortedReps.length === 0 && (
-                      <tr><td colSpan={9} className="sm-empty">لا توجد بيانات</td></tr>
+                      <tr><td colSpan={12} className="sm-empty">لا توجد بيانات</td></tr>
                     )}
                   </tbody>
                 </table>
@@ -677,9 +780,25 @@ export default function SummaryPage() {
               {/* Summary card */}
               <div className="sm-debt-summary">
                 <div className="sm-debt-summary__total">
-                  <span className="sm-debt-summary__label">إجمالي الديون القائمة</span>
+                  <span className="sm-debt-summary__label">
+                    إجمالي الديون القائمة
+                    {(filterFrom || filterTo) && (
+                      <span className="sm-debt-summary__period">
+                        {' '}(فواتير {filterFrom ? new Date(filterFrom + 'T00:00:00').toLocaleDateString('ar-SA-u-nu-latn', { day: '2-digit', month: 'short' }) : '…'}
+                        {' '}← {filterTo ? new Date(filterTo + 'T00:00:00').toLocaleDateString('ar-SA-u-nu-latn', { day: '2-digit', month: 'short', year: 'numeric' }) : '…'})
+                      </span>
+                    )}
+                  </span>
                   <span className="sm-debt-summary__value">{fmtCurrency(debt?.grand_balance)}</span>
                 </div>
+                <button
+                  type="button"
+                  className={`sm-carrefour-toggle${excludeCarrefour ? ' sm-carrefour-toggle--active' : ''}`}
+                  onClick={() => setExcludeCarrefour(v => !v)}
+                  title={excludeCarrefour ? 'إظهار مديونية كارفور ضمن الإجمالي' : 'إخفاء مديونية كارفور من الإجمالي'}
+                >
+                  {excludeCarrefour ? '✅ مديونية كارفور مستبعدة' : '🚫 استبعاد مديونية كارفور'}
+                </button>
               </div>
 
               <div className="sm-debt-grid">
@@ -723,6 +842,20 @@ export default function SummaryPage() {
                           <tr><td colSpan={4} className="sm-empty">لا توجد بيانات</td></tr>
                         )}
                       </tbody>
+                      {(debt?.by_region || []).length > 0 && (
+                        <tfoot>
+                          <tr className="sm-tf-row">
+                            <td className="sm-td-name">الإجمالي</td>
+                            <td className="sm-td-num sm-td-red">
+                              {fmtCurrency((debt?.by_region || []).reduce((s, r) => s + Number(r.total_balance || 0), 0))}
+                            </td>
+                            <td className="sm-td-num">100%</td>
+                            <td className="sm-td-num sm-td-muted">
+                              {fmtCurrency((debt?.by_region || []).reduce((s, r) => s + Number(r.total_invoiced || 0), 0))}
+                            </td>
+                          </tr>
+                        </tfoot>
+                      )}
                     </table>
                   </div>
                 </div>
@@ -737,6 +870,7 @@ export default function SummaryPage() {
                       labelKey="salesrep_name"
                       colorClass="sm-bar--danger"
                       maxBars={10}
+                      onLabelClick={r => navigate(`/rep-debt/${encodeURIComponent(r.salesrep_name)}`)}
                     />
                   </div>
                   <div className="sm-table-wrap" style={{ marginTop: 12 }}>
@@ -747,14 +881,16 @@ export default function SummaryPage() {
                         <col />
                         <col />
                         <col />
+                        <col style={{ width: '60px' }} />
                       </colgroup>
                       <thead>
                         <tr>
                           <th>#</th>
                           <th>المندوب</th>
-                          <Th col="total_balance"  sortCol={debtRepSortCol} sortDir={debtRepSortDir} onSort={handleDebtRepSort}>رصيد الديون</Th>
-                          <Th col="pct_of_total"   sortCol={debtRepSortCol} sortDir={debtRepSortDir} onSort={handleDebtRepSort}>النسبة %</Th>
-                          <Th col="total_invoiced" sortCol={debtRepSortCol} sortDir={debtRepSortDir} onSort={handleDebtRepSort}>إجمالي الفواتير</Th>
+                          <th>رصيد الديون <span className="sm-sort sm-sort--active"> ▼</span></th>
+                          <th>النسبة %</th>
+                          <th>إجمالي الفواتير</th>
+                          <th>التفاصيل</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -763,7 +899,13 @@ export default function SummaryPage() {
                           return (
                             <tr key={r.salesrep_name + i}>
                               <td className="sm-td-rank">{rank}</td>
-                              <td className="sm-td-name">{r.salesrep_name}</td>
+                              <td
+                                className="sm-td-name sm-td-name--link"
+                                onClick={() => navigate(`/rep-debt/${encodeURIComponent(r.salesrep_name)}`)}
+                                title="عرض تفاصيل مديونية المندوب"
+                              >
+                                {r.salesrep_name}
+                              </td>
                               <td className="sm-td-num sm-td-red">{fmtCurrency(r.total_balance)}</td>
                               <td className="sm-td-num">
                                 <div className="sm-debt-pct-wrap">
@@ -772,13 +914,41 @@ export default function SummaryPage() {
                                 </div>
                               </td>
                               <td className="sm-td-num sm-td-muted">{fmtCurrency(r.total_invoiced)}</td>
+                              <td className="sm-td-num">
+                                <button
+                                  type="button"
+                                  className="sm-detail-btn"
+                                  onClick={() => navigate(`/rep-debt/${encodeURIComponent(r.salesrep_name)}`)}
+                                  title="عرض تفاصيل مديونية المندوب"
+                                >
+                                  <ExternalLink size={13} />
+                                </button>
+                              </td>
                             </tr>
                           );
                         })}
                         {sortedDebtReps.length === 0 && (
-                          <tr><td colSpan={5} className="sm-empty">لا توجد بيانات</td></tr>
+                          <tr><td colSpan={6} className="sm-empty">لا توجد بيانات</td></tr>
                         )}
                       </tbody>
+                      {sortedDebtReps.length > 0 && (
+                        <tfoot>
+                          <tr className="sm-tf-row">
+                            <td></td>
+                            <td className="sm-td-name">الإجمالي ({sortedDebtReps.length} مندوب)</td>
+                            <td className="sm-td-num sm-td-red">
+                              {fmtCurrency(sortedDebtReps.reduce((s, r) => s + Number(r.total_balance || 0), 0))}
+                            </td>
+                            <td className="sm-td-num">
+                              {(+sortedDebtReps.reduce((s, r) => s + Number(r.pct_of_total || 0), 0).toFixed(1))}%
+                            </td>
+                            <td className="sm-td-num sm-td-muted">
+                              {fmtCurrency(sortedDebtReps.reduce((s, r) => s + Number(r.total_invoiced || 0), 0))}
+                            </td>
+                            <td></td>
+                          </tr>
+                        </tfoot>
+                      )}
                     </table>
                   </div>
                 </div>

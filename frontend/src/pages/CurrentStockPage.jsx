@@ -40,7 +40,7 @@ function fmtQty(v) {
 }
 function fmtTime(ts) {
   if (!ts) return '—';
-  return new Date(ts).toLocaleString('ar-SA', {
+  return new Date(ts).toLocaleString('ar-SA-u-nu-latn', {
     year: 'numeric', month: 'short', day: 'numeric',
     hour: '2-digit', minute: '2-digit',
   });
@@ -196,7 +196,7 @@ function StockMatrix({
   };
 
   /* ── Build matrix data ── */
-  const { regions, typeMap, grandByRegion, grandTotal, maxTypeTotal } = useMemo(() => {
+  const { regions, typeMap, grandByRegion, maxTypeTotal } = useMemo(() => {
     const q = search?.toLowerCase() || '';
     let filtered = rows;
     if (locFilter) filtered = filtered.filter(r => r[locCol] === locFilter);
@@ -256,19 +256,28 @@ function StockMatrix({
   const selectAllRegions  = () => setCheckedRegions(null);
   const clearAllRegions   = () => setCheckedRegions(new Set());
 
-  /* ── Sorted types ── */
+  /* ── Sorted types ──
+     "الإجمالي" is always a sum over the VISIBLE (checked) regions only, so
+     unchecking a region subtracts it from every total (type row, item row,
+     grand total) instead of always reflecting all regions regardless of
+     the region filter. */
+  const sumVisible = (map) => visibleRegions.reduce((s, reg) => s + (map.get(reg) ?? 0), 0);
+
   const sortedTypes = useMemo(() => {
     return [...typeMap.entries()].sort(([, aD], [, bD]) => {
       if (sortCol === '__total__') {
-        const aS = [...aD.locTotals.values()].reduce((s, v) => s + v, 0);
-        const bS = [...bD.locTotals.values()].reduce((s, v) => s + v, 0);
+        const aS = sumVisible(aD.locTotals);
+        const bS = sumVisible(bD.locTotals);
         return sortDir === 'desc' ? bS - aS : aS - bS;
       }
       const aV = aD.locTotals.get(sortCol) ?? 0;
       const bV = bD.locTotals.get(sortCol) ?? 0;
       return sortDir === 'desc' ? bV - aV : aV - bV;
     });
-  }, [typeMap, sortCol, sortDir]);
+  }, [typeMap, sortCol, sortDir, visibleRegions]);
+
+  /* Grand total, recomputed from only the visible regions */
+  const visibleGrandTotal = useMemo(() => sumVisible(grandByRegion), [grandByRegion, visibleRegions]);
 
   const toggleRow    = type => setExpanded(prev => {
     const n = new Set(prev); n.has(type) ? n.delete(type) : n.add(type); return n;
@@ -495,12 +504,10 @@ function StockMatrix({
             <tbody>
               {sortedTypes.map(([type, td]) => {
                 const isOpen    = expanded.has(type);
-                const typeTotal = [...td.locTotals.values()].reduce((a, b) => a + b, 0);
-                const sortedItems = [...td.items.entries()].sort(([, aM], [, bM]) => {
-                  const aS = [...aM.values()].reduce((a, b) => a + b, 0);
-                  const bS = [...bM.values()].reduce((a, b) => a + b, 0);
-                  return bS - aS;
-                });
+                const typeTotal = sumVisible(td.locTotals);
+                const sortedItems = [...td.items.entries()].sort(([, aM], [, bM]) =>
+                  sumVisible(bM) - sumVisible(aM)
+                );
 
                 return (
                   <React.Fragment key={type}>
@@ -510,11 +517,13 @@ function StockMatrix({
                       onClick={() => toggleRow(type)}
                     >
                       <td className="csp-mx-td-label">
-                        <span className="csp-mx-toggle">
-                          {isOpen ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
-                        </span>
-                        <span className="csp-mx-type-name">{type}</span>
-                        <span className="csp-mx-count">({td.items.size})</span>
+                        <div className="csp-mx-lbl">
+                          <span className="csp-mx-toggle">
+                            {isOpen ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+                          </span>
+                          <span className="csp-mx-type-name">{type}</span>
+                          <span className="csp-mx-count">({td.items.size})</span>
+                        </div>
                       </td>
                       <td className="csp-mx-td-type-total">
                         {typeTotal > 0 ? fmtQty(typeTotal) : <span className="csp-mx-zero">0</span>}
@@ -533,12 +542,14 @@ function StockMatrix({
 
                     {/* Item rows */}
                     {isOpen && sortedItems.map(([item, itemLocs]) => {
-                      const itemTotal = [...itemLocs.values()].reduce((a, b) => a + b, 0);
+                      const itemTotal = sumVisible(itemLocs);
                       return (
                         <tr key={`${type}__${item}`} className="csp-mx-item-row">
                           <td className="csp-mx-td-item">
-                            <span className="csp-mx-item-tree">└</span>
-                            <span className="csp-mx-item-name">{item}</span>
+                            <div className="csp-mx-lbl csp-mx-lbl--item">
+                              <span className="csp-mx-item-tree">└</span>
+                              <span className="csp-mx-item-name">{item}</span>
+                            </div>
                           </td>
                           <td className="csp-mx-td-item-total">
                             {itemTotal > 0 ? fmtQty(itemTotal) : <span className="csp-mx-zero">0</span>}
@@ -565,7 +576,7 @@ function StockMatrix({
               <tr className="csp-mx-grand-row">
                 <td className="csp-mx-grand-label">الإجمالي الكلي</td>
                 <td className="csp-mx-grand-total">
-                  {grandTotal > 0 ? fmtQty(grandTotal) : <span className="csp-mx-zero">0</span>}
+                  {visibleGrandTotal > 0 ? fmtQty(visibleGrandTotal) : <span className="csp-mx-zero">0</span>}
                 </td>
                 {visibleRegions.map(reg => (
                   <td key={reg} className="csp-mx-grand-cell">

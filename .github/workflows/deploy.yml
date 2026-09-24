@@ -42,8 +42,9 @@ jobs:
 
       - name: Restart backend
         run: |
-          pm2 restart taryah-backend
-          pm2 save
+          $pm2 = "C:\Users\Administrator\AppData\Roaming\npm\pm2.cmd"
+          & $pm2 restart taryah-backend
+          & $pm2 save
 
       - name: Verify site is up
         run: |

@@ -3025,6 +3025,21 @@ HTTPS connection to GitHub to pick up jobs; no inbound port needs to stay open o
   similar failure later, but it was masking the real problem rather than fixing it — 75 seconds of
   patient retrying still failed 100% of the time before this fix, which is itself what proved this
   wasn't actually a transient race.
+- **`Could not write new index file`, a SEPARATE failure that only reproduced under the runner
+  service account, never in an interactive Administrator session**: the service runs as `NT
+  AUTHORITY\NETWORK SERVICE`, which lacked write permission somewhere under `.git` (and, unnoticed
+  until this point since git hadn't gotten far enough yet, would have hit the same wall writing
+  `frontend/dist`, `frontend/node_modules`, `backend/node_modules` in later steps too) — the earlier
+  `safe.directory` fix only satisfied git's own ownership *check*, it granted no actual NTFS
+  permission. Fixed with `icacls "C:\apps\Taryah-WB" /grant "NT AUTHORITY\NETWORK SERVICE:(OI)(CI)M"
+  /T` (Modify, recursive, run once manually — not part of the workflow, since it's a one-time
+  machine setup step, not something that needs to re-run on every deploy).
+- **`pm2` command not found when run BY the workflow**, despite working fine manually: `node`/`npm`
+  are on the system-wide PATH (installed via the Node MSI), but `pm2` was installed as a global npm
+  package under the interactively-logged-in Administrator account (`npm install -g pm2`), which only
+  adds it to *that account's* user-scoped PATH (`%APPDATA%\npm`) — invisible to the service account
+  running the workflow. Fixed by calling pm2 via its full path
+  (`C:\Users\Administrator\AppData\Roaming\npm\pm2.cmd`) instead of relying on PATH resolution.
 - Steps: pull → `npm install && npm run build` (frontend) → `npm install` (backend) →
   `pm2 restart taryah-backend` + `pm2 save` → a health-check curl against
   `https://www.sales.taryahpoultry.com.sa/api/health`, failing the job (not just logging) if it

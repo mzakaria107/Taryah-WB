@@ -3008,6 +3008,15 @@ HTTPS connection to GitHub to pick up jobs; no inbound port needs to stay open o
   ("already configured") — run `./config.cmd remove --token <fresh token>` first, then the full
   registration command again with a newer token (registration tokens expire quickly, within about an
   hour).
+- **`git reset --hard` retries up to 5 times (3s apart)** — the exact same handful of
+  `frontend/src/**` files (`.jsx`/`.css`/`.js`) failed with `unable to unlink old ...: Invalid
+  argument` on every attempt, even after adding a Windows Defender exclusion for the app folder
+  (`Add-MpPreference -ExclusionPath "C:\apps\Taryah-WB"`, kept regardless — harmless and standard
+  practice for a build/deploy folder). Since it was the same file set every time rather than random
+  files, the likely cause is Windows Search Indexer momentarily holding those specific
+  content-indexed file types open, not antivirus. Rather than disabling OS-level indexing/services on
+  the production server for this, the workflow itself just retries the reset a few times — these
+  locks clear within a second or two on their own.
 - Steps: pull → `npm install && npm run build` (frontend) → `npm install` (backend) →
   `pm2 restart taryah-backend` + `pm2 save` → a health-check curl against
   `https://www.sales.taryahpoultry.com.sa/api/health`, failing the job (not just logging) if it

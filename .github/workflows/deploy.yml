@@ -16,7 +16,17 @@ jobs:
         run: |
           cd C:\apps\Taryah-WB
           git fetch origin main
-          git reset --hard origin/main
+          $maxAttempts = 5
+          for ($i = 1; $i -le $maxAttempts; $i++) {
+            git reset --hard origin/main
+            if ($LASTEXITCODE -eq 0) { break }
+            if ($i -eq $maxAttempts) {
+              Write-Error "git reset --hard failed after $maxAttempts attempts"
+              exit 1
+            }
+            Write-Host "git reset --hard failed (attempt $i/$maxAttempts), likely a transient file lock (e.g. Windows Search Indexer) - retrying in 3s..."
+            Start-Sleep -Seconds 3
+          }
 
       - name: Build frontend
         run: |

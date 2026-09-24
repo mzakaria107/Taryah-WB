@@ -42,6 +42,7 @@ jobs:
 
       - name: Restart backend
         run: |
+          $env:PM2_HOME = "C:\Users\Administrator\.pm2"
           $pm2 = "C:\Users\Administrator\AppData\Roaming\npm\pm2.cmd"
           & $pm2 restart taryah-backend
           & $pm2 save

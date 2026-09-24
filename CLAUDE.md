@@ -3039,7 +3039,19 @@ HTTPS connection to GitHub to pick up jobs; no inbound port needs to stay open o
   package under the interactively-logged-in Administrator account (`npm install -g pm2`), which only
   adds it to *that account's* user-scoped PATH (`%APPDATA%\npm`) — invisible to the service account
   running the workflow. Fixed by calling pm2 via its full path
-  (`C:\Users\Administrator\AppData\Roaming\npm\pm2.cmd`) instead of relying on PATH resolution.
+  (`C:\Users\Administrator\AppData\Roaming\npm\pm2.cmd`) instead of relying on PATH resolution — but
+  the full path alone still 404'd ("term not recognized") because `NETWORK SERVICE` couldn't even
+  traverse into another account's `C:\Users\Administrator\...` profile folder at all (Windows blocks
+  cross-account profile access by default). Granted once manually: `icacls
+  "C:\Users\Administrator\AppData\Roaming\npm" /grant "NT AUTHORITY\NETWORK SERVICE:(OI)(CI)RX" /T`
+  (Read+Execute only — this folder never needs to be written to). **A second, separate gotcha even
+  once the executable itself is reachable**: PM2 keeps its running daemon's state in `PM2_HOME`
+  (default `%HOME%\.pm2`, so `C:\Users\Administrator\.pm2` for whoever originally ran `pm2 start`) —
+  a DIFFERENT OS account calling `pm2 restart` would, without setting this explicitly, talk to its
+  OWN separate/empty PM2 instance under its own profile and never find `taryah-backend` at all
+  (silently the wrong daemon, not an error). Workflow sets
+  `$env:PM2_HOME = "C:\Users\Administrator\.pm2"` before every pm2 call so it always controls the
+  one real, already-running daemon regardless of which account executes the workflow step.
 - Steps: pull → `npm install && npm run build` (frontend) → `npm install` (backend) →
   `pm2 restart taryah-backend` + `pm2 save` → a health-check curl against
   `https://www.sales.taryahpoultry.com.sa/api/health`, failing the job (not just logging) if it

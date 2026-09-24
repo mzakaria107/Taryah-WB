@@ -15,6 +15,7 @@ jobs:
       - name: Pull latest code
         run: |
           cd C:\apps\Taryah-WB
+          git config core.fscache false
           git fetch origin main
           $maxAttempts = 15
           for ($i = 1; $i -le $maxAttempts; $i++) {

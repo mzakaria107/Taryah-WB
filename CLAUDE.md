@@ -3008,15 +3008,23 @@ HTTPS connection to GitHub to pick up jobs; no inbound port needs to stay open o
   ("already configured") — run `./config.cmd remove --token <fresh token>` first, then the full
   registration command again with a newer token (registration tokens expire quickly, within about an
   hour).
-- **`git reset --hard` retries up to 5 times (3s apart)** — the exact same handful of
-  `frontend/src/**` files (`.jsx`/`.css`/`.js`) failed with `unable to unlink old ...: Invalid
-  argument` on every attempt, even after adding a Windows Defender exclusion for the app folder
-  (`Add-MpPreference -ExclusionPath "C:\apps\Taryah-WB"`, kept regardless — harmless and standard
-  practice for a build/deploy folder). Since it was the same file set every time rather than random
-  files, the likely cause is Windows Search Indexer momentarily holding those specific
-  content-indexed file types open, not antivirus. Rather than disabling OS-level indexing/services on
-  the production server for this, the workflow itself just retries the reset a few times — these
-  locks clear within a second or two on their own.
+- **Root cause of `error: unable to unlink old '...': Invalid argument` on `git reset --hard`**:
+  Git for Windows' `core.fscache` optimization (a known source of exactly this symptom on NTFS
+  during large batch checkouts — separate git processes are fine, but many files updated in rapid
+  succession within one `git reset --hard` trips it). Ruled out first, methodically, before finding
+  this: a persistent file lock (`handle64.exe` found nothing), Windows Defender real-time scanning
+  (exclusion for `C:\apps\Taryah-WB` was already correctly set and active), Controlled Folder Access
+  (disabled), Tamper Protection (disabled, so the Defender exclusion wasn't being silently ignored
+  either), any third-party AV/EDR (none installed, only Defender), and the files themselves being
+  read-only/compressed/symlinks (plain ordinary files). A `Remove-Item` on the exact same file
+  outside git succeeded instantly every time, pointing at git's own batch-delete path specifically,
+  not an external blocker — `git config core.fscache false` (set both in the workflow, so it
+  survives a future re-clone, and already persisted in the live repo's `.git/config`) fixed it
+  completely. **The 15-attempt retry loop around `git reset --hard` is kept as a defensive
+  fallback** (cheap, harmless if never triggered) in case some other transient issue causes a
+  similar failure later, but it was masking the real problem rather than fixing it — 75 seconds of
+  patient retrying still failed 100% of the time before this fix, which is itself what proved this
+  wasn't actually a transient race.
 - Steps: pull → `npm install && npm run build` (frontend) → `npm install` (backend) →
   `pm2 restart taryah-backend` + `pm2 save` → a health-check curl against
   `https://www.sales.taryahpoultry.com.sa/api/health`, failing the job (not just logging) if it

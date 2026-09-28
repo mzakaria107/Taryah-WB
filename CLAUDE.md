@@ -3149,6 +3149,11 @@ already-settled zero-balance invoices. Returns a flat list (not grouped server-s
   a wide invoice table anyway, so this mode just reuses the existing page size instead of needing
   the `printWithPageSize` dynamic-injection workaround that fix required.
 
+**Region column in the Excel export**: the endpoint `LEFT JOIN regions` to return `region_name` per
+invoice (shown in "تفاصيل الفواتير"). In "ملخص المناديب" a rep's region is derived client-side from
+their own invoices and lists every distinct region joined with " / " — a rep can hold invoices in
+more than one region, and picking a single "primary" one would silently hide the rest.
+
 **Not verified against production data this turn** — this session's cloud sandbox has no direct
 database or authenticated-API access (no JWT signing key, no DB connection path), only the public
 HTTPS site and the self-hosted-runner deploy pipeline. Verified instead: `npm run build` clean,

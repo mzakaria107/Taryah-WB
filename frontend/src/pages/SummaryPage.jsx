@@ -199,20 +199,28 @@ export default function SummaryPage() {
       const repNamesInView = new Set(sortedDebtReps.map(r => r.salesrep_name));
       const filteredInvoices = invoices.filter(inv => repNamesInView.has(inv.salesrep_name));
 
+      // A rep can hold invoices in more than one region — list them all rather than pick one.
+      const repRegions = new Map();
+      for (const inv of filteredInvoices) {
+        if (!repRegions.has(inv.salesrep_name)) repRegions.set(inv.salesrep_name, new Set());
+        repRegions.get(inv.salesrep_name).add(inv.region_name);
+      }
+      const regionOf = name => [...(repRegions.get(name) || [])].join(' / ');
+
       const summaryAoa = [
-        ['#', 'المندوب', 'رصيد الديون', 'النسبة %', 'إجمالي الفواتير'],
-        ...sortedDebtReps.map((r, i) => [i + 1, r.salesrep_name, Number(r.total_balance), r.pct_of_total, Number(r.total_invoiced)]),
+        ['#', 'المندوب', 'المنطقة', 'رصيد الديون', 'النسبة %', 'إجمالي الفواتير'],
+        ...sortedDebtReps.map((r, i) => [i + 1, r.salesrep_name, regionOf(r.salesrep_name), Number(r.total_balance), r.pct_of_total, Number(r.total_invoiced)]),
         [],
-        ['', `الإجمالي (${sortedDebtReps.length} مندوب)`,
+        ['', `الإجمالي (${sortedDebtReps.length} مندوب)`, '',
           sortedDebtReps.reduce((s, r) => s + Number(r.total_balance || 0), 0), '',
           sortedDebtReps.reduce((s, r) => s + Number(r.total_invoiced || 0), 0)],
       ];
       const wsSummary = XLSX.utils.aoa_to_sheet(summaryAoa);
 
       const detailAoa = [
-        ['المندوب', 'العميل', 'كود العميل', 'رقم الفاتورة', 'تاريخ الفاتورة', 'قيمة الفاتورة', 'المدفوع', 'الرصيد', 'الحالة'],
+        ['المندوب', 'المنطقة', 'العميل', 'كود العميل', 'رقم الفاتورة', 'تاريخ الفاتورة', 'قيمة الفاتورة', 'المدفوع', 'الرصيد', 'الحالة'],
         ...filteredInvoices.map(inv => [
-          inv.salesrep_name, inv.customer_name, inv.customer_id, inv.invoice_number,
+          inv.salesrep_name, inv.region_name, inv.customer_name, inv.customer_id, inv.invoice_number,
           inv.invoice_date || '', Number(inv.original_amount), Number(inv.paid_amount), Number(inv.balance), inv.status,
         ]),
       ];

@@ -741,6 +741,7 @@ router.get('/debt/invoices', verifyToken, applyRegionFilter, async (req, res) =>
     const { rows } = await pool.query(`
       SELECT
         COALESCE(TRIM(i.sales_rep_name), 'غير محدد') AS salesrep_name,
+        COALESCE(r.name_ar, r.name_en, 'غير محدد')  AS region_name,
         i.customer_name,
         i.customer_id,
         i.invoice_number,
@@ -750,6 +751,7 @@ router.get('/debt/invoices', verifyToken, applyRegionFilter, async (req, res) =>
         i.balance::numeric         AS balance,
         i.status
       FROM invoices i
+      LEFT JOIN regions r ON r.id = i.region_id
       ${where}
       ORDER BY COALESCE(TRIM(i.sales_rep_name), 'غير محدد'), i.balance DESC
       LIMIT 20000

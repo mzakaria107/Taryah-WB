@@ -226,7 +226,19 @@ export default function SummaryPage() {
       ];
       const wsDetail = XLSX.utils.aoa_to_sheet(detailAoa);
 
+      const regionRows = data?.debt?.by_region || [];
+      const regionAoa = [
+        ['المنطقة', 'رصيد الديون', 'نسبة من الإجمالي %', 'إجمالي الفواتير'],
+        ...regionRows.map(r => [r.region_name, Number(r.total_balance), r.pct_of_total, Number(r.total_invoiced)]),
+        [],
+        ['الإجمالي',
+          regionRows.reduce((s, r) => s + Number(r.total_balance || 0), 0), 100,
+          regionRows.reduce((s, r) => s + Number(r.total_invoiced || 0), 0)],
+      ];
+      const wsRegions = XLSX.utils.aoa_to_sheet(regionAoa);
+
       const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, wsRegions, 'المديونية حسب المنطقة');
       XLSX.utils.book_append_sheet(wb, wsSummary, 'ملخص المناديب');
       XLSX.utils.book_append_sheet(wb, wsDetail, 'تفاصيل الفواتير');
       XLSX.writeFile(wb, `مديونية_المناديب_${new Date().toISOString().slice(0, 10)}.xlsx`);

@@ -3154,6 +3154,12 @@ invoice (shown in "تفاصيل الفواتير"). In "ملخص المنادي�
 their own invoices and lists every distinct region joined with " / " — a rep can hold invoices in
 more than one region, and picking a single "primary" one would silently hide the rest.
 
+A third sheet, **"المديونية حسب المنطقة"** (first in the workbook), exports the on-screen
+by-region table as-is from `debt.by_region` (region, balance, % of total, total invoiced) plus a
+total row — no extra fetch, it's already in the loaded summary data. Note it is NOT narrowed by the
+client-side `excludeZeroReps` toggle (that only reshapes the rep list), matching what the region
+table on screen shows.
+
 **Not verified against production data this turn** — this session's cloud sandbox has no direct
 database or authenticated-API access (no JWT signing key, no DB connection path), only the public
 HTTPS site and the self-hosted-runner deploy pipeline. Verified instead: `npm run build` clean,

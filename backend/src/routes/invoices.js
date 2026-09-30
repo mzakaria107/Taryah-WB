@@ -686,7 +686,9 @@ router.get('/customer/:customerId', verifyToken, applyRegionFilter, async (req, 
     // Use i. prefix for customer_id to avoid ambiguity with notes.customer_id
     const joinedWhere = where.replace(/\bcustomer_id\b/g, 'i.customer_id');
     const { rows: invoices } = await pool.query(
-      `SELECT i.*, r.name_ar AS region_name_ar, n.note_text
+      // invoice_date re-selected as ::text after i.* (last duplicate wins in the row
+      // object) — a raw DATE comes back one day early, see sales_rep_last_date above.
+      `SELECT i.*, i.invoice_date::text AS invoice_date, r.name_ar AS region_name_ar, n.note_text
        FROM invoices i
        LEFT JOIN regions r ON r.id = i.region_id
        LEFT JOIN (SELECT invoice_id, note_text FROM notes) n

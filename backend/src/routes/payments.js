@@ -226,8 +226,8 @@ router.get('/customer/:customerId', verifyToken, async (req, res) => {
          SUM(p.pos)       AS total_pos,
          SUM(p.total_paid)AS total_paid,
          COUNT(*)         AS transaction_count,
-         MIN(p.tran_date) AS first_date,
-         MAX(p.tran_date) AS last_date
+         MIN(p.tran_date)::text AS first_date,
+         MAX(p.tran_date)::text AS last_date
        FROM payments p
        WHERE p.customer_code = $1`,
       [customerId]
@@ -244,7 +244,7 @@ router.get('/customer/:customerId', verifyToken, async (req, res) => {
       `SELECT
          i.id,
          i.invoice_number,
-         i.invoice_date,
+         i.invoice_date::text AS invoice_date,
          i.year,
          i.original_amount,
          i.paid_amount,
@@ -275,7 +275,7 @@ router.get('/customer/:customerId', verifyToken, async (req, res) => {
            p.id,
            p.document_number,
            p.invoice_number,
-           p.tran_date,
+           p.tran_date::text AS tran_date,
            p.bank_name,
            p.cash,
            p.cheque,
@@ -308,7 +308,7 @@ router.get('/customer/:customerId', verifyToken, async (req, res) => {
       `SELECT
          p.document_number,
          p.invoice_number,
-         p.tran_date,
+         p.tran_date::text AS tran_date,
          p.bank_name,
          p.route_code,
          p.cash,

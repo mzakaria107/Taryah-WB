@@ -3168,6 +3168,22 @@ line-for-line against the already-proven `debtData()` it mirrors. **Needs a real
 the user** (or a future session with server access) to confirm the exported Excel/print output
 actually matches on-screen numbers end to end.
 
+## Customer detail page — payment/invoice dates shown one day early
+
+Reported from «كل حركات السداد» on `CustomerDetailPage.jsx`: every payment date read one day
+before the real one. Same root cause as the Carrefour date bug above — a `DATE` column comes out
+of `pg` as a JS `Date` at local midnight (server is UTC+3), JSON turns it into
+`...T21:00:00Z` of the PREVIOUS day, and the page's `fmtDate` just cuts at `T`. Fixed by casting
+to `::text` at the SELECT, same scoped approach (not a global `setTypeParser`):
+- `GET /api/payments/customer/:id` — `tran_date` in both payment lists, `first_date`/`last_date`
+  in the summary, and `invoice_date` in its invoice list.
+- `GET /api/invoices/customer/:id` — `SELECT i.*, i.invoice_date::text AS invoice_date, ...`.
+  Relies on node-postgres assigning columns in order so the later duplicate wins (checked in
+  `pg/lib/result.js` `parseRow`). That route's `sales_rep_last_date` already had this fix.
+
+**Other `DATE` columns elsewhere in the app likely have the same bug** wherever they're sent
+without `::text` — only these two routes were fixed here.
+
 ## Ongoing Rules
 - Always update this CLAUDE.md when adding new pages, routes, migrations, or significant business logic changes.
 - After any local code change: `docker compose build && docker compose up -d`

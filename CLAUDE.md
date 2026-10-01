@@ -3184,6 +3184,14 @@ to `::text` at the SELECT, same scoped approach (not a global `setTypeParser`):
 **Other `DATE` columns elsewhere in the app likely have the same bug** wherever they're sent
 without `::text` — only these two routes were fixed here.
 
+## Sales-activity CSV upload rejected every row ("لا توجد صفوف صالحة بعد التحقق")
+
+`POST /api/sales-activity/upload` looked up the month column by the exact header `Month`. A
+newer NetSuite export ships it as **`Date - Month`**, so every row read an empty month and failed
+`lookupMonth` — the whole file was rejected even though all 17,285 rows were valid. The month
+column now matches either header. Verified by running the route's own `parseCSV`/`lookupMonth`
+against the user's real file: 17,285 of 17,285 rows pass (all "September").
+
 ## Ongoing Rules
 - Always update this CLAUDE.md when adding new pages, routes, migrations, or significant business logic changes.
 - After any local code change: `docker compose build && docker compose up -d`

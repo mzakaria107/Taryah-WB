@@ -173,7 +173,8 @@ router.post('/upload', verifyToken, applyRegionFilter, csvUpload.single('file'),
     const COL_BRANCH      = findKey('Branch Name English');
     const COL_REP         = findKey('First Name Salesrep English');
     const COL_INVOICE     = findKey('Invoice Number');
-    const COL_MONTH       = findKey('Month');
+    // NetSuite has exported this header as both "Month" and "Date - Month".
+    const COL_MONTH       = sampleKeys.find(k => ['Month', 'Date - Month'].includes(k.replace(/^﻿/, '').trim())) || 'Month';
     const COL_QTY         = findKey('Total Net qty with FOC');
     const COL_CATEGORY    = findKey('Category Name English');
     const COL_BAD_RETURN  = findKey('Total Bad Return Qty');

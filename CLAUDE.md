@@ -3192,6 +3192,17 @@ newer NetSuite export ships it as **`Date - Month`**, so every row read an empty
 column now matches either header. Verified by running the route's own `parseCSV`/`lookupMonth`
 against the user's real file: 17,285 of 17,285 rows pass (all "September").
 
+## Aging page — "عمر أقرب دين" column
+
+Added after "عمر أقدم دين" (table, footer, Excel "العملاء" sheet). Backend `aging.js` returns
+`newest_age_days` = days since the customer's NEWEST invoice that still carries a positive balance
+(`MIN(CASE WHEN balance > 0 THEN CURRENT_DATE - invoice_date END)`, NULL date → 121 like the
+oldest-age column). Credit notes (`balance < 0`, which the page's WHERE deliberately includes so
+they net into totals) are excluded here — a refund isn't a debt, and counting one would make a
+customer look like they took fresh credit days ago. Sortable (`SORT_COLS.newest_age_days`). Note
+the existing column named `avg_age_days` is actually the OLDEST invoice's age (`MAX`), despite
+the name. Not run against production data — no DB access from the cloud session.
+
 ## Ongoing Rules
 - Always update this CLAUDE.md when adding new pages, routes, migrations, or significant business logic changes.
 - After any local code change: `docker compose build && docker compose up -d`

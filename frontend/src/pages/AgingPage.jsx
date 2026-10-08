@@ -315,7 +315,7 @@ export default function AgingPage() {
       '1-15 يوم', '16-30 يوم', '31-60 يوم',
       '61-90 يوم', '91-120 يوم', 'أكثر من 120',
       'نسبة التحصيل %', 'نسبة المتبقي %',
-      'عمر أقدم دين (يوم)', 'إجمالي الدين', 'التغير اليومي',
+      'عمر أقدم دين (يوم)', 'عمر أقرب دين (يوم)', 'إجمالي الدين', 'التغير اليومي',
     ];
     const custRows = (data.customers || []).map(c => {
       const totalAmt = parseFloat(c.total_amount || 0);
@@ -332,6 +332,7 @@ export default function AgingPage() {
         parseFloat(c.collection_rate || 0),
         remRate,
         parseInt(c.avg_age_days || 0),
+        c.newest_age_days == null ? '' : parseInt(c.newest_age_days),
         totalBal,
         parseFloat(c.daily_change || 0),
       ];
@@ -343,14 +344,14 @@ export default function AgingPage() {
       parseFloat(k.b_1_15 || 0), parseFloat(k.b_16_30 || 0),
       parseFloat(k.b_31_60 || 0), parseFloat(k.b_61_90 || 0),
       parseFloat(k.b_91_120 || 0), parseFloat(k.b_120_plus || 0),
-      '', '', '', parseFloat(k.total_balance || 0), '',
+      '', '', '', '', parseFloat(k.total_balance || 0), '',
     ]);
     const ws1 = XLSX.utils.aoa_to_sheet([custHeader, ...custRows]);
     // Column widths
     ws1['!cols'] = [
       { wch: 28 }, { wch: 12 }, { wch: 12 }, { wch: 12 },
       { wch: 12 }, { wch: 13 }, { wch: 14 },
-      { wch: 16 }, { wch: 16 }, { wch: 16 }, { wch: 14 }, { wch: 13 },
+      { wch: 16 }, { wch: 16 }, { wch: 16 }, { wch: 16 }, { wch: 14 }, { wch: 13 },
     ];
     XLSX.utils.book_append_sheet(wb, ws1, 'العملاء');
 
@@ -759,6 +760,10 @@ function CustomerTable({ customers, kpis, sortBy, sortDir, onSort, onOpenModal }
             <SortIcon col="avg_age_days" sortBy={sortBy} sortDir={sortDir} />
             عمر أقدم دين
           </th>
+          <th onClick={() => onSort('newest_age_days')} className={sortBy === 'newest_age_days' ? 'age-th--sorted' : ''}>
+            <SortIcon col="newest_age_days" sortBy={sortBy} sortDir={sortDir} />
+            عمر أقرب دين
+          </th>
           <th onClick={() => onSort('total_balance')} className={sortBy === 'total_balance' ? 'age-th--sorted' : ''}>
             <SortIcon col="total_balance" sortBy={sortBy} sortDir={sortDir} />
             إجمالي الدين
@@ -781,6 +786,7 @@ function CustomerTable({ customers, kpis, sortBy, sortDir, onSort, onOpenModal }
           {BUCKETS.map(b => (
             <td key={b.key}>{fmtN(foot[b.key])}</td>
           ))}
+          <td>—</td>
           <td>—</td>
           <td>—</td>
           <td>—</td>
@@ -863,6 +869,11 @@ function CustomerRow({ c, fmtN, onOpenModal }) {
       {/* متوسط عمر الدين */}
       <td>
         <AvgAgeBadge days={parseInt(c.avg_age_days || 0)} />
+      </td>
+
+      {/* عمر أقرب دين */}
+      <td>
+        {c.newest_age_days == null ? '—' : <AvgAgeBadge days={parseInt(c.newest_age_days)} />}
       </td>
 
       {/* Total balance */}

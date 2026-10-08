@@ -46,6 +46,7 @@ const SORT_COLS = {
   daily_change:    'daily_change',
   collection_rate: 'collection_rate',
   avg_age_days:    'avg_age_days',
+  newest_age_days: 'newest_age_days',
 };
 
 /* ═══════════════════════════════════════════════════════════════
@@ -177,6 +178,11 @@ router.get('/', verifyToken, applyRegionFilter, async (req, res) => {
           THEN (CURRENT_DATE - i.invoice_date)
           ELSE 121 END
         )::int AS avg_age_days,
+        -- Age of the newest invoice still carrying debt; credit notes (balance < 0) aren't debt
+        MIN(
+          CASE WHEN i.balance > 0
+          THEN COALESCE(CURRENT_DATE - i.invoice_date, 121) END
+        )::int AS newest_age_days,
         -- Daily change vs most recent previous snapshot
         COALESCE(bs.total_balance, SUM(i.balance)) AS prev_balance,
         ROUND((SUM(i.balance) - COALESCE(bs.total_balance, SUM(i.balance)))::numeric, 2) AS daily_change

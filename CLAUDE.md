@@ -3273,3 +3273,30 @@ against production data — no DB access or login from the cloud session.
 - Always update this CLAUDE.md when adding new pages, routes, migrations, or significant business logic changes.
 - After any local code change: `docker compose build && docker compose up -d`
 - Push to `main` → the self-hosted-runner workflow (above) deploys automatically. Manual deploy via `deploy_rep_management.py` (see Production Deployment above) remains available as a fallback.
+
+## Sales plan page (`/sales-plan`, "خطة المبيعات")
+
+Management plan "60,000 units/day of chilled chicken" compared with live actuals.
+- **Plan** is static in `frontend/src/data/salesPlan.js`, transcribed from management's sheet:
+  per region × weight (700–1400 g + fillet 450 g) daily qty, item prices, and staffing (branch
+  managers / supervisors / active reps / planned reps). Every row and column foots to the sheet's
+  totals (verified). Jeddah + Madinah are agencies (وكالة), the other 7 are retail (مفرق).
+  Region `db` key = `regions.name_ar` (English: Al-Qassem, Riyadh, Hael, Al Duwadmi, Shaqraa, Arar,
+  Dammam, Madinah, Jeddah). Regions with sales but not in the plan (Hafir El Batin) show as "خارج الخطة".
+- **Actuals**: `GET /api/sales-plan?months=9` (`routes/salesPlan.js`, page key `sales_plan`), last N
+  complete months. Chilled = `item_category_en = 'دجاج مبرد طرية'` (`categories=` overrides);
+  `direct` excluded unless `include_direct=1`. Returns per region: qty, revenue, selling days,
+  avg monthly active customers (net qty > 0), avg selling reps, weight mix (grams parsed from the
+  item name, same regex as regionPerformance), fillet (`item_name_en ILIKE '%fillet%'`, any
+  category), invoiced vs collected in the window, debt, >60/90/180/365-day buckets, dormant debtors
+  (debt > 0 and last invoice > 60 days ago). Plus top-10 debtors, top-10 reps by +90 debt,
+  Carrefour debt, flagged bad debt.
+- **Client-side math** (`SalesPlanPage.jsx`): daily avg = qty ÷ company selling days (or calendar
+  days, toggle); required customers = plan daily ÷ (actual units/customer/day × (1 + uplift%));
+  "safe" adds a buffer % (default 15); agencies/regions without sales borrow the company per-customer
+  rate. Collection rate = collected ÷ invoiced (all products); DSO = debt ÷ (invoiced ÷ calendar days).
+  Debt problems are generated from the data and ranked by amount; recommendations embed the numbers.
+- Verified against a local Postgres 16 with every migration applied and seeded data (all queries
+  run, totals consistent) and rendered with Playwright. Not run against production data.
+- Migration 121 seeds page permissions, but production migrations stall at 058 (see the bad-debt
+  note above) so until that is fixed only super_admin / it_admin pass the API check.

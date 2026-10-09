@@ -29,6 +29,7 @@ const QualityIssuesPage            = lazy(() => import('./pages/QualityIssuesPag
 const CollectionsPerformancePage   = lazy(() => import('./pages/CollectionsPerformancePage'));
 const AgingPage                    = lazy(() => import('./pages/AgingPage'));
 const AgingByPeriodPage            = lazy(() => import('./pages/AgingByPeriodPage'));
+const SalesPlanPage                = lazy(() => import('./pages/SalesPlanPage'));
 const RepManagementPage            = lazy(() => import('./pages/RepManagementPage'));
 const PerformanceDashboardPage     = lazy(() => import('./pages/PerformanceDashboardPage'));
 const RepDebtPage                  = lazy(() => import('./pages/RepDebtPage'));
@@ -262,6 +263,14 @@ export default function App() {
         <RoleRoute pageKey="aging_by_period">
           <AppLayout>
             <PageSuspense><AgingByPeriodPage /></PageSuspense>
+          </AppLayout>
+        </RoleRoute>
+      } />
+
+      <Route path="/sales-plan" element={
+        <RoleRoute pageKey="sales_plan">
+          <AppLayout>
+            <PageSuspense><SalesPlanPage /></PageSuspense>
           </AppLayout>
         </RoleRoute>
       } />

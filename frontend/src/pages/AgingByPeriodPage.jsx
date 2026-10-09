@@ -11,6 +11,10 @@ import './AgingByPeriodPage.css';
 
 const fmt = n => (n == null || n === 0) ? '—' : Number(n).toLocaleString('en-SA', { maximumFractionDigits: 0 });
 
+const fmtStamp = iso => iso
+  ? new Date(iso).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+  : '—';
+
 // Same colour bands as the aging page's age badge.
 function AgeBadge({ days }) {
   if (days == null) return <span className="age-cell--zero">—</span>;
@@ -82,7 +86,7 @@ export default function AgingByPeriodPage() {
       queryClient.setQueriesData({ queryKey: ['aging-by-period'] }, old => old && ({
         ...old,
         customers: old.customers.map(c => c.customer_id === res.customer_id
-          ? { ...c, bad_debt: res.bad_debt, bad_debt_marked_at: res.bad_debt_marked_at }
+          ? { ...c, bad_debt: res.bad_debt, bad_debt_marked_at: res.bad_debt_marked_at, bad_debt_marked_by: res.bad_debt_marked_by }
           : c),
       }));
     },
@@ -137,15 +141,16 @@ export default function AgingByPeriodPage() {
   ].filter(Boolean).join(' · ');
 
   const handleExport = () => {
-    const header = ['العميل', 'رقم العميل', 'المنطقة', ...periods.map(p => p.label), 'إجمالي الدين', 'عمر أقدم دين (يوم)', 'عمر أقرب دين (يوم)', 'مديونية معدومة'];
+    const header = ['العميل', 'رقم العميل', 'المنطقة', ...periods.map(p => p.label), 'إجمالي الدين', 'عمر أقدم دين (يوم)', 'عمر أقرب دين (يوم)', 'مديونية معدومة', 'سُجّلت بواسطة', 'تاريخ التسجيل'];
     const body = rows.map(c => [
       c.customer_name, c.customer_id, c.region_name || '',
       ...periods.map(p => Number(c.by_period[p.key] || 0)),
       c.total, c.oldest_age_days ?? '', c.newest_age_days ?? '', c.bad_debt ? 'نعم' : '',
+      c.bad_debt ? (c.bad_debt_marked_by || '') : '', c.bad_debt ? fmtStamp(c.bad_debt_marked_at) : '',
     ]);
-    const foot = ['الإجمالي', '', '', ...periods.map(p => Number(totals[p.key] || 0)), Number(totals.total || 0), '', '', ''];
+    const foot = ['الإجمالي', '', '', ...periods.map(p => Number(totals[p.key] || 0)), Number(totals.total || 0), '', '', '', '', ''];
     const ws = XLSX.utils.aoa_to_sheet([header, ...body, foot]);
-    ws['!cols'] = [{ wch: 32 }, { wch: 12 }, { wch: 14 }, ...periods.map(() => ({ wch: 13 })), { wch: 14 }, { wch: 16 }, { wch: 16 }, { wch: 14 }];
+    ws['!cols'] = [{ wch: 32 }, { wch: 12 }, { wch: 14 }, ...periods.map(() => ({ wch: 13 })), { wch: 14 }, { wch: 16 }, { wch: 16 }, { wch: 14 }, { wch: 22 }, { wch: 22 }];
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'المديونية حسب الفترة');
     XLSX.writeFile(wb, `المديونية_حسب_الفترة_${new Date().toLocaleDateString('en-CA')}.xlsx`);
@@ -323,7 +328,7 @@ export default function AgingByPeriodPage() {
                         className={`abp-bad-debt-btn${c.bad_debt ? ' abp-bad-debt-btn--on' : ''}`}
                         disabled={!canEditBadDebt || badDebtMutation.isPending}
                         title={c.bad_debt
-                          ? `معدومة منذ ${c.bad_debt_marked_at ? new Date(c.bad_debt_marked_at).toLocaleDateString('ar-SA-u-nu-latn') : '—'}${canEditBadDebt ? ' — اضغط للإلغاء' : ''}`
+                          ? `معدومة — بواسطة ${c.bad_debt_marked_by || '—'} في ${fmtStamp(c.bad_debt_marked_at)}${canEditBadDebt ? ' — اضغط للإلغاء' : ''}`
                           : (canEditBadDebt ? 'اضغط لتحديدها كمديونية معدومة' : 'غير معدومة')}
                         onClick={() => badDebtMutation.mutate({ customerId: c.customer_id, badDebt: !c.bad_debt })}
                       >
@@ -331,6 +336,12 @@ export default function AgingByPeriodPage() {
                           ? '✓ معدومة'
                           : (canEditBadDebt ? 'تنشيط' : '—')}
                       </button>
+                      {c.bad_debt && (
+                        <div className="abp-bad-debt-sig">
+                          {c.bad_debt_marked_by || '—'}
+                          <span>{fmtStamp(c.bad_debt_marked_at)}</span>
+                        </div>
+                      )}
                     </td>
                   </tr>
                 ))}

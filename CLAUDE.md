@@ -3246,6 +3246,13 @@ are built from the data, not hardcoded, so 2027 rolls over by itself.
     by-period read swallows errors from it. Reason: right after release the page showed "حدث خطأ"
     because startup migrations stop at the first failing file (`index.js` logs and starts anyway),
     so 119 may never run. Migration 119 has no FK for the same reason.
+- **Bad-debt signature**: flagging stores who did it. `bad_debt_customers.marked_by_name` (name
+  captured at flag time) + `bad_debt_log (customer_id, action 'mark'|'unmark', user_id, user_name,
+  created_at)` audit of every real change (no-op clicks aren't logged). Migration 120, also created
+  lazily by `ensureBadDebtTable()`. `GET /by-period` returns `bad_debt_marked_by` =
+  `COALESCE(users.name, marked_by_name)`. The page shows name + date/time (en-GB, Gregorian) under
+  the "✓ معدومة" button and in its tooltip; Excel adds "سُجّلت بواسطة" and "تاريخ التسجيل".
+  Customers flagged before this change have `marked_by` (user id) only — the join still names them.
 - Compact layout (`AgingByPeriodPage.css`): 0.72rem font, 4px cell padding, wrapping centred headers,
   sort arrows hidden (sorted header is coloured/underlined) — whole matrix fits 1366px+ without
   horizontal scroll (checked with Playwright on mocked data at 1366 and 1880).

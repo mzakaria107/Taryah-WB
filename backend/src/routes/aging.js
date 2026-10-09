@@ -323,11 +323,11 @@ router.get('/by-period', verifyToken, applyRegionFilter, requirePagePermission('
       `, params),
       // Never let the bad-debt label take the whole page down (e.g. table not created yet).
       ensureBadDebtTable()
-        .then(() => pool.query(`SELECT customer_id, marked_at FROM bad_debt_customers`))
+        .then(() => pool.query(BAD_DEBT_SELECT))
         .catch(err => { console.error('[Aging/by-period] bad_debt_customers:', err.message); return { rows: [] }; }),
     ]);
     const infoById = new Map(custInfo.map(r => [r.customer_id, r]));
-    const badDebtById = new Map(badDebt.map(r => [r.customer_id, r.marked_at]));
+    const badDebtById = new Map(badDebt.map(r => [r.customer_id, r]));
 
     const customers = new Map();
     const years = new Set();
@@ -368,7 +368,8 @@ router.get('/by-period', verifyToken, applyRegionFilter, requirePagePermission('
           oldest_age_days: info.oldest_age_days ?? null,
           newest_age_days: info.newest_age_days ?? null,
           bad_debt:           badDebtById.has(c.customer_id),
-          bad_debt_marked_at: badDebtById.get(c.customer_id) ?? null,
+          bad_debt_marked_at: badDebtById.get(c.customer_id)?.marked_at ?? null,
+          bad_debt_marked_by: badDebtById.get(c.customer_id)?.marked_by_name ?? null,
         };
       })
       .filter(c => c.total !== 0)
@@ -403,11 +404,27 @@ function ensureBadDebtTable() {
         customer_id VARCHAR(100) PRIMARY KEY,
         marked_by   UUID,
         marked_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
-      )
+      );
+      ALTER TABLE bad_debt_customers ADD COLUMN IF NOT EXISTS marked_by_name VARCHAR(200);
+      CREATE TABLE IF NOT EXISTS bad_debt_log (
+        id          SERIAL PRIMARY KEY,
+        customer_id VARCHAR(100) NOT NULL,
+        action      VARCHAR(10)  NOT NULL,   -- 'mark' | 'unmark'
+        user_id     UUID,
+        user_name   VARCHAR(200),
+        created_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+      );
     `).catch(err => { badDebtTableReady = null; throw err; });
   }
   return badDebtTableReady;
 }
+
+// Who flagged it: the live user name, falling back to the name captured at flag time
+// (kept so the signature survives the user being renamed or deleted).
+const BAD_DEBT_SELECT = `
+  SELECT b.customer_id, b.marked_at, COALESCE(u.name, b.marked_by_name) AS marked_by_name
+  FROM bad_debt_customers b
+  LEFT JOIN users u ON u.id = b.marked_by`;
 
 router.put('/bad-debt/:customerId', verifyToken, requirePagePermission('aging_by_period', 2), async (req, res) => {
   const { customerId } = req.params;
@@ -415,19 +432,34 @@ router.put('/bad-debt/:customerId', verifyToken, requirePagePermission('aging_by
   if (typeof flag !== 'boolean') return res.status(400).json({ error: 'bad_debt يجب أن يكون true أو false' });
   try {
     await ensureBadDebtTable();
+    const { rows: [me] } = await pool.query('SELECT name FROM users WHERE id = $1', [req.user.id]);
+    const userName = me?.name || req.user.name || req.user.email || null;
     if (flag) {
-      const { rows: [row] } = await pool.query(
-        `INSERT INTO bad_debt_customers (customer_id, marked_by) VALUES ($1, $2)
-         ON CONFLICT (customer_id) DO NOTHING
-         RETURNING marked_at`,
-        [customerId, req.user.id]
+      const { rowCount } = await pool.query(
+        `INSERT INTO bad_debt_customers (customer_id, marked_by, marked_by_name) VALUES ($1, $2, $3)
+         ON CONFLICT (customer_id) DO NOTHING`,
+        [customerId, req.user.id, userName]
       );
-      const markedAt = row?.marked_at
-        ?? (await pool.query('SELECT marked_at FROM bad_debt_customers WHERE customer_id = $1', [customerId])).rows[0]?.marked_at;
-      return res.json({ customer_id: customerId, bad_debt: true, bad_debt_marked_at: markedAt ?? null });
+      if (rowCount) {
+        await pool.query(
+          `INSERT INTO bad_debt_log (customer_id, action, user_id, user_name) VALUES ($1, 'mark', $2, $3)`,
+          [customerId, req.user.id, userName]
+        );
+      }
+      const { rows: [row] } = await pool.query(`${BAD_DEBT_SELECT} WHERE b.customer_id = $1`, [customerId]);
+      return res.json({
+        customer_id: customerId, bad_debt: true,
+        bad_debt_marked_at: row?.marked_at ?? null, bad_debt_marked_by: row?.marked_by_name ?? null,
+      });
     }
-    await pool.query('DELETE FROM bad_debt_customers WHERE customer_id = $1', [customerId]);
-    res.json({ customer_id: customerId, bad_debt: false, bad_debt_marked_at: null });
+    const { rowCount } = await pool.query('DELETE FROM bad_debt_customers WHERE customer_id = $1', [customerId]);
+    if (rowCount) {
+      await pool.query(
+        `INSERT INTO bad_debt_log (customer_id, action, user_id, user_name) VALUES ($1, 'unmark', $2, $3)`,
+        [customerId, req.user.id, userName]
+      );
+    }
+    res.json({ customer_id: customerId, bad_debt: false, bad_debt_marked_at: null, bad_debt_marked_by: null });
   } catch (err) {
     console.error('[Aging/bad-debt]', err.message);
     res.status(500).json({ error: err.message });

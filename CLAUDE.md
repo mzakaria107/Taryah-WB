@@ -3340,3 +3340,15 @@ Management daily chilled-chicken plan (now 59,900 units/day) compared with live 
   needed vs current rate, reps to hire, raise drop size below 80% of company average, agency
   monthly contract). Sections after it were renumbered 4–8. Verified on local Postgres 16 with
   seeded lost/declining/new customers.
+- **Word export (button "تصدير Word", added 9 Oct 2026)**: `frontend/src/utils/salesPlanDocx.js`
+  builds the full plan as a .docx IN THE BROWSER from the page's own computed objects (`data`,
+  `calc`, `ramp`, `findings`) so it carries live actuals — the cloud session cannot reach production
+  data, so a server-side/offline document would have had no real numbers. Uses `docx@9.5.1`
+  (frontend dependency, lazy-loaded chunk ~360 KB only on click). A4 landscape, RTL
+  (`bidirectional` paragraphs, `rightToLeft` runs, `visuallyRightToLeft` tables), Arial, brand green,
+  header + "صفحة X من Y" footer. Sections: cover, executive summary (KPI strip + key points), plan vs
+  actual + staffing, 3-month ramp + customers/reps per month, expansion (priority table with
+  actions, top 10 lost / declining), item mix, collection & debt + problems, recommendations,
+  methodology. Filename is ASCII (`Sales-Plan_YYYY-MM-DD.docx`) — Chromium drops an Arabic
+  `download` attribute and saves as "download". Verified by clicking the button in Playwright,
+  validating the file against the OOXML schema (passes) and rendering every page via LibreOffice.

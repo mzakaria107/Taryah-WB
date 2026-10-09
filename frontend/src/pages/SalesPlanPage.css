@@ -88,3 +88,5 @@
 .sp-kpis--compact .sp-kpi b { font-size: 1.2rem; }
 .sp-table td.sp-actions { white-space: normal; text-align: right; font-size: 0.72rem; line-height: 1.6; min-width: 280px; }
 .sp-table td div.sp-muted { display: block; }
+.sp-word-btn { background: #1d4ed8; color: #fff; border-color: #1d4ed8; }
+.sp-word-btn:disabled { opacity: 0.6; cursor: wait; }

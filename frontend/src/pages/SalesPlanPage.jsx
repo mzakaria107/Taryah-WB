@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Target, Printer } from 'lucide-react';
+import { Target, Printer, FileText } from 'lucide-react';
 import api from '../api/client';
 import { PLAN_TARGET, PLAN_REGIONS, PLAN_ITEMS, PLAN_CUSTOMERS, FOCUS_REGIONS, FOCUS_WEIGHT, planDailyForRegion, planDailyForItem, planCustomerTargets, RAMP_STEPS } from '../data/salesPlan';
 import './SalesPlanPage.css';
@@ -17,6 +17,7 @@ function GapCell({ gap }) {
 
 export default function SalesPlanPage() {
   const [months,   setMonths]   = useState(9);
+  const [exporting, setExporting] = useState(false);
   // 'working' = Sat–Thu minus holidays — the same divisor as the region-performance page.
   const [daysMode, setDaysMode] = useState('working'); // 'working' | 'calendar'
 
@@ -246,6 +247,14 @@ export default function SalesPlanPage() {
       <div className="sp-header">
         <Target size={24} color="#15803d" />
         <h1 className="sp-title">خطة المبيعات — الوصول إلى {fmt(PLAN_TARGET)} حبة يومياً</h1>
+        <button className="sp-print-btn sp-word-btn sp-no-print" disabled={exporting || !ramp} onClick={async () => {
+          setExporting(true);
+          try {
+            const { exportSalesPlanDocx } = await import('../utils/salesPlanDocx');
+            await exportSalesPlanDocx({ data, calc, ramp, findings, periodLabel });
+          } catch (e) { alert('تعذّر إنشاء ملف Word: ' + e.message); }
+          finally { setExporting(false); }
+        }}><FileText size={16} /> {exporting ? 'جاري الإنشاء…' : 'تصدير Word'}</button>
         <button className="sp-print-btn sp-no-print" onClick={() => window.print()}><Printer size={16} /> طباعة / PDF</button>
       </div>
 

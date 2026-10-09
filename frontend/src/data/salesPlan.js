@@ -1,6 +1,6 @@
-/* Daily sales plan — transcribed from the management plan sheet (latest revision: 59,900/day).
-   Every row and column foots to the sheet's own totals (59,900; Jeddah 4,800 / Madinah 4,800 /
-   Dammam 4,250 / Arar 3,550 / Shaqra 5,150 / Dawadmi 4,450 / Hail 7,200 / Riyadh 12,300 /
+/* Daily sales plan — transcribed from the management plan sheet (latest revision: 60,000/day).
+   Every row and column foots to the sheet's own totals (60,000; Jeddah 4,800 / Madinah 4,800 /
+   Dammam 4,250 / Arar 3,550 / Shaqra 5,150 / Dawadmi 4,450 / Hail 7,300 / Riyadh 12,300 /
    Qassim 13,400).
    `db` = regions.name_ar (English identifier also used by sales_activity.branch_name). */
 
@@ -25,7 +25,7 @@ export const PLAN_ITEMS = [
   { key: '1000',   label: 'وزن 1000',     grams: 1000, price: 14.0, qty: { qassim: 3500, riyadh: 2500, hail: 1500, dawadmi: 800,  shaqra: 800,  arar: 500, dammam: 800, madinah: 1000, jeddah: 1000 } },
   { key: '1100',   label: 'وزن 1100',     grams: 1100, price: 14.3, qty: { qassim: 2700, riyadh: 1500, hail: 1000, dawadmi: 500,  shaqra: 500,  arar: 500, dammam: 500, madinah: 500,  jeddah: 500 } },
   { key: '1200',   label: 'وزن 1200',     grams: 1200, price: 15.0, qty: { qassim: 1500, riyadh: 1500, hail: 1000, dawadmi: 400,  shaqra: 300,  arar: 500, dammam: 600, madinah: 500,  jeddah: 500 } },
-  { key: '1300',   label: 'وزن 1300',     grams: 1300, price: 15.5, qty: { qassim: 1000, riyadh: 1000, hail: 500,  dawadmi: 200,  shaqra: 200,  arar: 500, dammam: 500, madinah: 500,  jeddah: 500 } },
+  { key: '1300',   label: 'وزن 1300',     grams: 1300, price: 15.5, qty: { qassim: 1000, riyadh: 1000, hail: 600,  dawadmi: 200,  shaqra: 200,  arar: 500, dammam: 500, madinah: 500,  jeddah: 500 } },
   { key: '1400',   label: 'وزن 1400',     grams: 1400, price: 16.0, qty: { qassim: 1000, riyadh: 1000, hail: 500,  dawadmi: 100,  shaqra: 100,  arar: 500, dammam: 500, madinah: 500,  jeddah: 500 } },
   { key: 'fillet', label: 'فيليه 450ج',   grams: null, price: 13.0, qty: { qassim: 100,  riyadh: 300,  hail: 200,  dawadmi: 50,   shaqra: 50,   arar: 50,  dammam: 50,  madinah: 100,  jeddah: 100 } },
 ];

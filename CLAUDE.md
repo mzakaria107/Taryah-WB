@@ -3291,8 +3291,9 @@ Management daily chilled-chicken plan (now 59,900 units/day) compared with live 
   category), invoiced vs collected in the window, debt, >60/90/180/365-day buckets, dormant debtors
   (debt > 0 and last invoice > 60 days ago). Plus top-10 debtors, top-10 reps by +90 debt,
   Carrefour debt, flagged bad debt.
-- **Plan revision (9 Oct 2026): 59,900/day** — `PLAN_TARGET` is now computed from `PLAN_ITEMS`
-  (no hardcoded total). Regions: Qassim 13,400, Riyadh 12,300, Hail 7,200, Shaqra 5,150, Dawadmi
+- **Plan revision (9 Oct 2026): 60,000/day** (previous sheet 59,900; latest change: Hail 1300g
+  500 → 600) — `PLAN_TARGET` is computed from `PLAN_ITEMS` (no hardcoded total). Regions: Qassim
+  13,400, Riyadh 12,300, Hail 7,300, Shaqra 5,150, Dawadmi
   4,450, Dammam 4,250, Arar 3,550, Madinah 4,800, Jeddah 4,800 (all rows/columns foot to the sheet).
 - **Customer target = 2,000** active customers/month for the 7 retail regions only (agencies
   excluded), `PLAN_CUSTOMERS` (was 2,500, then focus-only expansion — revised 9 Oct 2026).

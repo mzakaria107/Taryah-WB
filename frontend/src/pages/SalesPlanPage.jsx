@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Target, Printer } from 'lucide-react';
 import api from '../api/client';
-import { PLAN_TARGET, PLAN_REGIONS, PLAN_ITEMS, PLAN_CUSTOMERS, FOCUS_REGIONS, FOCUS_WEIGHT, planDailyForRegion, planDailyForItem, planCustomerTargets } from '../data/salesPlan';
+import { PLAN_TARGET, PLAN_REGIONS, PLAN_ITEMS, PLAN_CUSTOMERS, FOCUS_REGIONS, FOCUS_WEIGHT, planDailyForRegion, planDailyForItem, planCustomerTargets, RAMP_STEPS } from '../data/salesPlan';
 import './SalesPlanPage.css';
 
 const fmt  = (n, d = 0) => (n == null || !isFinite(n)) ? '—' : Number(n).toLocaleString('en-SA', { maximumFractionDigits: d, minimumFractionDigits: d });
@@ -166,6 +166,73 @@ export default function SalesPlanPage() {
     return { debtProblems: shown, lagging, lowPerCust, worstCollection };
   }, [calc, data]);
 
+  /* ── Ramp: today's run-rate (last 3 months) → plan over the next 3 months ── */
+  const ramp = useMemo(() => {
+    if (!data?.ramp_months || !data?.recent) return null;
+    const byDb = new Map(data.regions.map(r => [r.region, r]));
+    const rd = data.recent.working_days || 1;
+    const recentMonths = data.recent.months.length || 1;
+    const custTargets = planCustomerTargets(Object.fromEntries(
+      PLAN_REGIONS.map(p => [p.key, byDb.get(p.db)?.recent_active_customers || 0])));
+    const companyActive = data.regions.reduce((s, r) => s + (r.recent_active_customers || 0), 0);
+    const companyDaily = data.regions.reduce((s, r) => s + (r.recent_qty || 0), 0) / rd;
+    const companyPerCust = companyActive ? companyDaily / companyActive : 0;
+
+    const rows = PLAN_REGIONS.map(p => {
+      const a = byDb.get(p.db) || {};
+      const cur = (a.recent_qty || 0) / rd;
+      const plan = planDailyForRegion(p.key);
+      const curCust = a.recent_active_customers || 0;
+      const finalCust = p.type === 'retail' ? custTargets[p.key] : null;
+      const curReps = p.staff.activeReps ?? null;
+      const finalReps = p.staff.plannedReps ?? null;
+      const steps = RAMP_STEPS.map((k, i) => {
+        const daily = cur >= plan ? cur : cur + (plan - cur) * k;     // never plan below today
+        const cust = finalCust != null ? Math.round(curCust + (finalCust - curCust) * k) : null;
+        const reps = finalReps != null ? Math.round(curReps + (finalReps - curReps) * k) : null;
+        const wd = data.ramp_months[i].working_days;
+        return { daily, monthly: daily * wd, cust, reps, perCust: cust ? daily / cust : null };
+      });
+      const pool = a.pool || {};
+      const perCust = curCust ? cur / curCust : null;
+      // Customers to win back + new ones still needed to reach the final target
+      const newNeeded = finalCust != null ? Math.max(0, finalCust - curCust - (pool.lost || 0)) : null;
+      const newPerMonthNow = (pool.new_customers || 0) / recentMonths;
+      return { ...p, a, cur, plan, gap: plan - cur, curCust, finalCust, curReps, finalReps, steps, pool, perCust,
+               focus: FOCUS_REGIONS.includes(p.key), newNeeded, newPerMonthNeeded: newNeeded != null ? newNeeded / 3 : null,
+               newPerMonthNow, recoverable: (pool.lost_daily || 0) + (pool.declining_loss || 0) };
+    });
+    const sum = f => rows.reduce((s, r) => s + (f(r) || 0), 0);
+    const totals = {
+      cur: sum(r => r.cur), plan: sum(r => r.plan),
+      curCust: sum(r => r.type === 'retail' ? r.curCust : 0),
+      steps: RAMP_STEPS.map((_, i) => ({
+        daily: sum(r => r.steps[i].daily), monthly: sum(r => r.steps[i].monthly),
+        cust: sum(r => r.steps[i].cust), reps: sum(r => r.steps[i].reps),
+      })),
+      lost: sum(r => r.pool.lost), lostDaily: sum(r => r.pool.lost_daily),
+      declining: sum(r => r.pool.declining), decliningLoss: sum(r => r.pool.declining_loss),
+      newPerMonthNow: sum(r => r.newPerMonthNow), newNeeded: sum(r => r.newNeeded),
+      recoverable: sum(r => r.recoverable),
+    };
+
+    // Expansion priority: biggest remaining gap after recoverable volume, with focus regions first
+    const priority = rows.filter(r => r.gap > 0).map(r => {
+      const actions = [];
+      if (r.pool.lost) actions.push(`استرجاع ${fmt(r.pool.lost)} عميل مفقود (≈ +${fmt(r.pool.lost_daily)} حبة/يوم)`);
+      if (r.pool.declining) actions.push(`معالجة ${fmt(r.pool.declining)} عميل متراجع (≈ +${fmt(r.pool.declining_loss)} حبة/يوم)`);
+      if (r.type === 'retail' && r.newNeeded > 0) actions.push(`ضم ${fmt(r.newPerMonthNeeded)} عميل جديد شهرياً (المعدل الحالي ${fmt(r.newPerMonthNow, 1)})`);
+      if (r.finalReps != null && r.finalReps > r.curReps) actions.push(`تعيين ${r.finalReps - r.curReps} مندوب`);
+      if (r.perCust && companyPerCust && r.perCust < companyPerCust * 0.8) actions.push(`رفع مبيعات العميل من ${fmt(r.perCust, 1)} إلى متوسط الشركة ${fmt(companyPerCust, 1)} حبة/يوم`);
+      if (r.type === 'agency') actions.push(`عقد كميات شهري مع الوكيل بحد أدنى ${fmt(r.plan * 26)} حبة/شهر`);
+      const afterRecovery = Math.max(0, r.gap - r.recoverable);
+      return { ...r, actions, afterRecovery,
+               score: r.gap * (r.focus ? 1.5 : 1) + r.recoverable };
+    }).sort((x, y) => y.score - x.score);
+
+    return { rows, totals, priority, companyPerCust };
+  }, [data]);
+
   if (isLoading) return <div className="sp-page"><div className="sp-loading">جاري تحميل البيانات الفعلية…</div></div>;
   if (isError)   return <div className="sp-page"><div className="sp-loading">حدث خطأ في تحميل البيانات: {error?.response?.data?.error || error?.message}</div></div>;
   if (!calc) return null;
@@ -278,9 +345,129 @@ export default function SalesPlanPage() {
         </p>
       </section>
 
+      {/* ── 2. Ramp plan ── */}
+      {ramp && (
+        <section className="sp-section">
+          <h2>2) خطة الوصول التصاعدية — من الوضع الحالي إلى {fmt(PLAN_TARGET)} حبة يومياً خلال 3 أشهر</h2>
+          <p className="sp-explain sp-explain--top">
+            الوضع الحالي = متوسط آخر 3 أشهر ({data.recent.months.map(m => MONTHS_AR[m.m - 1]).join('، ')}) على أيام العمل.
+            يُغلق {RAMP_STEPS.map(k => pct(k * 100, 0)).join(' ثم ')} من الفجوة بنهاية كل شهر (تصاعد متدرج لأن المناديب والعملاء الجدد يحتاجون أسابيع للوصول لكامل طاقتهم).
+          </p>
+          <div className="sp-table-wrap">
+            <table className="sp-table sp-table--ramp">
+              <thead>
+                <tr>
+                  <th rowSpan={2}>المنطقة</th>
+                  <th rowSpan={2}>الحالي / يوم</th>
+                  {data.ramp_months.map(m => <th key={m.m} colSpan={3}>{MONTHS_AR[m.m - 1]} {m.y} ({m.working_days} يوم عمل)</th>)}
+                  <th rowSpan={2}>المخطط النهائي / يوم</th>
+                </tr>
+                <tr>
+                  {data.ramp_months.map(m => (
+                    <React.Fragment key={m.m}><th>حبة / يوم</th><th>كمية الشهر</th><th>عملاء · مناديب</th></React.Fragment>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {ramp.rows.map(r => (
+                  <tr key={r.key} className={r.type === 'agency' ? 'sp-row--agency' : ''}>
+                    <td className="sp-strong">{r.label}{r.focus && <span className="sp-focus">توسع</span>}</td>
+                    <td>{fmt(r.cur)}<div className="sp-muted">{fmt(r.curCust)} عميل</div></td>
+                    {r.steps.map((st, i) => (
+                      <React.Fragment key={i}>
+                        <td className="sp-strong">{fmt(st.daily)}<div className="sp-muted">+{pct(r.cur ? (st.daily / r.cur - 1) * 100 : null, 0)}</div></td>
+                        <td>{fmtK(st.monthly)}</td>
+                        <td>{st.cust != null ? `${fmt(st.cust)} · ${fmt(st.reps)}` : 'وكالة'}{st.perCust != null && <div className="sp-muted">{fmt(st.perCust, 1)} حبة/عميل</div>}</td>
+                      </React.Fragment>
+                    ))}
+                    <td>{fmt(r.plan)}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr>
+                  <td>الإجمالي</td>
+                  <td>{fmt(ramp.totals.cur)}<div className="sp-muted">{fmt(ramp.totals.curCust)} عميل</div></td>
+                  {ramp.totals.steps.map((st, i) => (
+                    <React.Fragment key={i}>
+                      <td>{fmt(st.daily)}<div className="sp-muted">+{pct(ramp.totals.cur ? (st.daily / ramp.totals.cur - 1) * 100 : null, 0)}</div></td>
+                      <td>{fmtK(st.monthly)}</td>
+                      <td>{fmt(st.cust)} · {fmt(st.reps)}</td>
+                    </React.Fragment>
+                  ))}
+                  <td>{fmt(ramp.totals.plan)}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+          <p className="sp-explain">
+            العملاء: من العدد الحالي إلى هدف {fmt(PLAN_CUSTOMERS)} عميل (مفرق بدون الوكالات، التركيز على الرياض والقصيم والدمام). المناديب: من المناديب النشطة إلى المخطط (32 → 50).
+            المنطقة التي تبيع حالياً أكثر من خطتها تبقى على مستواها الحالي.
+          </p>
+        </section>
+      )}
+
+      {/* ── 3. Expansion opportunities ── */}
+      {ramp && (
+        <section className="sp-section">
+          <h2>3) المناطق والعملاء القابلين للتوسع</h2>
+          <div className="sp-kpis sp-kpis--compact">
+            <div className="sp-kpi"><span>عملاء مفقودين (اشتروا قبل ولم يشتروا آخر 3 أشهر)</span><b>{fmt(ramp.totals.lost)}</b><small>كانوا يشترون ≈ {fmt(ramp.totals.lostDaily)} حبة/يوم</small></div>
+            <div className="sp-kpi"><span>عملاء متراجعين (أقل من 70% من مستواهم)</span><b>{fmt(ramp.totals.declining)}</b><small>فاقد ≈ {fmt(ramp.totals.decliningLoss)} حبة/يوم</small></div>
+            <div className="sp-kpi"><span>حجم قابل للاسترجاع</span><b>{fmt(ramp.totals.recoverable)}</b><small>{pct((ramp.totals.recoverable / Math.max(1, PLAN_TARGET - ramp.totals.cur)) * 100, 0)} من الفجوة</small></div>
+            <div className="sp-kpi"><span>عملاء جدد شهرياً</span><b>{fmt(ramp.totals.newPerMonthNow, 0)}</b><small>المطلوب ≈ {fmt(ramp.totals.newNeeded / 3)} شهرياً</small></div>
+          </div>
+          <div className="sp-table-wrap">
+            <table className="sp-table">
+              <thead>
+                <tr><th>الأولوية</th><th>المنطقة</th><th>الفجوة / يوم</th><th>مفقودين</th><th>متراجعين</th><th>عملاء جدد / شهر (حالي → مطلوب)</th><th>حبة / عميل / يوم</th><th>الإجراءات المقترحة</th></tr>
+              </thead>
+              <tbody>
+                {ramp.priority.map((r, i) => (
+                  <tr key={r.key}>
+                    <td className="sp-strong">{i + 1}</td>
+                    <td className="sp-strong">{r.label}{r.focus && <span className="sp-focus">توسع</span>}</td>
+                    <td className="sp-neg">{fmt(r.gap)}</td>
+                    <td>{fmt(r.pool.lost)}<div className="sp-muted">{fmt(r.pool.lost_daily)} حبة/يوم</div></td>
+                    <td>{fmt(r.pool.declining)}<div className="sp-muted">{fmt(r.pool.declining_loss)} حبة/يوم</div></td>
+                    <td>{r.type === 'retail' ? `${fmt(r.newPerMonthNow, 1)} → ${fmt(r.newPerMonthNeeded)}` : '—'}</td>
+                    <td>{fmt(r.perCust, 1)}</td>
+                    <td className="sp-actions">{r.actions.map(a => <div key={a}>• {a}</div>)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="sp-two-col">
+            <div>
+              <h3>أكبر العملاء المفقودين — أولوية الاسترجاع</h3>
+              <table className="sp-table sp-table--small">
+                <thead><tr><th>العميل</th><th>المنطقة</th><th>المندوب</th><th>كان يشتري / يوم</th><th>آخر شراء</th></tr></thead>
+                <tbody>{data.lost_customers.map(c => (
+                  <tr key={c.customer_code}><td>{c.customer_name}</td><td>{c.region}</td><td>{c.rep || '—'}</td><td>{fmt(c.prior_daily, 1)}</td><td>{c.last_ym ? `${MONTHS_AR[(c.last_ym % 100) - 1]} ${Math.floor(c.last_ym / 100)}` : '—'}</td></tr>
+                ))}</tbody>
+              </table>
+            </div>
+            <div>
+              <h3>أكبر العملاء المتراجعين — أولوية الزيارة</h3>
+              <table className="sp-table sp-table--small">
+                <thead><tr><th>العميل</th><th>المنطقة</th><th>المندوب</th><th>قبل / يوم</th><th>الآن / يوم</th></tr></thead>
+                <tbody>{data.declining_customers.map(c => (
+                  <tr key={c.customer_code}><td>{c.customer_name}</td><td>{c.region}</td><td>{c.rep || '—'}</td><td>{fmt(c.prior_daily, 1)}</td><td className="sp-neg">{fmt(c.recent_daily, 1)}</td></tr>
+                ))}</tbody>
+              </table>
+            </div>
+          </div>
+          <p className="sp-explain">
+            مفقود = اشترى في الأشهر السابقة ولا يوجد له صافي شراء في آخر 3 أشهر. متراجع = متوسطه اليومي في آخر 3 أشهر أقل من 70% من متوسطه قبلها.
+            الأولوية = الفجوة (×1.5 لمناطق التركيز) + الحجم القابل للاسترجاع.
+          </p>
+        </section>
+      )}
+
       {/* ── 2. Staffing ── */}
       <section className="sp-section">
-        <h2>2) الطاقة البيعية: المناديب والعملاء لكل مندوب</h2>
+        <h2>4) الطاقة البيعية: المناديب والعملاء لكل مندوب</h2>
         <div className="sp-table-wrap">
           <table className="sp-table">
             <thead>
@@ -314,7 +501,7 @@ export default function SalesPlanPage() {
 
       {/* ── 3. Item mix ── */}
       <section className="sp-section">
-        <h2>3) مزيج الأصناف: المخطط مقابل الفعلي (حبة / يوم)</h2>
+        <h2>5) مزيج الأصناف: المخطط مقابل الفعلي (حبة / يوم)</h2>
         <div className="sp-table-wrap">
           <table className="sp-table">
             <thead>
@@ -358,7 +545,7 @@ export default function SalesPlanPage() {
 
       {/* ── 4. Collection & debt ── */}
       <section className="sp-section">
-        <h2>4) التحصيل والمديونية لكل منطقة</h2>
+        <h2>6) التحصيل والمديونية لكل منطقة</h2>
         <div className="sp-table-wrap">
           <table className="sp-table">
             <thead>
@@ -421,7 +608,7 @@ export default function SalesPlanPage() {
 
       {/* ── 5. Biggest debt problems ── */}
       <section className="sp-section">
-        <h2>5) أكبر مشاكل المديونية (مرتبة حسب الحجم)</h2>
+        <h2>7) أكبر مشاكل المديونية (مرتبة حسب الحجم)</h2>
         <ol className="sp-problems">
           {findings.debtProblems.map(p => <li key={p.title}><b>{p.title}:</b> {p.text}</li>)}
         </ol>
@@ -429,7 +616,7 @@ export default function SalesPlanPage() {
 
       {/* ── 6. Recommendations ── */}
       <section className="sp-section sp-reco">
-        <h2>6) المقترحات للوصول إلى {fmt(PLAN_TARGET)} حبة يومياً</h2>
+        <h2>8) المقترحات للوصول إلى {fmt(PLAN_TARGET)} حبة يومياً</h2>
         <h3>أ. رافعات النمو</h3>
         <ul>
           <li><b>زيادة قاعدة العملاء — التركيز على الرياض والقصيم والدمام:</b> الوصول إلى <b>{fmt(PLAN_CUSTOMERS)}</b> عميل فعّال شهرياً في المناطق النشطة بدون الوكالات (حالياً {fmt(t.retailActive)}) — إضافة {fmt(PLAN_CUSTOMERS - t.retailActive)} عميل. الجزء الأكبر في مناطق التركيز: {regions.filter(r => r.focus).map(r => `${r.label} من ${fmt(r.active)} إلى ${fmt(r.target)} (+${fmt(r.additional)})`).join('، ')}. وتوسع أقل في باقي المناطق: {regions.filter(r => r.type === 'retail' && !r.focus).map(r => `${r.label} +${fmt(r.additional)}`).join('، ')} — مع رفع مبيعات العميل فيها لتحقيق خطتها.</li>

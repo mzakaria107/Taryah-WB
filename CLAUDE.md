@@ -3323,3 +3323,20 @@ Management daily chilled-chicken plan (now 59,900 units/day) compared with live 
   run, totals consistent) and rendered with Playwright. Not run against production data.
 - Migration 121 seeds page permissions, but production migrations stall at 058 (see the bad-debt
   note above) so until that is fixed only super_admin / it_admin pass the API check.
+- **Ramp plan (section 2, added 9 Oct 2026)**: from today's run-rate to the plan over the next 3
+  months (`ramp_months` = current month + 2, with working days). Baseline per region = last 3
+  months of the window (`recent_qty` ÷ recent working days, `recent_active_customers`). Month k
+  target = current + (plan − current) × `RAMP_STEPS[k]` = 30% / 65% / 100% (back-loaded: new reps
+  and customers need weeks to reach full rate); a region already above plan stays at its current
+  level. Customers ramp from the current base to the 2,000 allocation (computed here from the
+  RECENT active base, section 1 uses the full-window average), reps from the sheet's active to
+  planned (32 → 50). Shows daily target, month quantity (daily × working days), customers · reps,
+  units/customer/day.
+- **Expansion opportunities (section 3)**: per customer, recent (last 3 months) vs prior months of
+  the window — lost (prior > 0, recent net ≤ 0), declining (recent daily < 70% of prior daily),
+  new (first appears in recent months). Backend returns per-region `pool` aggregates and the top 20
+  lost / declining customers with rep. Page ranks regions by gap (×1.5 for focus regions) +
+  recoverable volume and generates actions (win back lost, visit declining, new customers per month
+  needed vs current rate, reps to hire, raise drop size below 80% of company average, agency
+  monthly contract). Sections after it were renumbered 4–8. Verified on local Postgres 16 with
+  seeded lost/declining/new customers.

@@ -252,6 +252,58 @@ router.get('/', verifyToken, requirePagePermission('sales_plan', 1), async (req,
     const dormantCust = byRegionId(dormant, 'customers');
     const dormantDebt = byRegionId(dormant, 'debt');
 
+    /* ── Ramp baseline + expansion pool ─────────────────────────────
+       "Recent" = the last 3 months of the window (today's run-rate); "prior" = the months before.
+       Per customer: lost (bought before, nothing net in the recent months), declining (recent
+       daily < 70% of prior daily), new (first appears in the recent months). */
+    const recent = win.slice(-Math.min(3, win.length));
+    const prior = win.slice(0, win.length - recent.length);
+    const recentFrom = recent[0].y * 100 + recent[0].m;
+    const recentDays = recent.reduce((s, m) => s + workingDays(m.y, m.m), 0);
+    const priorDays = prior.reduce((s, m) => s + workingDays(m.y, m.m), 0);
+    const [branchMonthly, custRows] = await Promise.all([
+      q(`SELECT COALESCE(NULLIF(TRIM(sa.branch_name), ''), 'غير محدد') AS branch,
+                sa.report_year * 100 + sa.month_num AS ym, COALESCE(SUM(sa.qty), 0)::bigint AS qty
+         FROM sales_activity sa WHERE ${saBase} AND ${saCat}
+         GROUP BY 1, 2`, saParams),
+      q(`SELECT sa.customer_code,
+                MAX(sa.customer_name) AS customer_name,
+                MAX(COALESCE(NULLIF(TRIM(sa.branch_name), ''), 'غير محدد')) AS branch,
+                MAX(TRIM(sa.salesrep_name)) AS rep,
+                COALESCE(SUM(sa.qty) FILTER (WHERE sa.report_year * 100 + sa.month_num >= $4), 0)::bigint AS recent,
+                COALESCE(SUM(sa.qty) FILTER (WHERE sa.report_year * 100 + sa.month_num <  $4), 0)::bigint AS prior,
+                MAX(sa.report_year * 100 + sa.month_num) FILTER (WHERE sa.qty > 0) AS last_ym
+         FROM sales_activity sa WHERE ${saBase} AND ${saCat}
+         GROUP BY sa.customer_code`, [...saParams, recentFrom]),
+    ]);
+    const recentQty = new Map(), recentActive = new Map(), recentReps = new Map();
+    for (const r of branchMonthly) if (Number(r.ym) >= recentFrom) recentQty.set(r.branch, (recentQty.get(r.branch) || 0) + n(r.qty));
+    for (const r of activeByMonth) if (Number(r.ym) >= recentFrom) recentActive.set(r.branch, (recentActive.get(r.branch) || 0) + n(r.active) / recent.length);
+    for (const r of repsByMonth) if (Number(r.ym) >= recentFrom) recentReps.set(r.branch, (recentReps.get(r.branch) || 0) + n(r.reps) / recent.length);
+
+    const pool_ = new Map();   // branch -> expansion-pool aggregates
+    const lost = [], declining = [];
+    const agg = b => { if (!pool_.has(b)) pool_.set(b, { lost: 0, lost_daily: 0, declining: 0, declining_loss: 0, new_customers: 0, new_daily: 0 }); return pool_.get(b); };
+    for (const c of custRows) {
+      const rq = n(c.recent), pq = n(c.prior);
+      const rd = recentDays ? rq / recentDays : 0, pd = priorDays ? pq / priorDays : 0;
+      const a = agg(c.branch);
+      const row = { customer_code: c.customer_code, customer_name: c.customer_name, region: c.branch, rep: c.rep,
+                    prior_daily: pd, recent_daily: rd, last_ym: c.last_ym };
+      if (pq > 0 && rq <= 0) { a.lost += 1; a.lost_daily += pd; lost.push(row); }
+      else if (pq > 0 && rq > 0 && rd < pd * 0.7) { a.declining += 1; a.declining_loss += pd - rd; declining.push({ ...row, loss: pd - rd }); }
+      else if (pq <= 0 && rq > 0 && priorDays) { a.new_customers += 1; a.new_daily += rd; }
+    }
+    lost.sort((x, y) => y.prior_daily - x.prior_daily);
+    declining.sort((x, y) => y.loss - x.loss);
+
+    // The next 3 months (current month first) for the ramp.
+    const today = new Date();
+    const rampMonths = [0, 1, 2].map(k => {
+      const d = new Date(today.getFullYear(), today.getMonth() + k, 1);
+      return { y: d.getFullYear(), m: d.getMonth() + 1, working_days: workingDays(d.getFullYear(), d.getMonth() + 1) };
+    });
+
     const branches = new Set([
       ...regions.map(r => r.name_ar), ...byBranch.map(r => r.branch), ...debtM.keys(),
     ]);
@@ -276,6 +328,10 @@ router.get('/', verifyToken, requirePagePermission('sales_plan', 1), async (req,
       over365: over.over365.get(b) || 0,
       dormant_customers: dormantCust.get(b) || 0,
       dormant_debt: dormantDebt.get(b) || 0,
+      recent_qty: recentQty.get(b) || 0,
+      recent_active_customers: recentActive.get(b) || 0,
+      recent_active_reps: recentReps.get(b) || 0,
+      pool: pool_.get(b) || { lost: 0, lost_daily: 0, declining: 0, declining_loss: 0, new_customers: 0, new_daily: 0 },
     })).filter(r => r.qty || r.debt || r.invoiced || r.collected);
 
     res.json({
@@ -287,6 +343,10 @@ router.get('/', verifyToken, requirePagePermission('sales_plan', 1), async (req,
       categories, exclude_direct: excludeDirect,
       category_options: allCats.map(c => ({ name: c.name, qty: n(c.qty) })),
       regions: rows,
+      recent: { months: recent, working_days: recentDays, prior_working_days: priorDays },
+      ramp_months: rampMonths,
+      lost_customers: lost.slice(0, 20),
+      declining_customers: declining.slice(0, 20),
       top_debtors: top10.map(r => ({ ...r, debt: n(r.debt) })),
       reps_overdue: repsOverdue.map(r => ({ ...r, debt: n(r.debt), over90: n(r.over90) })),
       carrefour_debt: n(carrefour[0]?.debt),

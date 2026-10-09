@@ -81,3 +81,10 @@
   background: #dbeafe; color: #1d4ed8; font-size: 0.62rem; font-weight: 700; vertical-align: middle;
 }
 .sp-kpi small .sp-inline { font-size: 0.8rem; font-weight: 800; color: var(--color-text); }
+.sp-explain--top { margin: 0 0 10px; }
+.sp-table--ramp td .sp-muted { display: block; font-size: 0.64rem; }
+.sp-table--ramp th { white-space: nowrap; }
+.sp-kpis--compact { margin-bottom: 14px; }
+.sp-kpis--compact .sp-kpi b { font-size: 1.2rem; }
+.sp-table td.sp-actions { white-space: normal; text-align: right; font-size: 0.72rem; line-height: 1.6; min-width: 280px; }
+.sp-table td div.sp-muted { display: block; }

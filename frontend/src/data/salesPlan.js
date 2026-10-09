@@ -69,3 +69,8 @@ export function planCustomerTargets(activeByKey = {}) {
   const share = largestRemainder(w.map(v => (v / tw) * expansion), expansion);
   return Object.fromEntries(retail.map((r, i) => [r.key, base(r) + share[i]]));
 }
+
+/* Ramp to the plan over the next 3 months: cumulative share of the gap (current run-rate → plan)
+   closed by the end of month 1 / 2 / 3. Back-loaded on purpose — new reps and new customers need
+   a few weeks before they sell at full rate. */
+export const RAMP_STEPS = [0.30, 0.65, 1.0];

@@ -27,3 +27,8 @@
     -webkit-print-color-adjust: exact;
   }
 }
+
+.abp-table td.abp-td--code {
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-muted);
+}

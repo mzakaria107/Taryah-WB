@@ -283,7 +283,7 @@ router.get('/by-period', verifyToken, applyRegionFilter, requirePagePermission('
     const { conditions, params } = buildAgingFilters(req);
     const where = conditions.join(' AND ');
 
-    const [{ rows: [now] }, { rows }, { rows: regions }] = await Promise.all([
+    const [{ rows: [now] }, { rows }, { rows: regions }, { rows: custInfo }] = await Promise.all([
       pool.query(`SELECT EXTRACT(YEAR FROM CURRENT_DATE)::int AS y, EXTRACT(MONTH FROM CURRENT_DATE)::int AS m`),
       pool.query(`
         SELECT
@@ -308,7 +308,21 @@ router.get('/by-period', verifyToken, applyRegionFilter, requirePagePermission('
         WHERE ${where} AND i.region_id IS NOT NULL
         ORDER BY r.name_ar
       `, params),
+      // Same age definitions as the aging page: oldest over every row (NULL date → 121),
+      // newest over invoices still carrying debt only.
+      pool.query(`
+        SELECT
+          i.customer_id,
+          MAX(r.name_ar) AS region_name,
+          MAX(CASE WHEN i.invoice_date IS NOT NULL THEN CURRENT_DATE - i.invoice_date ELSE 121 END)::int AS oldest_age_days,
+          MIN(CASE WHEN i.balance > 0 THEN COALESCE(CURRENT_DATE - i.invoice_date, 121) END)::int AS newest_age_days
+        FROM invoices i
+        LEFT JOIN regions r ON r.id = i.region_id
+        WHERE ${where}
+        GROUP BY i.customer_id
+      `, params),
     ]);
+    const infoById = new Map(custInfo.map(r => [r.customer_id, r]));
 
     const customers = new Map();
     const years = new Set();
@@ -340,7 +354,16 @@ router.get('/by-period', verifyToken, applyRegionFilter, requirePagePermission('
     ];
 
     const list = [...customers.values()]
-      .map(c => ({ ...c, total: Math.round(c.total * 100) / 100 }))
+      .map(c => {
+        const info = infoById.get(c.customer_id) || {};
+        return {
+          ...c,
+          total: Math.round(c.total * 100) / 100,
+          region_name:     info.region_name ?? null,
+          oldest_age_days: info.oldest_age_days ?? null,
+          newest_age_days: info.newest_age_days ?? null,
+        };
+      })
       .filter(c => c.total !== 0)
       .sort((a, b) => b.total - a.total);
 

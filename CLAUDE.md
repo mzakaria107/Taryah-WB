@@ -3223,6 +3223,10 @@ are built from the data, not hardcoded, so 2027 rolls over by itself.
 - **Pre-existing gap noticed, not fixed**: `VALID_PAGES` is missing several newer page keys
   (e.g. `fleet_management`, the Carrefour and quality-returns pages), so editing those from the
   Permissions screen should also fail with "صفحة غير صالحة".
+- Extra per-customer columns: رقم العميل, المنطقة, and — after the total — عمر أقدم دين / عمر أقرب
+  دين. A separate per-customer query in the same endpoint returns `region_name`, `oldest_age_days`
+  (MAX over every row, NULL date → 121) and `newest_age_days` (MIN over `balance > 0` only) — the
+  exact definitions the aging page uses, so the two pages show the same ages.
 - Frontend reuses `AgingPage.css` (`age-*` classes); only the year-column tint and KPI accents are
   in `AgingByPeriodPage.css`. Sorting is client-side. Excel export = one sheet, same columns.
 

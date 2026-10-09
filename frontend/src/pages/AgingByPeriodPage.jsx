@@ -9,6 +9,17 @@ import './AgingByPeriodPage.css';
 
 const fmt = n => (n == null || n === 0) ? '—' : Number(n).toLocaleString('en-SA', { maximumFractionDigits: 0 });
 
+// Same colour bands as the aging page's age badge.
+function AgeBadge({ days }) {
+  if (days == null) return <span className="age-cell--zero">—</span>;
+  const cls = days <= 15 ? 'age-avg--b1' : days <= 30 ? 'age-avg--b2' : days <= 60 ? 'age-avg--b3'
+    : days <= 90 ? 'age-avg--b4' : days <= 120 ? 'age-avg--b5' : 'age-avg--b6';
+  return <span className={`age-avg-badge ${cls}`}>{days} يوم</span>;
+}
+
+const TEXT_COLS = ['customer_name', 'customer_id', 'region_name'];
+const ROW_COLS  = [...TEXT_COLS, 'total', 'oldest_age_days', 'newest_age_days'];
+
 function SortIcon({ col, sortBy, sortDir }) {
   if (sortBy !== col) return <ChevronsUpDown size={12} style={{ opacity: 0.4 }} />;
   return sortDir === 'desc' ? <ChevronDown size={12} /> : <ChevronUp size={12} />;
@@ -58,11 +69,13 @@ export default function AgingByPeriodPage() {
 
   const rows = useMemo(() => {
     const list = [...(data?.customers || [])];
-    const val = c => sortBy === 'customer_name' ? c.customer_name
-      : sortBy === 'total' ? c.total : (c.by_period[sortBy] || 0);
+    const isText = TEXT_COLS.includes(sortBy);
+    const val = c => ROW_COLS.includes(sortBy) ? c[sortBy] : (c.by_period[sortBy] || 0);
     list.sort((a, b) => {
       const va = val(a), vb = val(b);
-      const cmp = typeof va === 'string' ? va.localeCompare(vb, 'ar') : va - vb;
+      const cmp = isText
+        ? String(va ?? '').localeCompare(String(vb ?? ''), 'ar', { numeric: true })
+        : (va ?? -1) - (vb ?? -1);
       return sortDir === 'desc' ? -cmp : cmp;
     });
     return list;
@@ -79,15 +92,15 @@ export default function AgingByPeriodPage() {
   ].filter(Boolean).join(' · ');
 
   const handleExport = () => {
-    const header = ['العميل', 'كود العميل', ...periods.map(p => p.label), 'إجمالي الدين'];
+    const header = ['العميل', 'رقم العميل', 'المنطقة', ...periods.map(p => p.label), 'إجمالي الدين', 'عمر أقدم دين (يوم)', 'عمر أقرب دين (يوم)'];
     const body = rows.map(c => [
-      c.customer_name, c.customer_id,
+      c.customer_name, c.customer_id, c.region_name || '',
       ...periods.map(p => Number(c.by_period[p.key] || 0)),
-      c.total,
+      c.total, c.oldest_age_days ?? '', c.newest_age_days ?? '',
     ]);
-    const foot = ['الإجمالي', '', ...periods.map(p => Number(totals[p.key] || 0)), Number(totals.total || 0)];
+    const foot = ['الإجمالي', '', '', ...periods.map(p => Number(totals[p.key] || 0)), Number(totals.total || 0), '', ''];
     const ws = XLSX.utils.aoa_to_sheet([header, ...body, foot]);
-    ws['!cols'] = [{ wch: 32 }, { wch: 12 }, ...periods.map(() => ({ wch: 13 })), { wch: 14 }];
+    ws['!cols'] = [{ wch: 32 }, { wch: 12 }, { wch: 14 }, ...periods.map(() => ({ wch: 13 })), { wch: 14 }, { wch: 16 }, { wch: 16 }];
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'المديونية حسب الفترة');
     XLSX.writeFile(wb, `المديونية_حسب_الفترة_${new Date().toLocaleDateString('en-CA')}.xlsx`);
@@ -202,6 +215,11 @@ export default function AgingByPeriodPage() {
                   <th onClick={() => onSort('customer_name')} className={sortBy === 'customer_name' ? 'age-th--sorted' : ''}>
                     <SortIcon col="customer_name" sortBy={sortBy} sortDir={sortDir} /> العميل
                   </th>
+                  {[['customer_id', 'رقم العميل'], ['region_name', 'المنطقة']].map(([k, l]) => (
+                    <th key={k} onClick={() => onSort(k)} className={sortBy === k ? 'age-th--sorted' : ''}>
+                      <SortIcon col={k} sortBy={sortBy} sortDir={sortDir} /> {l}
+                    </th>
+                  ))}
                   {periods.map(p => (
                     <th
                       key={p.key}
@@ -214,6 +232,11 @@ export default function AgingByPeriodPage() {
                   <th onClick={() => onSort('total')} className={sortBy === 'total' ? 'age-th--sorted' : ''}>
                     <SortIcon col="total" sortBy={sortBy} sortDir={sortDir} /> إجمالي الدين
                   </th>
+                  {[['oldest_age_days', 'عمر أقدم دين'], ['newest_age_days', 'عمر أقرب دين']].map(([k, l]) => (
+                    <th key={k} onClick={() => onSort(k)} className={sortBy === k ? 'age-th--sorted' : ''}>
+                      <SortIcon col={k} sortBy={sortBy} sortDir={sortDir} /> {l}
+                    </th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
@@ -224,6 +247,8 @@ export default function AgingByPeriodPage() {
                         {c.customer_name}
                       </Link>
                     </td>
+                    <td className="abp-td--code">{c.customer_id}</td>
+                    <td>{c.region_name || '—'}</td>
                     {periods.map(p => {
                       const v = Number(c.by_period[p.key] || 0);
                       return (
@@ -233,18 +258,24 @@ export default function AgingByPeriodPage() {
                       );
                     })}
                     <td style={{ fontWeight: 700 }}>{fmt(c.total)}</td>
+                    <td><AgeBadge days={c.oldest_age_days} /></td>
+                    <td><AgeBadge days={c.newest_age_days} /></td>
                   </tr>
                 ))}
                 {!rows.length && (
-                  <tr><td colSpan={periods.length + 2} className="age-loading">لا توجد مديونيات مطابقة</td></tr>
+                  <tr><td colSpan={periods.length + 7} className="age-loading">لا توجد مديونيات مطابقة</td></tr>
                 )}
               </tbody>
               {rows.length > 0 && (
                 <tfoot>
                   <tr>
                     <td>الإجمالي ({rows.length} عميل)</td>
+                    <td />
+                    <td />
                     {periods.map(p => <td key={p.key}>{fmt(totals[p.key])}</td>)}
                     <td style={{ fontWeight: 800 }}>{fmt(totals.total)}</td>
+                    <td />
+                    <td />
                   </tr>
                 </tfoot>
               )}

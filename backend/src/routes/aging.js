@@ -321,7 +321,10 @@ router.get('/by-period', verifyToken, applyRegionFilter, requirePagePermission('
         WHERE ${where}
         GROUP BY i.customer_id
       `, params),
-      pool.query(`SELECT customer_id, marked_at FROM bad_debt_customers`),
+      // Never let the bad-debt label take the whole page down (e.g. table not created yet).
+      ensureBadDebtTable()
+        .then(() => pool.query(`SELECT customer_id, marked_at FROM bad_debt_customers`))
+        .catch(err => { console.error('[Aging/by-period] bad_debt_customers:', err.message); return { rows: [] }; }),
     ]);
     const infoById = new Map(custInfo.map(r => [r.customer_id, r]));
     const badDebtById = new Map(badDebt.map(r => [r.customer_id, r.marked_at]));
@@ -390,11 +393,28 @@ router.get('/by-period', verifyToken, applyRegionFilter, requirePagePermission('
    Flags / un-flags a customer's debt as uncollectable ("مديونية معدومة").
    Pure label — it does not change any balance or total.
 ═══════════════════════════════════════════════════════════════ */
+// Also created by migration 119; done here too so the feature works even if the
+// startup migration run stopped at an earlier file (it logs and starts anyway).
+let badDebtTableReady = null;
+function ensureBadDebtTable() {
+  if (!badDebtTableReady) {
+    badDebtTableReady = pool.query(`
+      CREATE TABLE IF NOT EXISTS bad_debt_customers (
+        customer_id VARCHAR(100) PRIMARY KEY,
+        marked_by   UUID,
+        marked_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `).catch(err => { badDebtTableReady = null; throw err; });
+  }
+  return badDebtTableReady;
+}
+
 router.put('/bad-debt/:customerId', verifyToken, requirePagePermission('aging_by_period', 2), async (req, res) => {
   const { customerId } = req.params;
   const flag = req.body?.bad_debt;
   if (typeof flag !== 'boolean') return res.status(400).json({ error: 'bad_debt يجب أن يكون true أو false' });
   try {
+    await ensureBadDebtTable();
     if (flag) {
       const { rows: [row] } = await pool.query(
         `INSERT INTO bad_debt_customers (customer_id, marked_by) VALUES ($1, $2)

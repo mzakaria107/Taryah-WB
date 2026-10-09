@@ -47,6 +47,23 @@ jobs:
           & $pm2 restart taryah-backend
           & $pm2 save
 
+      - name: Report migration failures
+        continue-on-error: true
+        run: |
+          Start-Sleep -Seconds 8
+          $log = "C:\Users\Administrator\.pm2\logs\taryah-backend-error.log"
+          if (Test-Path $log) {
+            Get-Content $log -Tail 300 | Select-String -Pattern "Migration failed|migration" | Select-Object -Last 5 | ForEach-Object {
+              Write-Host "::warning title=migration::$($_.Line)"
+            }
+          }
+          $out = "C:\Users\Administrator\.pm2\logs\taryah-backend-out.log"
+          if (Test-Path $out) {
+            Get-Content $out -Tail 300 | Select-String -Pattern "migration applied" | Select-Object -Last 5 | ForEach-Object {
+              Write-Host "::notice title=migration::$($_.Line)"
+            }
+          }
+
       - name: Verify site is up
         run: |
           Start-Sleep -Seconds 5

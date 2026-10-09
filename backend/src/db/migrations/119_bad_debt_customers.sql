@@ -3,6 +3,6 @@
 -- debt-by-period page (needs full access on aging_by_period).
 CREATE TABLE IF NOT EXISTS bad_debt_customers (
   customer_id VARCHAR(100) PRIMARY KEY,
-  marked_by   UUID REFERENCES users(id) ON DELETE SET NULL,
+  marked_by   UUID,
   marked_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );

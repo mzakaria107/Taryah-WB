@@ -306,7 +306,7 @@ export default function AgingByPeriodPage() {
                       </button>
                     </td>
                     <td className="abp-td--code">{c.customer_id}</td>
-                    <td>{c.region_name || '—'}</td>
+                    <td className="abp-td--region">{c.region_name || '—'}</td>
                     {periods.map(p => {
                       const v = Number(c.by_period[p.key] || 0);
                       return (
@@ -328,7 +328,7 @@ export default function AgingByPeriodPage() {
                         onClick={() => badDebtMutation.mutate({ customerId: c.customer_id, badDebt: !c.bad_debt })}
                       >
                         {c.bad_debt
-                          ? (canEditBadDebt ? '✓ معدومة · إلغاء' : '✓ معدومة')
+                          ? '✓ معدومة'
                           : (canEditBadDebt ? 'تنشيط' : '—')}
                       </button>
                     </td>

@@ -3242,6 +3242,15 @@ are built from the data, not hardcoded, so 2027 rolls over by itself.
   - Filter "المديونية المعدومة": كل العملاء / المعدومة فقط / استبعاد المعدومة — client-side. KPIs and
     footer are now summed client-side from the visible rows so they follow this filter (the
     server's `totals` is no longer used by the page). Flagged rows are tinted; Excel gets a column.
+  - The table is also created lazily by `ensureBadDebtTable()` in `routes/aging.js`, and the
+    by-period read swallows errors from it. Reason: right after release the page showed "حدث خطأ"
+    because startup migrations stop at the first failing file (`index.js` logs and starts anyway),
+    so 119 may never run. Migration 119 has no FK for the same reason.
+- Compact layout (`AgingByPeriodPage.css`): 0.72rem font, 4px cell padding, wrapping centred headers,
+  sort arrows hidden (sorted header is coloured/underlined) — whole matrix fits 1366px+ without
+  horizontal scroll (checked with Playwright on mocked data at 1366 and 1880).
+- Deploy workflow step "Report migration failures" turns `migration` lines from the PM2 logs into
+  `::warning`/`::notice` annotations, readable via the check-run annotations API.
 
 Verified: the endpoint run against a mocked DB (year/month split, net-zero customer dropped,
 net-credit kept, footer foots, filter params bind correctly); `npm run build` clean. Not run

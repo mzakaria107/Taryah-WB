@@ -105,3 +105,23 @@
   font-weight: 400;
   color: var(--color-text-muted);
 }
+
+/* Bad-debt KPI row */
+.abp-bd-kpis { margin-top: -10px; }
+.abp-bd-kpi {
+  border-top: 3px solid #7f1d1d;
+  background: #fff7f7;
+  text-align: right;
+  font-family: inherit;
+}
+.abp-bd-kpi .age-kpi-value { color: #991b1b; }
+.abp-bd-kpi .age-kpi-pct { font-size: 0.7rem; color: var(--color-text-muted); }
+.abp-bd-kpi--total { cursor: pointer; background: #7f1d1d; border-color: #7f1d1d; }
+.abp-bd-kpi--total .age-kpi-label,
+.abp-bd-kpi--total .age-kpi-value,
+.abp-bd-kpi--total .age-kpi-pct { color: #fff; }
+.abp-bd-kpi--total:hover { background: #991b1b; }
+.abp-bd-kpi--active { outline: 3px solid #fca5a5; outline-offset: 2px; }
+@media print {
+  .abp-bd-kpi, .abp-bd-kpi--total { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+}

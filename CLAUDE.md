@@ -3253,6 +3253,11 @@ are built from the data, not hardcoded, so 2027 rolls over by itself.
   `COALESCE(users.name, marked_by_name)`. The page shows name + date/time (en-GB, Gregorian) under
   the "✓ معدومة" button and in its tooltip; Excel adds "سُجّلت بواسطة" and "تاريخ التسجيل".
   Customers flagged before this change have `marked_by` (user id) only — the join still names them.
+- **Bad-debt KPI row** (shown only when ≥1 flagged customer): dark "إجمالي المديونية المعدومة" card
+  (amount, flagged count, % of all debt — clicking toggles the filter to "المعدومة فقط") + one card
+  per year ("معدومة 2024/2025/…", current year = sum of its months): amount, flagged customers with
+  debt in that year, % of that year's whole debt. Computed client-side (`badDebtStats`) from all
+  customers under the current filters, deliberately ignoring the bad-debt filter itself.
 - Compact layout (`AgingByPeriodPage.css`): 0.72rem font, 4px cell padding, wrapping centred headers,
   sort arrows hidden (sorted header is coloured/underlined) — whole matrix fits 1366px+ without
   horizontal scroll (checked with Playwright on mocked data at 1366 and 1880).

@@ -124,6 +124,35 @@ export default function AgingByPeriodPage() {
   }, [rows]);
   const badDebtCount = useMemo(() => (data?.customers || []).filter(c => c.bad_debt).length, [data]);
 
+  // Bad-debt cards: flagged customers under the current filters, independent of the bad-debt
+  // filter itself (so "استبعاد المعدومة" doesn't zero them). Per year: amount, how many flagged
+  // customers carry debt from that year, and its share of that year's whole debt.
+  const badDebtStats = useMemo(() => {
+    const all = data?.customers || [];
+    const sum = (list, key) => list.reduce((s, c) => s + Number((key ? c.by_period[key] : c.total) || 0), 0);
+    const flagged = all.filter(c => c.bad_debt);
+    const yearOf = p => (p.kind === 'year' ? p.key : p.kind === 'month' ? `y${curYear}` : null);
+    const groups = new Map();   // yKey -> period keys
+    for (const p of periods) {
+      const y = yearOf(p);
+      if (!y) continue;
+      if (!groups.has(y)) groups.set(y, []);
+      groups.get(y).push(p.key);
+    }
+    const years = [...groups].map(([key, keys]) => {
+      const amountOf = c => keys.reduce((s, k) => s + Number(c.by_period[k] || 0), 0);
+      const amount = flagged.reduce((s, c) => s + amountOf(c), 0);
+      const whole  = all.reduce((s, c) => s + amountOf(c), 0);
+      return {
+        key, label: `معدومة ${key.slice(1)}`, amount,
+        count: flagged.filter(c => amountOf(c) !== 0).length,
+        pct: whole ? (amount / whole) * 100 : 0,
+      };
+    });
+    const total = sum(flagged), whole = sum(all);
+    return { count: flagged.length, total, pct: whole ? (total / whole) * 100 : 0, years };
+  }, [data, periods, curYear]);
+
   const curYearTotal = periods
     .filter(p => p.kind === 'month')
     .reduce((s, p) => s + Number(totals[p.key] || 0), 0);
@@ -263,6 +292,28 @@ export default function AgingByPeriodPage() {
               <span className="age-kpi-value">{fmt(curYearTotal)}</span>
             </div>
           </div>
+
+          {badDebtStats.count > 0 && (
+            <div className="age-kpis abp-bd-kpis">
+              <button
+                type="button"
+                className={`age-kpi-card abp-bd-kpi abp-bd-kpi--total${badDebtFilter === 'only' ? ' abp-bd-kpi--active' : ''}`}
+                onClick={() => setBadDebtFilter(f => (f === 'only' ? '' : 'only'))}
+                title={badDebtFilter === 'only' ? 'إظهار كل العملاء' : 'عرض العملاء ذوي المديونية المعدومة فقط'}
+              >
+                <span className="age-kpi-label">إجمالي المديونية المعدومة</span>
+                <span className="age-kpi-value">{fmt(badDebtStats.total)}</span>
+                <span className="age-kpi-pct">{badDebtStats.count} عميل<br />{badDebtStats.pct.toFixed(1)}% من إجمالي المديونية</span>
+              </button>
+              {badDebtStats.years.map(y => (
+                <div key={y.key} className="age-kpi-card abp-bd-kpi">
+                  <span className="age-kpi-label">{y.label}</span>
+                  <span className="age-kpi-value">{fmt(y.amount)}</span>
+                  <span className="age-kpi-pct">{y.count} عميل<br />{y.pct.toFixed(1)}% من دين {y.key.slice(1)}</span>
+                </div>
+              ))}
+            </div>
+          )}
 
           <div className="age-table-wrap">
             <table className="age-table abp-table">

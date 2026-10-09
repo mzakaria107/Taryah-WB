@@ -3203,6 +3203,33 @@ customer look like they took fresh credit days ago. Sortable (`SORT_COLS.newest_
 the existing column named `avg_age_days` is actually the OLDEST invoice's age (`MAX`), despite
 the name. Not run against production data — no DB access from the cloud session.
 
+## Debt by period page (`/aging-by-period`, "المديونية حسب الفترة")
+
+Each customer's open balance split by when the invoice was issued: one column per year other than
+the current one (2024, 2025, …) and one per month of the current year (Jan → current month, plus
+any later month that has invoices), plus "بدون تاريخ" only if NULL-dated invoices exist. Columns
+are built from the data, not hardcoded, so 2027 rolls over by itself.
+
+- **`GET /api/aging/by-period`** (`aging.js`) — uses the SAME invoice set and filters as the aging
+  page: the WHERE builder was extracted into `buildAgingFilters(req)` and both routes call it, so
+  the two pages can't drift apart. Grand total equals the aging page's "إجمالي المديونية" for the
+  same filters.
+- Customers are kept whenever their **net** balance is non-zero (a net-credit customer shows a
+  negative total) and the footer is summed from the returned rows only — so every column foots.
+- Own page key **`aging_by_period`**, gated with `requirePagePermission`. Migration 118 copies each
+  role's existing `aging` access level; also added to `DEFAULT_PERMS`/`PAGES` (frontend) and to
+  `VALID_PAGES` in `backend/src/routes/permissions.js` — without that last one the Permissions
+  screen returns 400 when an admin tries to change this page's access.
+- **Pre-existing gap noticed, not fixed**: `VALID_PAGES` is missing several newer page keys
+  (e.g. `fleet_management`, the Carrefour and quality-returns pages), so editing those from the
+  Permissions screen should also fail with "صفحة غير صالحة".
+- Frontend reuses `AgingPage.css` (`age-*` classes); only the year-column tint and KPI accents are
+  in `AgingByPeriodPage.css`. Sorting is client-side. Excel export = one sheet, same columns.
+
+Verified: the endpoint run against a mocked DB (year/month split, net-zero customer dropped,
+net-credit kept, footer foots, filter params bind correctly); `npm run build` clean. Not run
+against production data — no DB access or login from the cloud session.
+
 ## Ongoing Rules
 - Always update this CLAUDE.md when adding new pages, routes, migrations, or significant business logic changes.
 - After any local code change: `docker compose build && docker compose up -d`

@@ -7,7 +7,7 @@ import React from 'react';
 import {
   LayoutDashboard, FileText, MessageSquare, Upload, Users, UserSearch,
   ClipboardList, Thermometer, Package, Warehouse, ShieldCheck, TrendingUp,
-  Mail, BarChart2, Contact, PieChart, Store, Wallet, ClockArrowUp,
+  Mail, BarChart2, Contact, PieChart, Store, Wallet, ClockArrowUp, CalendarRange,
   UserCog, Activity, Layers, Target, Tag, ClipboardCheck, Boxes, SearchCheck, Truck,
 } from 'lucide-react';
 
@@ -36,6 +36,7 @@ export const ALL_NAV = [
   { to: '/quality-issues',        pageKey: 'quality_issues',         label: 'توالف الجودة',         labelShort: 'توالف الجودة', labelEn: 'Quality Issues',       labelShortEn: 'Quality',     icon: s => <ShieldCheck     size={s}/> },
   { to: '/collections-performance', pageKey: 'collections_performance', label: 'أداء التحصيل',        labelShort: 'التحصيل',     labelEn: 'Collections Performance', labelShortEn: 'Collections', icon: s => <Wallet          size={s}/> },
   { to: '/aging',                  pageKey: 'aging',                  label: 'أعمار المديونيات',    labelShort: 'الأعمار',     labelEn: 'Debt Aging',            labelShortEn: 'Aging',       icon: s => <ClockArrowUp    size={s}/> },
+  { to: '/aging-by-period',        pageKey: 'aging_by_period',        label: 'المديونية حسب الفترة', labelShort: 'حسب الفترة', labelEn: 'Debt by Period',        labelShortEn: 'By Period',   icon: s => <CalendarRange   size={s}/> },
   { to: '/rep-management',          pageKey: 'rep_management',         label: 'إدارة المناديب',       labelShort: 'المناديب',    labelEn: 'Rep Management',        labelShortEn: 'Reps',        icon: s => <UserCog         size={s}/> },
   { to: '/performance-dashboard',  pageKey: 'performance_dashboard',  label: 'داشبورد الأداء',       labelShort: 'الأداء',      labelEn: 'Performance Dashboard', labelShortEn: 'Performance', icon: s => <Activity        size={s}/> },
   { to: '/profitability',  pageKey: 'profitability',   label: 'الربحية',          labelShort: 'الربحية',    labelEn: 'Profitability',         labelShortEn: 'Profit',      icon: s => <TrendingUp      size={s}/> },

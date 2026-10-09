@@ -1,0 +1,29 @@
+/* Builds on AgingPage.css (age-* classes); only what's specific to the by-period view. */
+
+.abp-kpi--year    { border-top: 3px solid #b91c1c; }
+.abp-kpi--current { border-top: 3px solid #f59e0b; }
+
+/* Prior-year columns read as the oldest, heaviest debt — tinted to set them apart
+   from the current-year month-by-month columns. */
+.abp-table th.abp-th--year,
+.abp-table td.abp-td--year {
+  background: #fef2f2;
+  color: #991b1b;
+  font-weight: 700;
+}
+.abp-table th.abp-th--unknown,
+.abp-table td.abp-td--unknown { background: #f8fafc; }
+
+.abp-table td.abp-td--neg { color: #16a34a; }
+
+.abp-table th,
+.abp-table td { white-space: nowrap; }
+
+@media print {
+  .abp-table { font-size: 0.62rem; }
+  .abp-table th.abp-th--year,
+  .abp-table td.abp-td--year {
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+}

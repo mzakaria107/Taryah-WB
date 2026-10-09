@@ -33,6 +33,50 @@ function resolveRegionIdsParam(req, region_id) {
   return requested ? [requested] : null;
 }
 
+/* ── Shared WHERE builder for every aging view ────────────────
+   Open invoices (unpaid/partial) plus credit notes (balance < 0) so they net
+   into each customer's total, then the page's filters. Returns the condition
+   list and its bind values; callers append their own params after these. */
+function buildAgingFilters(req) {
+  const { region_id, route_id, search, customer_type, sales_rep_name, exclude_carrefour } = req.query;
+  const conditions = [`(i.status IN ('unpaid','partial') OR i.balance < 0)`];
+  const params     = [];
+  let   p          = 1;
+
+  const effectiveRegionIds = resolveRegionIdsParam(req, region_id);
+  if (effectiveRegionIds) {
+    conditions.push(`i.region_id = ANY($${p++}::int[])`);
+    params.push(effectiveRegionIds);
+  }
+  if (route_id) {
+    conditions.push(`i.route_id = $${p++}`);
+    params.push(parseInt(route_id, 10));
+  }
+  if (customer_type) {
+    conditions.push(`i.customer_type = $${p++}`);
+    params.push(customer_type);
+  }
+  if (search) {
+    conditions.push(`(i.customer_name ILIKE $${p} OR i.customer_name_en ILIKE $${p})`);
+    params.push(`%${search}%`);
+    p++;
+  }
+  if (sales_rep_name) {
+    conditions.push(`i.sales_rep_name = $${p++}`);
+    params.push(sales_rep_name);
+  }
+  /* Carrefour is a single hypermarket group whose 13 branches carry ~560K of
+     open balance on long agreed terms — big enough to dominate the ageing
+     buckets and hide how the rest of the book behaves. Matching BOTH name
+     columns: they agree on every current row (434 either way), and relying
+     on one alone would break the day a record fills in only the other. */
+  if (exclude_carrefour === '1' || exclude_carrefour === 'true') {
+    conditions.push(`(COALESCE(i.customer_name,'') NOT ILIKE '%كارفور%'
+                  AND COALESCE(i.customer_name_en,'') NOT ILIKE '%carrefour%')`);
+  }
+  return { conditions, params };
+}
+
 /* ── Allowed sort columns ────────────────────────────────────── */
 const SORT_COLS = {
   total_balance:   'total_balance',
@@ -54,50 +98,9 @@ const SORT_COLS = {
 ═══════════════════════════════════════════════════════════════ */
 router.get('/', verifyToken, applyRegionFilter, async (req, res) => {
   try {
-    const {
-      region_id, route_id, search, customer_type, sales_rep_name, exclude_carrefour,
-      sort_by  = 'total_balance',
-      sort_dir = 'DESC',
-      page  = 1,
-      limit = 500,
-    } = req.query;
-
-    /* ── Build WHERE conditions ───────────────────────────────── */
-    const conditions = [`(i.status IN ('unpaid','partial') OR i.balance < 0)`];
-    const params     = [];
-    let   p          = 1;
-
-    const effectiveRegionIds = resolveRegionIdsParam(req, region_id);
-    if (effectiveRegionIds) {
-      conditions.push(`i.region_id = ANY($${p++}::int[])`);
-      params.push(effectiveRegionIds);
-    }
-    if (route_id) {
-      conditions.push(`i.route_id = $${p++}`);
-      params.push(parseInt(route_id, 10));
-    }
-    if (customer_type) {
-      conditions.push(`i.customer_type = $${p++}`);
-      params.push(customer_type);
-    }
-    if (search) {
-      conditions.push(`(i.customer_name ILIKE $${p} OR i.customer_name_en ILIKE $${p})`);
-      params.push(`%${search}%`);
-      p++;
-    }
-    if (sales_rep_name) {
-      conditions.push(`i.sales_rep_name = $${p++}`);
-      params.push(sales_rep_name);
-    }
-    /* Carrefour is a single hypermarket group whose 13 branches carry ~560K of
-       open balance on long agreed terms — big enough to dominate the ageing
-       buckets and hide how the rest of the book behaves. Matching BOTH name
-       columns: they agree on every current row (434 either way), and relying
-       on one alone would break the day a record fills in only the other. */
-    if (exclude_carrefour === '1' || exclude_carrefour === 'true') {
-      conditions.push(`(COALESCE(i.customer_name,'') NOT ILIKE '%كارفور%'
-                    AND COALESCE(i.customer_name_en,'') NOT ILIKE '%carrefour%')`);
-    }
+    const { sort_by = 'total_balance', sort_dir = 'DESC', page = 1, limit = 500 } = req.query;
+    const { conditions, params } = buildAgingFilters(req);
+    const p = params.length + 1;
 
     const where    = conditions.join(' AND ');
     const safeSort = SORT_COLS[sort_by] ?? 'total_balance';
@@ -260,6 +263,97 @@ router.get('/', verifyToken, applyRegionFilter, async (req, res) => {
     });
   } catch (err) {
     console.error('[Aging]', err.message, err.stack);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/* ═══════════════════════════════════════════════════════════════
+   GET /api/aging/by-period
+   Each customer's open balance split by WHEN the invoice was issued:
+   one column per past (or future) year, and one per month of the
+   current year. Same invoice set and filters as GET / — so the grand
+   total matches the aging page's "إجمالي المديونية". Customers are kept
+   whenever their net balance is non-zero (a net-credit customer shows
+   negative), so the rows always foot to that grand total.
+═══════════════════════════════════════════════════════════════ */
+const MONTHS_AR = ['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
+
+router.get('/by-period', verifyToken, applyRegionFilter, requirePagePermission('aging_by_period', 1), async (req, res) => {
+  try {
+    const { conditions, params } = buildAgingFilters(req);
+    const where = conditions.join(' AND ');
+
+    const [{ rows: [now] }, { rows }, { rows: regions }] = await Promise.all([
+      pool.query(`SELECT EXTRACT(YEAR FROM CURRENT_DATE)::int AS y, EXTRACT(MONTH FROM CURRENT_DATE)::int AS m`),
+      pool.query(`
+        SELECT
+          i.customer_id,
+          MAX(i.customer_name) AS customer_name,
+          MAX(i.region_id)     AS region_id,
+          CASE
+            WHEN i.invoice_date IS NULL THEN 'unknown'
+            WHEN EXTRACT(YEAR FROM i.invoice_date) <> EXTRACT(YEAR FROM CURRENT_DATE)
+              THEN 'y' || EXTRACT(YEAR FROM i.invoice_date)::int
+            ELSE 'm' || EXTRACT(MONTH FROM i.invoice_date)::int
+          END AS period,
+          ROUND(SUM(i.balance)::numeric, 2) AS amount
+        FROM invoices i
+        WHERE ${where}
+        GROUP BY i.customer_id, period
+      `, params),
+      pool.query(`
+        SELECT DISTINCT i.region_id, r.name_ar AS region_name
+        FROM invoices i
+        LEFT JOIN regions r ON r.id = i.region_id
+        WHERE ${where} AND i.region_id IS NOT NULL
+        ORDER BY r.name_ar
+      `, params),
+    ]);
+
+    const customers = new Map();
+    const years = new Set();
+    let maxMonth = now.m;
+    let hasUnknown = false;
+
+    for (const r of rows) {
+      const amount = Number(r.amount);
+      if (r.period === 'unknown') hasUnknown = true;
+      else if (r.period[0] === 'y') years.add(Number(r.period.slice(1)));
+      else maxMonth = Math.max(maxMonth, Number(r.period.slice(1)));
+
+      let c = customers.get(r.customer_id);
+      if (!c) {
+        c = { customer_id: r.customer_id, customer_name: r.customer_name, region_id: r.region_id, by_period: {}, total: 0 };
+        customers.set(r.customer_id, c);
+      }
+      if (r.region_id && !c.region_id) c.region_id = r.region_id;
+      c.by_period[r.period] = (c.by_period[r.period] || 0) + amount;
+      c.total += amount;
+    }
+
+    const periods = [
+      ...[...years].sort((a, b) => a - b).map(y => ({ key: `y${y}`, label: `دين ${y}`, kind: 'year' })),
+      ...Array.from({ length: maxMonth }, (_, i) => ({
+        key: `m${i + 1}`, label: `${MONTHS_AR[i]} ${now.y}`, kind: 'month',
+      })),
+      ...(hasUnknown ? [{ key: 'unknown', label: 'بدون تاريخ', kind: 'unknown' }] : []),
+    ];
+
+    const list = [...customers.values()]
+      .map(c => ({ ...c, total: Math.round(c.total * 100) / 100 }))
+      .filter(c => c.total !== 0)
+      .sort((a, b) => b.total - a.total);
+
+    // Summed from the rows actually returned so the footer always foots.
+    const totals = { total: 0 };
+    for (const c of list) {
+      totals.total += c.total;
+      for (const [k, v] of Object.entries(c.by_period)) totals[k] = (totals[k] || 0) + v;
+    }
+
+    res.json({ current_year: now.y, periods, customers: list, totals, regions });
+  } catch (err) {
+    console.error('[Aging/by-period]', err.message, err.stack);
     res.status(500).json({ error: err.message });
   }
 });

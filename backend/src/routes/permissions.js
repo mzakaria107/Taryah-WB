@@ -8,7 +8,7 @@ const VALID_ROLES = ['super_admin','it_admin','sales_manager','top_management','
 const VALID_PAGES = ['dashboard','invoices','reports','customer_detail','sales_activity','sales_tasks',
                      'fridges','stock','current_stock','upload','users','permissions','profitability','settings','sales_report','coverage',
                      'summary','hypermarkets','category_performance','region_performance',
-                     'collections_performance','aging',
+                     'collections_performance','aging','aging_by_period',
                      'rep_management','performance_dashboard','commissions','quality_issues','discount_shops'];
 
 // GET /api/permissions — returns { pageKey: { role: level } }

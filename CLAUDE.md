@@ -3303,8 +3303,16 @@ Management daily chilled-chicken plan (now 59,900 units/day) compared with live 
   rounding keeps the total exact; falls back to a pure volume split if current bases already
   exceed 2,000. Targets depend on live actuals so they are computed in the page. Focus regions
   carry a blue "توسع" badge.
-- **Client-side math** (`SalesPlanPage.jsx`): daily avg = qty ÷ company selling days (or calendar
-  days, toggle). Per retail region: target customers, additional = target − actual avg active,
+- **Daily average = same method as region-performance "متوسط الكميات اليومية"** (fixed 9 Oct 2026
+  after a mismatch: plan page showed 19,988 vs 22,788): chilled qty INCLUDING the `direct`
+  central-warehouse sales (region-performance does not exclude it; `exclude_direct=1` opts out) ÷
+  **working days** = month days minus Fridays and `HOLIDAYS` (copied from regionPerformance.js —
+  keep in sync). The old divisor was distinct days with sales (273 for Jan–Sep, Fridays included)
+  and direct was excluded. `window.months[]` now carries `working_days` + chilled `qty` per month
+  and the KPI card also shows the last-3-months average, which for Jul–Sep 2026 reproduces
+  1,800,259 ÷ 79 = 22,788. Calendar days remain as an option.
+- **Client-side math** (`SalesPlanPage.jsx`): daily avg = qty ÷ working days (or calendar days,
+  toggle). Per retail region: target customers, additional = target − actual avg active,
   required units/customer/day = plan ÷ target, required lift vs actual, and "customers needed at
   current productivity" = plan ÷ actual units/customer/day (no-history regions borrow the company
   rate) — shows whether 2,500 is enough without raising drop size. The earlier buffer/uplift

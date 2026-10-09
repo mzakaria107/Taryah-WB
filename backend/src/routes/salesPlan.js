@@ -23,6 +23,22 @@ const DEFAULT_CATEGORIES = ['دجاج مبرد طرية'];
 const ITEM_GRAMS_SQL = `NULLIF(substring(sa.item_name_en from '([0-9]+(?:\\.[0-9]+)?) *[gG]'),'')::numeric`;
 const DIRECT_INV = `LOWER(TRIM(COALESCE(i.sales_rep_name, ''))) <> 'direct'`;
 
+/* Working days — same calculator as regionPerformance.js / summary.js / performanceDashboard.js
+   (skip Friday + named holidays) so the daily average here matches "متوسط الكميات اليومية" on
+   the region-performance page. Keep HOLIDAYS in sync with those files. */
+const HOLIDAYS = [
+  { year: 2026, month: 5, days: [27, 28, 29] }, // عيد الأضحى 1447هـ
+];
+function workingDays(year, month) {
+  const last = new Date(year, month, 0).getDate();
+  let n = 0;
+  for (let d = 1; d <= last; d++) {
+    const holiday = HOLIDAYS.some(h => h.year === year && h.month === month && h.days.includes(d));
+    if (new Date(year, month - 1, d).getDay() !== 5 && !holiday) n++;
+  }
+  return Math.max(n, 1);
+}
+
 function windowMonths(n) {
   const now = new Date();
   let y = now.getFullYear(), m = now.getMonth() + 1;     // current (incomplete) month
@@ -47,7 +63,9 @@ router.get('/', verifyToken, requirePagePermission('sales_plan', 1), async (req,
     let categories = req.query.categories;
     if (typeof categories === 'string') categories = categories.split(',');
     categories = (categories || DEFAULT_CATEGORIES).map(s => String(s).trim().toLowerCase()).filter(Boolean);
-    const excludeDirect = req.query.include_direct !== '1';
+    // Region-performance counts direct (central-warehouse) sales in its quantities, so the plan
+    // includes them too by default to keep the two daily averages identical.
+    const excludeDirect = req.query.exclude_direct === '1';
 
     // sales_activity window predicate: (year*100 + month) between first and last
     const ymFrom = first.y * 100 + first.m, ymTo = last.y * 100 + last.m;
@@ -60,7 +78,7 @@ router.get('/', verifyToken, requirePagePermission('sales_plan', 1), async (req,
 
     const [
       regions, byBranch, activeByMonth, sellingDays, repsByMonth, byWeight, filletRows,
-      allCats, salesValue, payments, debt, overdue, dormant, top10, repsOverdue, carrefour, badDebt,
+      allCats, salesValue, payments, debt, overdue, dormant, top10, repsOverdue, carrefour, badDebt, byMonth,
     ] = await Promise.all([
       // fleet_only (migration 112) may be missing if startup migrations stalled — fall back.
       q(`SELECT id, name_ar FROM regions WHERE COALESCE(fleet_only, false) = false ORDER BY id`)
@@ -187,6 +205,11 @@ router.get('/', verifyToken, requirePagePermission('sales_plan', 1), async (req,
       pool.query(`SELECT COALESCE(SUM(i.balance), 0)::numeric AS debt, COUNT(DISTINCT b.customer_id)::int AS customers
                   FROM bad_debt_customers b JOIN invoices i ON i.customer_id = b.customer_id
                   WHERE ${DIRECT_INV}`).then(r => r.rows).catch(() => [{ debt: 0, customers: 0 }]),
+
+      // Chilled qty per month (company) — lets the page show any sub-window's daily average
+      q(`SELECT sa.report_year * 100 + sa.month_num AS ym, COALESCE(SUM(sa.qty), 0)::bigint AS qty
+         FROM sales_activity sa WHERE ${saBase} AND ${saCat}
+         GROUP BY 1`, saParams),
     ]);
 
     const n = v => Number(v || 0);
@@ -201,6 +224,7 @@ router.get('/', verifyToken, requirePagePermission('sales_plan', 1), async (req,
     };
 
     const companyDays = n(sellingDays.find(r => r.branch === null)?.days);
+    const monthlyQty = new Map(byMonth.map(r => [Number(r.ym), n(r.qty)]));
     const branchDays = new Map(sellingDays.filter(r => r.branch !== null).map(r => [r.branch, n(r.days)]));
 
     const avgPerMonth = (rows, field) => {
@@ -255,7 +279,11 @@ router.get('/', verifyToken, requirePagePermission('sales_plan', 1), async (req,
     })).filter(r => r.qty || r.debt || r.invoiced || r.collected);
 
     res.json({
-      window: { months: win, date_from: dateFrom, date_to: dateTo, calendar_days: calendarDays, selling_days: companyDays },
+      window: {
+        months: win.map(m => ({ ...m, working_days: workingDays(m.y, m.m), qty: n(monthlyQty.get(m.y * 100 + m.m)) })),
+        date_from: dateFrom, date_to: dateTo, calendar_days: calendarDays, selling_days: companyDays,
+        working_days: win.reduce((s, m) => s + workingDays(m.y, m.m), 0),
+      },
       categories, exclude_direct: excludeDirect,
       category_options: allCats.map(c => ({ name: c.name, qty: n(c.qty) })),
       regions: rows,

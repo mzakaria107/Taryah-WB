@@ -80,3 +80,4 @@
   display: inline-block; margin-inline-start: 6px; padding: 0 6px; border-radius: 999px;
   background: #dbeafe; color: #1d4ed8; font-size: 0.62rem; font-weight: 700; vertical-align: middle;
 }
+.sp-kpi small .sp-inline { font-size: 0.8rem; font-weight: 800; color: var(--color-text); }

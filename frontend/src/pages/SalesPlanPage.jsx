@@ -17,7 +17,8 @@ function GapCell({ gap }) {
 
 export default function SalesPlanPage() {
   const [months,   setMonths]   = useState(9);
-  const [daysMode, setDaysMode] = useState('selling'); // 'selling' | 'calendar'
+  // 'working' = Sat–Thu minus holidays — the same divisor as the region-performance page.
+  const [daysMode, setDaysMode] = useState('working'); // 'working' | 'calendar'
 
   const { data, isLoading, isError, error } = useQuery({
     queryKey: ['sales-plan', months],
@@ -27,7 +28,11 @@ export default function SalesPlanPage() {
 
   const calc = useMemo(() => {
     if (!data) return null;
-    const days = daysMode === 'selling' ? (data.window.selling_days || data.window.calendar_days) : data.window.calendar_days;
+    const days = daysMode === 'working' ? (data.window.working_days || data.window.calendar_days) : data.window.calendar_days;
+    // Last 3 months of the window, same method — directly comparable with region-performance.
+    const last3 = data.window.months.slice(-3);
+    const last3Days = last3.reduce((s, m) => s + (daysMode === 'working' ? m.working_days : new Date(m.y, m.m, 0).getDate()), 0);
+    const last3Daily = last3Days ? last3.reduce((s, m) => s + (m.qty || 0), 0) / last3Days : null;
     const byDb = new Map(data.regions.map(r => [r.region, r]));
 
     const totalActualDaily = data.regions.reduce((s, r) => s + r.qty, 0) / days;
@@ -127,7 +132,7 @@ export default function SalesPlanPage() {
     const planRevenue = sum(items, i => i.planRevenue);
     const actualRevenueDaily = totals.revenue / days;
 
-    return { days, regions, outside, totals, items, itemActual, planRevenue, actualRevenueDaily, companyPerCust };
+    return { days, last3, last3Daily, regions, outside, totals, items, itemActual, planRevenue, actualRevenueDaily, companyPerCust };
   }, [data, daysMode]);
 
   /* ── Data-driven findings ─────────────────────────────── */
@@ -185,18 +190,18 @@ export default function SalesPlanPage() {
         </label>
         <label>المتوسط اليومي على
           <select value={daysMode} onChange={e => setDaysMode(e.target.value)}>
-            <option value="selling">أيام البيع الفعلية ({w.selling_days} يوم)</option>
+            <option value="working">أيام العمل — بدون الجمعة والإجازات ({w.working_days} يوم)</option>
             <option value="calendar">الأيام التقويمية ({w.calendar_days} يوم)</option>
           </select>
         </label>
       </div>
       <div className="sp-note">
-        الفعلي: {periodLabel} · الصنف: {data.categories.join('، ')} · {data.exclude_direct ? 'بدون مبيعات المستودع المركزي (direct)' : 'شامل direct'} · المتوسط اليومي = الكمية ÷ {calc.days} يوم.
+        الفعلي: {periodLabel} · الصنف: {data.categories.join('، ')} · {data.exclude_direct ? 'بدون مبيعات المستودع المركزي (direct)' : 'شامل مبيعات المستودع المركزي (direct) — نفس صفحة تقييم المناطق'} · المتوسط اليومي = الكمية ÷ {calc.days} يوم.
       </div>
 
       {/* ── KPIs ── */}
       <div className="sp-kpis">
-        <div className="sp-kpi sp-kpi--main"><span>المتوسط اليومي الفعلي</span><b>{fmt(t.actualDaily)}</b><small>حبة / يوم</small></div>
+        <div className="sp-kpi sp-kpi--main"><span>المتوسط اليومي الفعلي ({w.months.length} أشهر)</span><b>{fmt(t.actualDaily)}</b><small>آخر 3 أشهر ({MONTHS_AR[calc.last3[0].m - 1]}–{MONTHS_AR[calc.last3[calc.last3.length - 1].m - 1]}): <b className="sp-inline">{fmt(calc.last3Daily)}</b> / يوم</small></div>
         <div className="sp-kpi"><span>المستهدف اليومي</span><b>{fmt(PLAN_TARGET)}</b><small>نسبة التحقيق {pct(t.achievement)}</small></div>
         <div className="sp-kpi sp-kpi--gap"><span>الفجوة اليومية</span><b>{fmt(t.gap)}</b><small>نمو مطلوب {pct((t.gap / t.actualDaily) * 100, 0)}</small></div>
         <div className="sp-kpi"><span>متوسط العملاء الفعّالين / شهر</span><b>{fmt(t.active)}</b><small>{fmt(calc.companyPerCust, 1)} حبة / عميل / يوم</small></div>

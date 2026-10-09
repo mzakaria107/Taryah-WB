@@ -76,3 +76,7 @@
   .sp-table { font-size: 0.66rem; }
   .sp-details:not([open]) > *:not(summary) { display: block; }
 }
+.sp-focus {
+  display: inline-block; margin-inline-start: 6px; padding: 0 6px; border-radius: 999px;
+  background: #dbeafe; color: #1d4ed8; font-size: 0.62rem; font-weight: 700; vertical-align: middle;
+}

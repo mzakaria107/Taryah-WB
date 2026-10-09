@@ -2,9 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Target, Printer } from 'lucide-react';
 import api from '../api/client';
-import { PLAN_TARGET, PLAN_REGIONS, PLAN_ITEMS, PLAN_CUSTOMERS, planDailyForRegion, planDailyForItem, planCustomersByRegion } from '../data/salesPlan';
-
-const CUSTOMER_TARGETS = planCustomersByRegion();
+import { PLAN_TARGET, PLAN_REGIONS, PLAN_ITEMS, PLAN_CUSTOMERS, FOCUS_REGIONS, planDailyForRegion, planDailyForItem, planCustomerTargets } from '../data/salesPlan';
 import './SalesPlanPage.css';
 
 const fmt  = (n, d = 0) => (n == null || !isFinite(n)) ? '—' : Number(n).toLocaleString('en-SA', { maximumFractionDigits: d, minimumFractionDigits: d });
@@ -36,6 +34,10 @@ export default function SalesPlanPage() {
     const totalActive = data.regions.reduce((s, r) => s + r.avg_active_customers, 0);
     const companyPerCust = totalActive ? totalActualDaily / totalActive : 0;
 
+    // Customer targets need today's active base: non-focus regions hold it, focus regions grow.
+    const targets = planCustomerTargets(Object.fromEntries(
+      PLAN_REGIONS.map(p => [p.key, byDb.get(p.db)?.avg_active_customers || 0])));
+
     const regions = PLAN_REGIONS.map(p => {
       const a = byDb.get(p.db) || {};
       const actualDaily = (a.qty || 0) / days;
@@ -43,7 +45,8 @@ export default function SalesPlanPage() {
       const active = a.avg_active_customers || 0;
       const perCustActual = active ? actualDaily / active : 0;
       // Customer target (retail only — agencies are excluded from the 2,500).
-      const target = p.type === 'retail' ? CUSTOMER_TARGETS[p.key] : null;
+      const target = p.type === 'retail' ? targets[p.key] : null;
+      const focus = FOCUS_REGIONS.includes(p.key);
       const perCustTarget = target ? planDaily / target : null;      // units/customer/day the plan implies
       // What the plan would need at today's productivity (regions with no history use the company rate).
       const perCustBase = perCustActual || companyPerCust;
@@ -52,7 +55,7 @@ export default function SalesPlanPage() {
       return {
         ...p, a, actualDaily, planDaily, gap: planDaily - actualDaily,
         achievement: planDaily ? (actualDaily / planDaily) * 100 : null,
-        active, perCustActual, perCustBase, target, perCustTarget, atCurrent,
+        active, perCustActual, perCustBase, target, focus, perCustTarget, atCurrent,
         additional: target != null ? target - active : null,
         perCustLift: target && perCustActual ? (perCustTarget / perCustActual - 1) * 100 : null,
         actualReps: a.avg_active_reps || 0,
@@ -219,7 +222,7 @@ export default function SalesPlanPage() {
             <tbody>
               {regions.map(r => (
                 <tr key={r.key} className={r.type === 'agency' ? 'sp-row--agency' : ''}>
-                  <td className="sp-strong">{r.label}</td>
+                  <td className="sp-strong">{r.label}{r.focus && <span className="sp-focus" title="منطقة تركيز التوسع في العملاء">توسع</span>}</td>
                   <td>{r.type === 'agency' ? 'وكالة' : 'مفرق'}</td>
                   <td>{fmt(r.actualDaily)}</td>
                   <td>{fmt(r.planDaily)}</td>
@@ -263,7 +266,8 @@ export default function SalesPlanPage() {
           </table>
         </div>
         <p className="sp-explain">
-          هدف العملاء {fmt(PLAN_CUSTOMERS)} عميل فعّال شهرياً للمناطق النشطة (مفرق) بدون الوكالات، موزّع على المناطق بنسبة الكمية المخططة لكل منطقة.
+          هدف العملاء {fmt(PLAN_CUSTOMERS)} عميل فعّال شهرياً للمناطق النشطة (مفرق) بدون الوكالات. التوسع في العملاء مركّز على الرياض والقصيم والدمام:
+          باقي المناطق تحافظ على قاعدة عملائها الحالية وتنمو برفع مبيعات العميل، والعدد المتبقي من الـ {fmt(PLAN_CUSTOMERS)} يُضاف لمناطق التركيز بنسبة الكمية المخططة لكل منها.
           حبة/عميل/يوم مطلوب = المخطط اليومي ÷ العملاء المستهدفين، والزيادة المطلوبة مقارنة بالفعلي. إجماليات أعمدة العملاء للمفرق فقط.
           "عملاء مطلوبين بالإنتاجية الحالية" = كم عميل نحتاج لو بقيت مبيعات العميل كما هي اليوم. * = منطقة بلا مبيعات فعلية في الفترة، استُخدم متوسط الشركة.
         </p>
@@ -423,7 +427,7 @@ export default function SalesPlanPage() {
         <h2>6) المقترحات للوصول إلى {fmt(PLAN_TARGET)} حبة يومياً</h2>
         <h3>أ. رافعات النمو</h3>
         <ul>
-          <li><b>زيادة قاعدة العملاء:</b> الوصول إلى <b>{fmt(PLAN_CUSTOMERS)}</b> عميل فعّال شهرياً في المناطق النشطة بدون الوكالات (حالياً {fmt(t.retailActive)}) — إضافة {fmt(PLAN_CUSTOMERS - t.retailActive)} عميل موزعة حسب جدول (1). أولوية الاستقطاب للمناطق الأكبر فجوة: {findings.lagging.filter(r => r.type === 'retail').slice(0, 3).map(r => `${r.label} (+${fmt(r.additional)} عميل)`).join('، ')}.</li>
+          <li><b>زيادة قاعدة العملاء — التركيز على الرياض والقصيم والدمام:</b> الوصول إلى <b>{fmt(PLAN_CUSTOMERS)}</b> عميل فعّال شهرياً في المناطق النشطة بدون الوكالات (حالياً {fmt(t.retailActive)}) — إضافة {fmt(PLAN_CUSTOMERS - t.retailActive)} عميل كلها في مناطق التركيز: {regions.filter(r => r.focus).map(r => `${r.label} من ${fmt(r.active)} إلى ${fmt(r.target)} (+${fmt(r.additional)})`).join('، ')}. هذه المناطق فيها أكبر كثافة سوق وأكبر عدد مناديب مخطط (الرياض 15، القصيم 12، الدمام 5). باقي المناطق ({regions.filter(r => r.type === 'retail' && !r.focus).map(r => r.label).join('، ')}) تحافظ على عملائها وتحقق خطتها برفع مبيعات العميل.</li>
           <li><b>رفع مبيعات العميل:</b> مع {fmt(PLAN_CUSTOMERS)} عميل يحتاج كل عميل إلى <b>{fmt(t.retailPerCustTarget, 1)}</b> حبة يومياً مقابل {fmt(t.retailPerCustActual, 1)} حالياً ({t.retailLift > 0 ? `زيادة ${pct(t.retailLift, 0)}` : 'لا يحتاج زيادة'}). {t.atCurrentRetail > PLAN_CUSTOMERS && <>بالإنتاجية الحالية نحتاج {fmt(t.atCurrentRetail)} عميل — أي أن هدف {fmt(PLAN_CUSTOMERS)} لا يكفي وحده بدون رفع مبيعات العميل (تشكيلة أوزان أوسع، عرض داخل المحل، زيارتين أسبوعياً للعملاء الكبار).</>} {findings.lowPerCust.length > 0 && <>مناطق مبيعات العميل فيها أقل من متوسط الشركة بأكثر من 20%: {findings.lowPerCust.map(r => `${r.label} (${fmt(r.perCustActual, 1)})`).join('، ')}.</>}</li>
           <li><b>اكتمال الطاقة البيعية:</b> تعيين {t.reps - t.activeRepsSheet} مندوب للوصول إلى {t.reps} مندوب مخطط، بأولوية الدمام (1 → 5) والرياض (10 → 15) والقصيم (7 → 12)، مع خط سير لكل مندوب 10–15 زيارة يومياً.</li>
           <li><b>الوكالات (جدة والمدينة):</b> عقد كميات شهري ثابت {fmt(planDailyForRegion('jeddah'))} حبة/يوم لكل وكيل بدفعة مقدمة أو ضمان بنكي، وتسعير وكالة واضح، ومتابعة سحب أسبوعية.</li>

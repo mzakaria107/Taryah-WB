@@ -3276,7 +3276,7 @@ against production data — no DB access or login from the cloud session.
 
 ## Sales plan page (`/sales-plan`, "خطة المبيعات")
 
-Management plan "60,000 units/day of chilled chicken" compared with live actuals.
+Management daily chilled-chicken plan (now 59,900 units/day) compared with live actuals.
 - **Plan** is static in `frontend/src/data/salesPlan.js`, transcribed from management's sheet:
   per region × weight (700–1400 g + fillet 450 g) daily qty, item prices, and staffing (branch
   managers / supervisors / active reps / planned reps). Every row and column foots to the sheet's
@@ -3291,11 +3291,17 @@ Management plan "60,000 units/day of chilled chicken" compared with live actuals
   category), invoiced vs collected in the window, debt, >60/90/180/365-day buckets, dormant debtors
   (debt > 0 and last invoice > 60 days ago). Plus top-10 debtors, top-10 reps by +90 debt,
   Carrefour debt, flagged bad debt.
+- **Plan revision (9 Oct 2026): 59,900/day** — `PLAN_TARGET` is now computed from `PLAN_ITEMS`
+  (no hardcoded total). Regions: Qassim 13,400, Riyadh 12,300, Hail 7,200, Shaqra 5,150, Dawadmi
+  4,450, Dammam 4,250, Arar 3,550, Madinah 4,800, Jeddah 4,800 (all rows/columns foot to the sheet).
 - **Customer target = 2,500** active customers/month for the 7 retail regions only (agencies
-  excluded) — management's figure, `PLAN_CUSTOMERS` in `data/salesPlan.js`. `planCustomersByRegion()`
-  splits it by each region's share of the retail plan volume (50,400/day) with largest-remainder
-  rounding (sums to exactly 2,500: Qassim 615, Riyadh 486, Hail 456, Shaqra 255, Dammam 251,
-  Dawadmi 221, Arar 216 → ~20.2 units/customer/day everywhere).
+  excluded), `PLAN_CUSTOMERS`. Expansion is concentrated in `FOCUS_REGIONS` = Riyadh, Qassim,
+  Dammam (management's instruction): `planCustomerTargets(activeByKey)` keeps every non-focus
+  retail region at its current avg active customers (they grow through sales per customer) and
+  gives the remainder to the focus regions = current base + share of the expansion proportional to
+  planned volume, largest-remainder rounded to exactly 2,500. Targets therefore depend on live
+  actuals and are computed in the page. Falls back to a pure volume split if current bases
+  already exceed 2,500. Focus regions carry a blue "توسع" badge.
 - **Client-side math** (`SalesPlanPage.jsx`): daily avg = qty ÷ company selling days (or calendar
   days, toggle). Per retail region: target customers, additional = target − actual avg active,
   required units/customer/day = plan ÷ target, required lift vs actual, and "customers needed at

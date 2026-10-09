@@ -1,9 +1,9 @@
 import React, { useState, useMemo } from 'react';
-import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Printer, CalendarRange, FileSpreadsheet, ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import api from '../api/client';
+import AgingInvoiceModal from '../components/AgingInvoiceModal';
 import './AgingPage.css';
 import './AgingByPeriodPage.css';
 
@@ -32,6 +32,7 @@ export default function AgingByPeriodPage() {
   const [search,           setSearch]           = useState('');
   const [excludeDirect,    setExcludeDirect]    = useState(true);
   const [excludeCarrefour, setExcludeCarrefour] = useState(false);
+  const [modalCustomer,    setModalCustomer]    = useState(null);
   const [sortBy,  setSortBy]  = useState('total');
   const [sortDir, setSortDir] = useState('desc');
 
@@ -243,9 +244,13 @@ export default function AgingByPeriodPage() {
                 {rows.map(c => (
                   <tr key={c.customer_id}>
                     <td>
-                      <Link className="age-customer-link" to={`/customers/${encodeURIComponent(c.customer_id)}`}>
+                      <button
+                        className="age-customer-link"
+                        style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
+                        onClick={() => setModalCustomer({ id: c.customer_id, name: c.customer_name })}
+                      >
                         {c.customer_name}
-                      </Link>
+                      </button>
                     </td>
                     <td className="abp-td--code">{c.customer_id}</td>
                     <td>{c.region_name || '—'}</td>
@@ -282,6 +287,10 @@ export default function AgingByPeriodPage() {
             </table>
           </div>
         </>
+      )}
+
+      {modalCustomer && (
+        <AgingInvoiceModal customer={modalCustomer} onClose={() => setModalCustomer(null)} />
       )}
     </div>
   );

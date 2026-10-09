@@ -3229,6 +3229,10 @@ are built from the data, not hardcoded, so 2027 rolls over by itself.
   exact definitions the aging page uses, so the two pages show the same ages.
 - Frontend reuses `AgingPage.css` (`age-*` classes); only the year-column tint and KPI accents are
   in `AgingByPeriodPage.css`. Sorting is client-side. Excel export = one sheet, same columns.
+- Clicking a customer name opens the same invoice-detail modal as the aging page (not a navigation).
+  The modal lives in `frontend/src/components/AgingInvoiceModal.jsx` (extracted from AgingPage.jsx,
+  which now imports it too); it calls `GET /api/aging/invoices/:customerId` and has the "ملف العميل"
+  link to `/customers/:id`.
 
 Verified: the endpoint run against a mocked DB (year/month split, net-zero customer dropped,
 net-credit kept, footer foots, filter params bind correctly); `npm run build` clean. Not run

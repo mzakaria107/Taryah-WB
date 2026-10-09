@@ -60,7 +60,7 @@
 }
 
 /* Bad-debt ("مديونية معدومة") toggle column */
-.abp-table td.abp-td--bad-debt { text-align: center; }
+.abp-table td.abp-td--bad-debt { text-align: right; }
 .abp-bad-debt-btn {
   border: 1px solid var(--color-border, #cbd5e1);
   background: #fff;
@@ -89,21 +89,34 @@
   .abp-bad-debt-btn { border: none; background: none !important; color: #b91c1c !important; padding: 0; }
 }
 
-/* Signature under a flagged customer's button: who flagged it and when */
+/* Signature beside a flagged customer's button (who flagged it and when) — two tiny lines that
+   fit inside the normal row height, so flagged rows are exactly as tall as the others. */
+.abp-bd-cell {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 5px;
+}
+.abp-table td.abp-td--bad-debt { width: 1%; }
 .abp-bad-debt-sig {
-  margin-top: 2px;
-  font-size: 0.6rem;
-  line-height: 1.25;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  font-size: 0.58rem;
+  line-height: 1.1;
+  white-space: nowrap;
+  text-align: right;
+}
+.abp-bad-debt-sig b {
   color: #991b1b;
   font-weight: 600;
-  white-space: normal;
-  max-width: 110px;
-  margin-inline: auto;
+  max-width: 78px;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .abp-bad-debt-sig span {
-  display: block;
-  font-weight: 400;
   color: var(--color-text-muted);
+  direction: ltr;
 }
 
 /* Bad-debt KPI row */

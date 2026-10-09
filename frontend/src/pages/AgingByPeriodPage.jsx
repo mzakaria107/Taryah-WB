@@ -15,6 +15,11 @@ const fmtStamp = iso => iso
   ? new Date(iso).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
   : '—';
 
+// Compact stamp for the in-row signature: "09/10/26 17:55".
+const fmtStampShort = iso => iso
+  ? new Date(iso).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }).replace(',', '')
+  : '—';
+
 // Same colour bands as the aging page's age badge.
 function AgeBadge({ days }) {
   if (days == null) return <span className="age-cell--zero">—</span>;
@@ -375,24 +380,26 @@ export default function AgingByPeriodPage() {
                     <td><AgeBadge days={c.oldest_age_days} /></td>
                     <td><AgeBadge days={c.newest_age_days} /></td>
                     <td className="abp-td--bad-debt">
-                      <button
-                        className={`abp-bad-debt-btn${c.bad_debt ? ' abp-bad-debt-btn--on' : ''}`}
-                        disabled={!canEditBadDebt || badDebtMutation.isPending}
-                        title={c.bad_debt
-                          ? `معدومة — بواسطة ${c.bad_debt_marked_by || '—'} في ${fmtStamp(c.bad_debt_marked_at)}${canEditBadDebt ? ' — اضغط للإلغاء' : ''}`
-                          : (canEditBadDebt ? 'اضغط لتحديدها كمديونية معدومة' : 'غير معدومة')}
-                        onClick={() => badDebtMutation.mutate({ customerId: c.customer_id, badDebt: !c.bad_debt })}
-                      >
-                        {c.bad_debt
-                          ? '✓ معدومة'
-                          : (canEditBadDebt ? 'تنشيط' : '—')}
-                      </button>
-                      {c.bad_debt && (
-                        <div className="abp-bad-debt-sig">
-                          {c.bad_debt_marked_by || '—'}
-                          <span>{fmtStamp(c.bad_debt_marked_at)}</span>
-                        </div>
-                      )}
+                      <div className="abp-bd-cell">
+                        <button
+                          className={`abp-bad-debt-btn${c.bad_debt ? ' abp-bad-debt-btn--on' : ''}`}
+                          disabled={!canEditBadDebt || badDebtMutation.isPending}
+                          title={c.bad_debt
+                            ? `معدومة — بواسطة ${c.bad_debt_marked_by || '—'} في ${fmtStamp(c.bad_debt_marked_at)}${canEditBadDebt ? ' — اضغط للإلغاء' : ''}`
+                            : (canEditBadDebt ? 'اضغط لتحديدها كمديونية معدومة' : 'غير معدومة')}
+                          onClick={() => badDebtMutation.mutate({ customerId: c.customer_id, badDebt: !c.bad_debt })}
+                        >
+                          {c.bad_debt
+                            ? '✓ معدومة'
+                            : (canEditBadDebt ? 'تنشيط' : '—')}
+                        </button>
+                        {c.bad_debt && (
+                          <div className="abp-bad-debt-sig" title={`${c.bad_debt_marked_by || '—'} — ${fmtStamp(c.bad_debt_marked_at)}`}>
+                            <b>{c.bad_debt_marked_by || '—'}</b>
+                            <span>{fmtStampShort(c.bad_debt_marked_at)}</span>
+                          </div>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}

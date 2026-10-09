@@ -3250,8 +3250,9 @@ are built from the data, not hardcoded, so 2027 rolls over by itself.
   captured at flag time) + `bad_debt_log (customer_id, action 'mark'|'unmark', user_id, user_name,
   created_at)` audit of every real change (no-op clicks aren't logged). Migration 120, also created
   lazily by `ensureBadDebtTable()`. `GET /by-period` returns `bad_debt_marked_by` =
-  `COALESCE(users.name, marked_by_name)`. The page shows name + date/time (en-GB, Gregorian) under
-  the "✓ معدومة" button and in its tooltip; Excel adds "سُجّلت بواسطة" and "تاريخ التسجيل".
+  `COALESCE(users.name, marked_by_name)`. The page shows the signature BESIDE the "✓ معدومة" button
+  (`.abp-bd-cell` flex row; name + short "dd/mm/yy HH:MM" as two 0.58rem lines that fit the normal
+  28px row, so flagged rows are never taller), full date/time in the tooltip; Excel adds "سُجّلت بواسطة" and "تاريخ التسجيل".
   Customers flagged before this change have `marked_by` (user id) only — the join still names them.
 - **Bad-debt KPI row** (shown only when ≥1 flagged customer): dark "إجمالي المديونية المعدومة" card
   (amount, flagged count, % of all debt — clicking toggles the filter to "المعدومة فقط") + one card

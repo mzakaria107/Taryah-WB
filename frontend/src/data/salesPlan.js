@@ -34,15 +34,16 @@ export const planDailyForRegion = key => PLAN_ITEMS.reduce((s, it) => s + (it.qt
 export const planDailyForItem = it => Object.values(it.qty).reduce((s, v) => s + v, 0);
 export const PLAN_TARGET = PLAN_ITEMS.reduce((s, it) => s + planDailyForItem(it), 0);
 
-/* Customer target: 2,500 active customers for the retail (مفرق) regions only — agencies are
-   excluded. Customer EXPANSION is concentrated in the focus regions (Riyadh, Qassim, Dammam):
-   every other retail region keeps its current active-customer base (and grows through sales per
-   customer), and the rest of the 2,500 goes to the focus regions — each keeps its current base
-   plus a share of the expansion proportional to its planned daily volume. Largest-remainder
-   rounding keeps the total at exactly 2,500. If current bases already exceed 2,500, it falls back
-   to a pure volume-proportional split. */
-export const PLAN_CUSTOMERS = 2500;
+/* Customer target: 2,000 active customers for the retail (مفرق) regions only — agencies are
+   excluded. Every retail region keeps its current active-customer base and receives a share of
+   the expansion (2,000 − today's total). Shares are weighted by planned daily volume, with the
+   focus regions (Riyadh, Qassim, Dammam) weighted FOCUS_WEIGHT× — so they get most of the new
+   customers while the other regions still grow, at lower rates. Largest-remainder rounding keeps
+   the total exact. If current bases already exceed the target, it falls back to a pure
+   volume-proportional split. */
+export const PLAN_CUSTOMERS = 2000;
 export const FOCUS_REGIONS = ['riyadh', 'qassim', 'dammam'];
+export const FOCUS_WEIGHT = 3;
 
 function largestRemainder(raw, total) {
   const out = raw.map(Math.floor);
@@ -56,22 +57,15 @@ function largestRemainder(raw, total) {
 export function planCustomerTargets(activeByKey = {}) {
   const retail = PLAN_REGIONS.filter(r => r.type === 'retail');
   const base = r => Math.round(activeByKey[r.key] || 0);
-  const others = retail.filter(r => !FOCUS_REGIONS.includes(r.key));
-  const focus = retail.filter(r => FOCUS_REGIONS.includes(r.key));
-  const fixed = others.reduce((s, r) => s + base(r), 0);
-  const focusBase = focus.reduce((s, r) => s + base(r), 0);
-  const expansion = PLAN_CUSTOMERS - fixed - focusBase;
+  const expansion = PLAN_CUSTOMERS - retail.reduce((s, r) => s + base(r), 0);
   if (expansion < 0) {
     const vol = retail.map(r => planDailyForRegion(r.key));
     const tv = vol.reduce((s, v) => s + v, 0);
     const out = largestRemainder(vol.map(v => (v / tv) * PLAN_CUSTOMERS), PLAN_CUSTOMERS);
     return Object.fromEntries(retail.map((r, i) => [r.key, out[i]]));
   }
-  const fvol = focus.map(r => planDailyForRegion(r.key));
-  const ftv = fvol.reduce((s, v) => s + v, 0);
-  const share = largestRemainder(fvol.map(v => (v / ftv) * expansion), expansion);
-  return Object.fromEntries([
-    ...others.map(r => [r.key, base(r)]),
-    ...focus.map((r, i) => [r.key, base(r) + share[i]]),
-  ]);
+  const w = retail.map(r => planDailyForRegion(r.key) * (FOCUS_REGIONS.includes(r.key) ? FOCUS_WEIGHT : 1));
+  const tw = w.reduce((s, v) => s + v, 0);
+  const share = largestRemainder(w.map(v => (v / tw) * expansion), expansion);
+  return Object.fromEntries(retail.map((r, i) => [r.key, base(r) + share[i]]));
 }

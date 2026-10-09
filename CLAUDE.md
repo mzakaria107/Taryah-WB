@@ -3294,14 +3294,15 @@ Management daily chilled-chicken plan (now 59,900 units/day) compared with live 
 - **Plan revision (9 Oct 2026): 59,900/day** — `PLAN_TARGET` is now computed from `PLAN_ITEMS`
   (no hardcoded total). Regions: Qassim 13,400, Riyadh 12,300, Hail 7,200, Shaqra 5,150, Dawadmi
   4,450, Dammam 4,250, Arar 3,550, Madinah 4,800, Jeddah 4,800 (all rows/columns foot to the sheet).
-- **Customer target = 2,500** active customers/month for the 7 retail regions only (agencies
-  excluded), `PLAN_CUSTOMERS`. Expansion is concentrated in `FOCUS_REGIONS` = Riyadh, Qassim,
-  Dammam (management's instruction): `planCustomerTargets(activeByKey)` keeps every non-focus
-  retail region at its current avg active customers (they grow through sales per customer) and
-  gives the remainder to the focus regions = current base + share of the expansion proportional to
-  planned volume, largest-remainder rounded to exactly 2,500. Targets therefore depend on live
-  actuals and are computed in the page. Falls back to a pure volume split if current bases
-  already exceed 2,500. Focus regions carry a blue "توسع" badge.
+- **Customer target = 2,000** active customers/month for the 7 retail regions only (agencies
+  excluded), `PLAN_CUSTOMERS` (was 2,500, then focus-only expansion — revised 9 Oct 2026).
+  `planCustomerTargets(activeByKey)`: every retail region keeps its current avg active customers
+  and gets a share of the expansion (2,000 − today's total) weighted by planned daily volume ×
+  `FOCUS_WEIGHT` (3) for `FOCUS_REGIONS` = Riyadh, Qassim, Dammam, ×1 for the rest — focus
+  regions get most of the new customers, the others still grow at lower rates. Largest-remainder
+  rounding keeps the total exact; falls back to a pure volume split if current bases already
+  exceed 2,000. Targets depend on live actuals so they are computed in the page. Focus regions
+  carry a blue "توسع" badge.
 - **Client-side math** (`SalesPlanPage.jsx`): daily avg = qty ÷ company selling days (or calendar
   days, toggle). Per retail region: target customers, additional = target − actual avg active,
   required units/customer/day = plan ÷ target, required lift vs actual, and "customers needed at

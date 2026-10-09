@@ -32,3 +32,32 @@
   font-variant-numeric: tabular-nums;
   color: var(--color-text-muted);
 }
+
+/* Bad-debt ("مديونية معدومة") toggle column */
+.abp-table td.abp-td--bad-debt { text-align: center; }
+.abp-bad-debt-btn {
+  border: 1px solid var(--color-border, #cbd5e1);
+  background: #fff;
+  color: #475569;
+  border-radius: 999px;
+  padding: 2px 10px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+}
+.abp-bad-debt-btn:hover:not(:disabled) { border-color: #b91c1c; color: #b91c1c; }
+.abp-bad-debt-btn--on {
+  background: #b91c1c;
+  border-color: #b91c1c;
+  color: #fff;
+}
+.abp-bad-debt-btn--on:hover:not(:disabled) { background: #991b1b; color: #fff; }
+.abp-bad-debt-btn:disabled { cursor: default; opacity: 0.85; }
+.abp-bad-debt-btn:disabled:not(.abp-bad-debt-btn--on) { border-color: transparent; background: none; }
+.abp-table tr.abp-row--bad-debt td { background: #fff1f2; }
+.abp-table tr.abp-row--bad-debt td.abp-td--year { background: #fee2e2; }
+
+@media print {
+  .abp-bad-debt-btn { border: none; background: none !important; color: #b91c1c !important; padding: 0; }
+}

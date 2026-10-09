@@ -3233,6 +3233,15 @@ are built from the data, not hardcoded, so 2027 rolls over by itself.
   The modal lives in `frontend/src/components/AgingInvoiceModal.jsx` (extracted from AgingPage.jsx,
   which now imports it too); it calls `GET /api/aging/invoices/:customerId` and has the "ملف العميل"
   link to `/customers/:id`.
+- **Bad debt ("مديونية معدومة")**: last column is a per-customer toggle ("تنشيط" / "✓ معدومة · إلغاء").
+  - Table `bad_debt_customers (customer_id PK, marked_by UUID → users, marked_at)` — migration 119.
+    A row = flagged; un-flagging deletes it. It is a label only: balances and totals are untouched.
+  - `PUT /api/aging/bad-debt/:customerId` body `{ bad_debt: true|false }`, needs level 2 on
+    `aging_by_period` (super_admin/it_admin always). Read-only users see the state but no button.
+  - `GET /by-period` adds `bad_debt` + `bad_debt_marked_at` to each customer.
+  - Filter "المديونية المعدومة": كل العملاء / المعدومة فقط / استبعاد المعدومة — client-side. KPIs and
+    footer are now summed client-side from the visible rows so they follow this filter (the
+    server's `totals` is no longer used by the page). Flagged rows are tinted; Excel gets a column.
 
 Verified: the endpoint run against a mocked DB (year/month split, net-zero customer dropped,
 net-credit kept, footer foots, filter params bind correctly); `npm run build` clean. Not run

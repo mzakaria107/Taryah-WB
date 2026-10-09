@@ -283,7 +283,7 @@ router.get('/by-period', verifyToken, applyRegionFilter, requirePagePermission('
     const { conditions, params } = buildAgingFilters(req);
     const where = conditions.join(' AND ');
 
-    const [{ rows: [now] }, { rows }, { rows: regions }, { rows: custInfo }] = await Promise.all([
+    const [{ rows: [now] }, { rows }, { rows: regions }, { rows: custInfo }, { rows: badDebt }] = await Promise.all([
       pool.query(`SELECT EXTRACT(YEAR FROM CURRENT_DATE)::int AS y, EXTRACT(MONTH FROM CURRENT_DATE)::int AS m`),
       pool.query(`
         SELECT
@@ -321,8 +321,10 @@ router.get('/by-period', verifyToken, applyRegionFilter, requirePagePermission('
         WHERE ${where}
         GROUP BY i.customer_id
       `, params),
+      pool.query(`SELECT customer_id, marked_at FROM bad_debt_customers`),
     ]);
     const infoById = new Map(custInfo.map(r => [r.customer_id, r]));
+    const badDebtById = new Map(badDebt.map(r => [r.customer_id, r.marked_at]));
 
     const customers = new Map();
     const years = new Set();
@@ -362,6 +364,8 @@ router.get('/by-period', verifyToken, applyRegionFilter, requirePagePermission('
           region_name:     info.region_name ?? null,
           oldest_age_days: info.oldest_age_days ?? null,
           newest_age_days: info.newest_age_days ?? null,
+          bad_debt:           badDebtById.has(c.customer_id),
+          bad_debt_marked_at: badDebtById.get(c.customer_id) ?? null,
         };
       })
       .filter(c => c.total !== 0)
@@ -377,6 +381,35 @@ router.get('/by-period', verifyToken, applyRegionFilter, requirePagePermission('
     res.json({ current_year: now.y, periods, customers: list, totals, regions });
   } catch (err) {
     console.error('[Aging/by-period]', err.message, err.stack);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/* ═══════════════════════════════════════════════════════════════
+   PUT /api/aging/bad-debt/:customerId   body: { bad_debt: boolean }
+   Flags / un-flags a customer's debt as uncollectable ("مديونية معدومة").
+   Pure label — it does not change any balance or total.
+═══════════════════════════════════════════════════════════════ */
+router.put('/bad-debt/:customerId', verifyToken, requirePagePermission('aging_by_period', 2), async (req, res) => {
+  const { customerId } = req.params;
+  const flag = req.body?.bad_debt;
+  if (typeof flag !== 'boolean') return res.status(400).json({ error: 'bad_debt يجب أن يكون true أو false' });
+  try {
+    if (flag) {
+      const { rows: [row] } = await pool.query(
+        `INSERT INTO bad_debt_customers (customer_id, marked_by) VALUES ($1, $2)
+         ON CONFLICT (customer_id) DO NOTHING
+         RETURNING marked_at`,
+        [customerId, req.user.id]
+      );
+      const markedAt = row?.marked_at
+        ?? (await pool.query('SELECT marked_at FROM bad_debt_customers WHERE customer_id = $1', [customerId])).rows[0]?.marked_at;
+      return res.json({ customer_id: customerId, bad_debt: true, bad_debt_marked_at: markedAt ?? null });
+    }
+    await pool.query('DELETE FROM bad_debt_customers WHERE customer_id = $1', [customerId]);
+    res.json({ customer_id: customerId, bad_debt: false, bad_debt_marked_at: null });
+  } catch (err) {
+    console.error('[Aging/bad-debt]', err.message);
     res.status(500).json({ error: err.message });
   }
 });

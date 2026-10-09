@@ -1,8 +1,10 @@
 import React, { useState, useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Printer, CalendarRange, FileSpreadsheet, ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import api from '../api/client';
+import { useAuth } from '../context/AuthContext';
+import { usePermissions } from '../context/PermissionsContext';
 import AgingInvoiceModal from '../components/AgingInvoiceModal';
 import './AgingPage.css';
 import './AgingByPeriodPage.css';
@@ -18,14 +20,26 @@ function AgeBadge({ days }) {
 }
 
 const TEXT_COLS = ['customer_name', 'customer_id', 'region_name'];
-const ROW_COLS  = [...TEXT_COLS, 'total', 'oldest_age_days', 'newest_age_days'];
+const ROW_COLS  = [...TEXT_COLS, 'total', 'oldest_age_days', 'newest_age_days', 'bad_debt'];
 
 function SortIcon({ col, sortBy, sortDir }) {
   if (sortBy !== col) return <ChevronsUpDown size={12} style={{ opacity: 0.4 }} />;
   return sortDir === 'desc' ? <ChevronDown size={12} /> : <ChevronUp size={12} />;
 }
 
+const BAD_DEBT_FILTERS = [
+  ['',        'كل العملاء'],
+  ['only',    'المديونية المعدومة فقط'],
+  ['exclude', 'استبعاد المعدومة'],
+];
+
 export default function AgingByPeriodPage() {
+  const { user }  = useAuth();
+  const { perms } = usePermissions();
+  const canEditBadDebt = !!user && (['super_admin', 'it_admin'].includes(user.role)
+    || (perms?.aging_by_period?.[user.role] ?? 0) >= 2);
+  const queryClient = useQueryClient();
+  const [badDebtFilter,    setBadDebtFilter]    = useState('');
   const [regionId,         setRegionId]         = useState('');
   const [routeId,          setRouteId]          = useState('');
   const [salesRep,         setSalesRep]         = useState('');
@@ -60,16 +74,29 @@ export default function AgingByPeriodPage() {
     staleTime: 120_000,
   });
 
+  // Flag/un-flag a customer's debt as uncollectable; patch every cached by-period result in place.
+  const badDebtMutation = useMutation({
+    mutationFn: ({ customerId, badDebt }) =>
+      api.put(`/aging/bad-debt/${encodeURIComponent(customerId)}`, { bad_debt: badDebt }).then(r => r.data),
+    onSuccess: res => {
+      queryClient.setQueriesData({ queryKey: ['aging-by-period'] }, old => old && ({
+        ...old,
+        customers: old.customers.map(c => c.customer_id === res.customer_id
+          ? { ...c, bad_debt: res.bad_debt, bad_debt_marked_at: res.bad_debt_marked_at }
+          : c),
+      }));
+    },
+    onError: err => alert(err.response?.data?.error || 'تعذّر حفظ حالة المديونية'),
+  });
+
   const periods   = data?.periods || [];
-  const totals    = data?.totals || {};
   const yearCols  = periods.filter(p => p.kind === 'year');
   const curYear   = data?.current_year;
-  const curYearTotal = periods
-    .filter(p => p.kind === 'month')
-    .reduce((s, p) => s + Number(totals[p.key] || 0), 0);
-
   const rows = useMemo(() => {
-    const list = [...(data?.customers || [])];
+    let list = data?.customers || [];
+    if (badDebtFilter === 'only')    list = list.filter(c => c.bad_debt);
+    if (badDebtFilter === 'exclude') list = list.filter(c => !c.bad_debt);
+    list = [...list];
     const isText = TEXT_COLS.includes(sortBy);
     const val = c => ROW_COLS.includes(sortBy) ? c[sortBy] : (c.by_period[sortBy] || 0);
     list.sort((a, b) => {
@@ -80,7 +107,22 @@ export default function AgingByPeriodPage() {
       return sortDir === 'desc' ? -cmp : cmp;
     });
     return list;
-  }, [data, sortBy, sortDir]);
+  }, [data, sortBy, sortDir, badDebtFilter]);
+
+  // Footer/KPIs summed from the visible rows so they follow the bad-debt filter.
+  const totals = useMemo(() => {
+    const t = { total: 0 };
+    for (const c of rows) {
+      t.total += Number(c.total || 0);
+      for (const [k, v] of Object.entries(c.by_period)) t[k] = (t[k] || 0) + Number(v || 0);
+    }
+    return t;
+  }, [rows]);
+  const badDebtCount = useMemo(() => (data?.customers || []).filter(c => c.bad_debt).length, [data]);
+
+  const curYearTotal = periods
+    .filter(p => p.kind === 'month')
+    .reduce((s, p) => s + Number(totals[p.key] || 0), 0);
 
   const onSort = col => {
     if (sortBy === col) setSortDir(d => (d === 'desc' ? 'asc' : 'desc'));
@@ -90,18 +132,20 @@ export default function AgingByPeriodPage() {
   const exclusionNote = [
     excludeDirect && 'مديونية المندوب مستبعدة',
     excludeCarrefour && 'مديونية كارفور مستبعدة',
+    badDebtFilter === 'only' && 'المديونية المعدومة فقط',
+    badDebtFilter === 'exclude' && 'المديونية المعدومة مستبعدة',
   ].filter(Boolean).join(' · ');
 
   const handleExport = () => {
-    const header = ['العميل', 'رقم العميل', 'المنطقة', ...periods.map(p => p.label), 'إجمالي الدين', 'عمر أقدم دين (يوم)', 'عمر أقرب دين (يوم)'];
+    const header = ['العميل', 'رقم العميل', 'المنطقة', ...periods.map(p => p.label), 'إجمالي الدين', 'عمر أقدم دين (يوم)', 'عمر أقرب دين (يوم)', 'مديونية معدومة'];
     const body = rows.map(c => [
       c.customer_name, c.customer_id, c.region_name || '',
       ...periods.map(p => Number(c.by_period[p.key] || 0)),
-      c.total, c.oldest_age_days ?? '', c.newest_age_days ?? '',
+      c.total, c.oldest_age_days ?? '', c.newest_age_days ?? '', c.bad_debt ? 'نعم' : '',
     ]);
-    const foot = ['الإجمالي', '', '', ...periods.map(p => Number(totals[p.key] || 0)), Number(totals.total || 0), '', ''];
+    const foot = ['الإجمالي', '', '', ...periods.map(p => Number(totals[p.key] || 0)), Number(totals.total || 0), '', '', ''];
     const ws = XLSX.utils.aoa_to_sheet([header, ...body, foot]);
-    ws['!cols'] = [{ wch: 32 }, { wch: 12 }, { wch: 14 }, ...periods.map(() => ({ wch: 13 })), { wch: 14 }, { wch: 16 }, { wch: 16 }];
+    ws['!cols'] = [{ wch: 32 }, { wch: 12 }, { wch: 14 }, ...periods.map(() => ({ wch: 13 })), { wch: 14 }, { wch: 16 }, { wch: 16 }, { wch: 14 }];
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'المديونية حسب الفترة');
     XLSX.writeFile(wb, `المديونية_حسب_الفترة_${new Date().toLocaleDateString('en-CA')}.xlsx`);
@@ -114,9 +158,9 @@ export default function AgingByPeriodPage() {
     window.onafterprint = () => { document.title = prev; };
   };
 
-  const isDirty = regionId || routeId || salesRep || search || !excludeDirect || excludeCarrefour;
+  const isDirty = regionId || routeId || salesRep || search || !excludeDirect || excludeCarrefour || badDebtFilter;
   const reset = () => {
-    setRegionId(''); setRouteId(''); setSalesRep(''); setSearch('');
+    setRegionId(''); setRouteId(''); setSalesRep(''); setSearch(''); setBadDebtFilter('');
     setExcludeDirect(true); setExcludeCarrefour(false);
   };
 
@@ -183,6 +227,12 @@ export default function AgingByPeriodPage() {
             {(meta?.reps || []).map(r => <option key={r} value={r}>{r}</option>)}
           </select>
         </div>
+        <div className="age-filter-group">
+          <span className="age-filter-label">المديونية المعدومة{badDebtCount ? ` (${badDebtCount})` : ''}</span>
+          <select className="age-filter-select" value={badDebtFilter} onChange={e => setBadDebtFilter(e.target.value)}>
+            {BAD_DEBT_FILTERS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+          </select>
+        </div>
         {isDirty && <button className="age-filter-reset" onClick={reset}>إعادة تعيين</button>}
       </div>
 
@@ -238,11 +288,14 @@ export default function AgingByPeriodPage() {
                       <SortIcon col={k} sortBy={sortBy} sortDir={sortDir} /> {l}
                     </th>
                   ))}
+                  <th onClick={() => onSort('bad_debt')} className={sortBy === 'bad_debt' ? 'age-th--sorted' : ''}>
+                    <SortIcon col="bad_debt" sortBy={sortBy} sortDir={sortDir} /> مديونية معدومة
+                  </th>
                 </tr>
               </thead>
               <tbody>
                 {rows.map(c => (
-                  <tr key={c.customer_id}>
+                  <tr key={c.customer_id} className={c.bad_debt ? 'abp-row--bad-debt' : ''}>
                     <td>
                       <button
                         className="age-customer-link"
@@ -265,10 +318,24 @@ export default function AgingByPeriodPage() {
                     <td style={{ fontWeight: 700 }}>{fmt(c.total)}</td>
                     <td><AgeBadge days={c.oldest_age_days} /></td>
                     <td><AgeBadge days={c.newest_age_days} /></td>
+                    <td className="abp-td--bad-debt">
+                      <button
+                        className={`abp-bad-debt-btn${c.bad_debt ? ' abp-bad-debt-btn--on' : ''}`}
+                        disabled={!canEditBadDebt || badDebtMutation.isPending}
+                        title={c.bad_debt
+                          ? `معدومة منذ ${c.bad_debt_marked_at ? new Date(c.bad_debt_marked_at).toLocaleDateString('ar-SA-u-nu-latn') : '—'}${canEditBadDebt ? ' — اضغط للإلغاء' : ''}`
+                          : (canEditBadDebt ? 'اضغط لتحديدها كمديونية معدومة' : 'غير معدومة')}
+                        onClick={() => badDebtMutation.mutate({ customerId: c.customer_id, badDebt: !c.bad_debt })}
+                      >
+                        {c.bad_debt
+                          ? (canEditBadDebt ? '✓ معدومة · إلغاء' : '✓ معدومة')
+                          : (canEditBadDebt ? 'تنشيط' : '—')}
+                      </button>
+                    </td>
                   </tr>
                 ))}
                 {!rows.length && (
-                  <tr><td colSpan={periods.length + 7} className="age-loading">لا توجد مديونيات مطابقة</td></tr>
+                  <tr><td colSpan={periods.length + 8} className="age-loading">لا توجد مديونيات مطابقة</td></tr>
                 )}
               </tbody>
               {rows.length > 0 && (
@@ -279,6 +346,7 @@ export default function AgingByPeriodPage() {
                     <td />
                     {periods.map(p => <td key={p.key}>{fmt(totals[p.key])}</td>)}
                     <td style={{ fontWeight: 800 }}>{fmt(totals.total)}</td>
+                    <td />
                     <td />
                     <td />
                   </tr>

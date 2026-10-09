@@ -3291,10 +3291,17 @@ Management plan "60,000 units/day of chilled chicken" compared with live actuals
   category), invoiced vs collected in the window, debt, >60/90/180/365-day buckets, dormant debtors
   (debt > 0 and last invoice > 60 days ago). Plus top-10 debtors, top-10 reps by +90 debt,
   Carrefour debt, flagged bad debt.
+- **Customer target = 2,500** active customers/month for the 7 retail regions only (agencies
+  excluded) — management's figure, `PLAN_CUSTOMERS` in `data/salesPlan.js`. `planCustomersByRegion()`
+  splits it by each region's share of the retail plan volume (50,400/day) with largest-remainder
+  rounding (sums to exactly 2,500: Qassim 615, Riyadh 486, Hail 456, Shaqra 255, Dammam 251,
+  Dawadmi 221, Arar 216 → ~20.2 units/customer/day everywhere).
 - **Client-side math** (`SalesPlanPage.jsx`): daily avg = qty ÷ company selling days (or calendar
-  days, toggle); required customers = plan daily ÷ (actual units/customer/day × (1 + uplift%));
-  "safe" adds a buffer % (default 15); agencies/regions without sales borrow the company per-customer
-  rate. Collection rate = collected ÷ invoiced (all products); DSO = debt ÷ (invoiced ÷ calendar days).
+  days, toggle). Per retail region: target customers, additional = target − actual avg active,
+  required units/customer/day = plan ÷ target, required lift vs actual, and "customers needed at
+  current productivity" = plan ÷ actual units/customer/day (no-history regions borrow the company
+  rate) — shows whether 2,500 is enough without raising drop size. The earlier buffer/uplift
+  controls were removed when the fixed target replaced the computed one. Collection rate = collected ÷ invoiced (all products); DSO = debt ÷ (invoiced ÷ calendar days).
   Debt problems are generated from the data and ranked by amount; recommendations embed the numbers.
 - Verified against a local Postgres 16 with every migration applied and seeded data (all queries
   run, totals consistent) and rendered with Playwright. Not run against production data.

@@ -2,7 +2,9 @@ import React, { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Target, Printer } from 'lucide-react';
 import api from '../api/client';
-import { PLAN_TARGET, PLAN_REGIONS, PLAN_ITEMS, planDailyForRegion, planDailyForItem } from '../data/salesPlan';
+import { PLAN_TARGET, PLAN_REGIONS, PLAN_ITEMS, PLAN_CUSTOMERS, planDailyForRegion, planDailyForItem, planCustomersByRegion } from '../data/salesPlan';
+
+const CUSTOMER_TARGETS = planCustomersByRegion();
 import './SalesPlanPage.css';
 
 const fmt  = (n, d = 0) => (n == null || !isFinite(n)) ? '—' : Number(n).toLocaleString('en-SA', { maximumFractionDigits: d, minimumFractionDigits: d });
@@ -17,8 +19,6 @@ function GapCell({ gap }) {
 
 export default function SalesPlanPage() {
   const [months,   setMonths]   = useState(9);
-  const [buffer,   setBuffer]   = useState(15);   // safety margin on required customers, %
-  const [uplift,   setUplift]   = useState(0);    // assumed growth in sales per customer, %
   const [daysMode, setDaysMode] = useState('selling'); // 'selling' | 'calendar'
 
   const { data, isLoading, isError, error } = useQuery({
@@ -42,19 +42,21 @@ export default function SalesPlanPage() {
       const planDaily = planDailyForRegion(p.key);
       const active = a.avg_active_customers || 0;
       const perCustActual = active ? actualDaily / active : 0;
-      // Agencies / regions without history borrow the company productivity.
+      // Customer target (retail only — agencies are excluded from the 2,500).
+      const target = p.type === 'retail' ? CUSTOMER_TARGETS[p.key] : null;
+      const perCustTarget = target ? planDaily / target : null;      // units/customer/day the plan implies
+      // What the plan would need at today's productivity (regions with no history use the company rate).
       const perCustBase = perCustActual || companyPerCust;
-      const perCustPlan = perCustBase * (1 + uplift / 100);
-      const required = perCustPlan ? planDaily / perCustPlan : null;
-      const safe = required != null ? Math.ceil(required * (1 + buffer / 100)) : null;
+      const atCurrent = perCustBase ? planDaily / perCustBase : null;
       const reps = p.staff.plannedReps || 0;
       return {
         ...p, a, actualDaily, planDaily, gap: planDaily - actualDaily,
         achievement: planDaily ? (actualDaily / planDaily) * 100 : null,
-        active, perCustActual, perCustBase, required, safe,
-        additional: safe != null ? safe - active : null,
+        active, perCustActual, perCustBase, target, perCustTarget, atCurrent,
+        additional: target != null ? target - active : null,
+        perCustLift: target && perCustActual ? (perCustTarget / perCustActual - 1) * 100 : null,
         actualReps: a.avg_active_reps || 0,
-        custPerRep: reps && safe ? safe / reps : null,
+        custPerRep: reps && target ? target / reps : null,
         dailyPerRep: reps ? planDaily / reps : null,
         actualPerRep: a.avg_active_reps ? actualDaily / a.avg_active_reps : null,
         borrowed: !perCustActual,
@@ -75,9 +77,11 @@ export default function SalesPlanPage() {
       planDaily: PLAN_TARGET,
       gap: PLAN_TARGET - totalActualDaily,
       active: totalActive,
-      planActive: sum(regions, r => r.active),
-      required: sum(regions, r => r.required),
-      safe: sum(regions, r => r.safe),
+      retailActive: sum(regions.filter(r => r.type === 'retail'), r => r.active),
+      retailActual: sum(regions.filter(r => r.type === 'retail'), r => r.actualDaily),
+      retailPlan: sum(regions.filter(r => r.type === 'retail'), r => r.planDaily),
+      target: PLAN_CUSTOMERS,
+      atCurrentRetail: sum(regions.filter(r => r.type === 'retail'), r => r.atCurrent),
       reps: sum(regions, r => r.staff.plannedReps),
       activeRepsSheet: sum(regions, r => r.staff.activeReps),
       actualReps: sum(all, r => r.avg_active_reps),
@@ -98,6 +102,9 @@ export default function SalesPlanPage() {
     totals.dso = totals.invoiced ? totals.debt / (totals.invoiced / data.window.calendar_days) : null;
     totals.achievement = (totals.actualDaily / PLAN_TARGET) * 100;
     totals.asp = totals.qty ? totals.revenue / totals.qty : null;
+    totals.retailPerCustActual = totals.retailActive ? totals.retailActual / totals.retailActive : null;
+    totals.retailPerCustTarget = totals.retailPlan / PLAN_CUSTOMERS;
+    totals.retailLift = totals.retailPerCustActual ? (totals.retailPerCustTarget / totals.retailPerCustActual - 1) * 100 : null;
 
     // Item mix: actual daily per weight class (company + per region)
     const itemActual = (regionDb, it) => {
@@ -118,7 +125,7 @@ export default function SalesPlanPage() {
     const actualRevenueDaily = totals.revenue / days;
 
     return { days, regions, outside, totals, items, itemActual, planRevenue, actualRevenueDaily, companyPerCust };
-  }, [data, buffer, uplift, daysMode]);
+  }, [data, daysMode]);
 
   /* ── Data-driven findings ─────────────────────────────── */
   const findings = useMemo(() => {
@@ -179,16 +186,6 @@ export default function SalesPlanPage() {
             <option value="calendar">الأيام التقويمية ({w.calendar_days} يوم)</option>
           </select>
         </label>
-        <label>هامش أمان العملاء
-          <select value={buffer} onChange={e => setBuffer(Number(e.target.value))}>
-            {[0, 10, 15, 20, 25, 30].map(b => <option key={b} value={b}>{b}%</option>)}
-          </select>
-        </label>
-        <label>تحسين مبيعات العميل المفترض
-          <select value={uplift} onChange={e => setUplift(Number(e.target.value))}>
-            {[0, 5, 10, 15, 20, 25, 30].map(b => <option key={b} value={b}>{b}%</option>)}
-          </select>
-        </label>
       </div>
       <div className="sp-note">
         الفعلي: {periodLabel} · الصنف: {data.categories.join('، ')} · {data.exclude_direct ? 'بدون مبيعات المستودع المركزي (direct)' : 'شامل direct'} · المتوسط اليومي = الكمية ÷ {calc.days} يوم.
@@ -200,7 +197,7 @@ export default function SalesPlanPage() {
         <div className="sp-kpi"><span>المستهدف اليومي</span><b>{fmt(PLAN_TARGET)}</b><small>نسبة التحقيق {pct(t.achievement)}</small></div>
         <div className="sp-kpi sp-kpi--gap"><span>الفجوة اليومية</span><b>{fmt(t.gap)}</b><small>نمو مطلوب {pct((t.gap / t.actualDaily) * 100, 0)}</small></div>
         <div className="sp-kpi"><span>متوسط العملاء الفعّالين / شهر</span><b>{fmt(t.active)}</b><small>{fmt(calc.companyPerCust, 1)} حبة / عميل / يوم</small></div>
-        <div className="sp-kpi sp-kpi--target"><span>العملاء المطلوبين (آمن)</span><b>{fmt(t.safe)}</b><small>إضافي {fmt(t.safe - t.planActive)} عميل</small></div>
+        <div className="sp-kpi sp-kpi--target"><span>العملاء المستهدفين (مفرق بدون الوكالات)</span><b>{fmt(PLAN_CUSTOMERS)}</b><small>الحالي {fmt(t.retailActive)} · إضافي {fmt(PLAN_CUSTOMERS - t.retailActive)} عميل</small></div>
         <div className="sp-kpi"><span>إيراد يومي مخطط</span><b>{fmtK(calc.planRevenue)}</b><small>الفعلي {fmtK(calc.actualRevenueDaily)} ر.س / يوم</small></div>
       </div>
 
@@ -213,8 +210,10 @@ export default function SalesPlanPage() {
               <tr>
                 <th>المنطقة</th><th>النوع</th>
                 <th>الفعلي / يوم</th><th>المخطط / يوم</th><th>الفجوة</th><th>التحقيق</th>
-                <th>عملاء فعّالين (متوسط شهري)</th><th>حبة / عميل / يوم</th>
-                <th>العملاء المطلوبين</th><th>المطلوب الآمن (+{buffer}%)</th><th>إضافي مطلوب</th>
+                <th>عملاء فعّالين (متوسط شهري)</th><th>حبة / عميل / يوم فعلي</th>
+                <th>العملاء المستهدفين</th><th>إضافي مطلوب</th>
+                <th>حبة / عميل / يوم مطلوب</th><th>زيادة مطلوبة في مبيعات العميل</th>
+                <th>عملاء مطلوبين بالإنتاجية الحالية</th>
               </tr>
             </thead>
             <tbody>
@@ -228,9 +227,15 @@ export default function SalesPlanPage() {
                   <td><span className={`sp-ach ${r.achievement >= 90 ? 'sp-ach--ok' : r.achievement >= 60 ? 'sp-ach--mid' : 'sp-ach--low'}`}>{pct(r.achievement, 0)}</span></td>
                   <td>{fmt(r.active)}</td>
                   <td>{fmt(r.perCustActual, 1)}{r.borrowed && <span className="sp-hint" title="لا توجد مبيعات فعلية — استخدم متوسط الشركة">*</span>}</td>
-                  <td>{fmt(r.required)}</td>
-                  <td className="sp-strong">{fmt(r.safe)}</td>
-                  <td className={r.additional > 0 ? 'sp-neg' : 'sp-pos'}>{r.additional > 0 ? '+' : ''}{fmt(r.additional)}</td>
+                  {r.type === 'agency' ? (
+                    <td colSpan={4} className="sp-muted">وكالة — خارج هدف الـ {fmt(PLAN_CUSTOMERS)} عميل</td>
+                  ) : (<>
+                    <td className="sp-strong">{fmt(r.target)}</td>
+                    <td className={r.additional > 0 ? 'sp-neg' : 'sp-pos'}>{r.additional > 0 ? '+' : ''}{fmt(r.additional)}</td>
+                    <td>{fmt(r.perCustTarget, 1)}</td>
+                    <td className={r.perCustLift > 0 ? 'sp-neg' : 'sp-pos'}>{r.perCustLift == null ? '—' : `${r.perCustLift > 0 ? '+' : ''}${pct(r.perCustLift, 0)}`}</td>
+                  </>)}
+                  <td>{fmt(r.atCurrent)}</td>
                 </tr>
               ))}
               {calc.outside.map(o => (
@@ -238,7 +243,7 @@ export default function SalesPlanPage() {
                   <td>{o.region}</td><td>خارج الخطة</td>
                   <td>{fmt(o.qty / calc.days)}</td><td>—</td><td>—</td><td>—</td>
                   <td>{fmt(o.avg_active_customers)}</td><td>{fmt(o.avg_active_customers ? (o.qty / calc.days) / o.avg_active_customers : null, 1)}</td>
-                  <td>—</td><td>—</td><td>—</td>
+                  <td>—</td><td>—</td><td>—</td><td>—</td><td>—</td>
                 </tr>
               ))}
             </tbody>
@@ -249,14 +254,18 @@ export default function SalesPlanPage() {
                 <GapCell gap={t.gap} />
                 <td>{pct(t.achievement, 0)}</td>
                 <td>{fmt(t.active)}</td><td>{fmt(calc.companyPerCust, 1)}</td>
-                <td>{fmt(t.required)}</td><td>{fmt(t.safe)}</td><td>+{fmt(t.safe - t.planActive)}</td>
+                <td>{fmt(PLAN_CUSTOMERS)}</td><td>+{fmt(PLAN_CUSTOMERS - t.retailActive)}</td>
+                <td>{fmt(t.retailPerCustTarget, 1)}</td>
+                <td>{t.retailLift == null ? '—' : `${t.retailLift > 0 ? '+' : ''}${pct(t.retailLift, 0)}`}</td>
+                <td>{fmt(t.atCurrentRetail)}</td>
               </tr>
             </tfoot>
           </table>
         </div>
         <p className="sp-explain">
-          العملاء المطلوبين = المخطط اليومي ÷ (مبيعات العميل اليومية الفعلية في المنطقة × (1 + تحسين {uplift}%)).
-          المطلوب الآمن يضيف {buffer}% لتعويض العملاء غير المنتظمين والتسرب. * = منطقة بلا مبيعات فعلية في الفترة، استُخدم متوسط الشركة.
+          هدف العملاء {fmt(PLAN_CUSTOMERS)} عميل فعّال شهرياً للمناطق النشطة (مفرق) بدون الوكالات، موزّع على المناطق بنسبة الكمية المخططة لكل منطقة.
+          حبة/عميل/يوم مطلوب = المخطط اليومي ÷ العملاء المستهدفين، والزيادة المطلوبة مقارنة بالفعلي. إجماليات أعمدة العملاء للمفرق فقط.
+          "عملاء مطلوبين بالإنتاجية الحالية" = كم عميل نحتاج لو بقيت مبيعات العميل كما هي اليوم. * = منطقة بلا مبيعات فعلية في الفترة، استُخدم متوسط الشركة.
         </p>
       </section>
 
@@ -414,8 +423,8 @@ export default function SalesPlanPage() {
         <h2>6) المقترحات للوصول إلى {fmt(PLAN_TARGET)} حبة يومياً</h2>
         <h3>أ. رافعات النمو</h3>
         <ul>
-          <li><b>زيادة قاعدة العملاء:</b> الوصول إلى <b>{fmt(t.safe)}</b> عميل فعّال شهرياً (حالياً {fmt(t.active)}) — إضافة {fmt(t.safe - t.planActive)} عميل موزعة حسب جدول (1). أولوية الاستقطاب للمناطق الأكبر فجوة: {findings.lagging.slice(0, 3).map(r => `${r.label} (${fmt(r.gap)} حبة/يوم)`).join('، ')}.</li>
-          <li><b>رفع مبيعات العميل:</b> كل 10% تحسين في متوسط مبيعات العميل يقلل العملاء المطلوبين بنحو 9% (جرّب خيار "تحسين مبيعات العميل" أعلى الصفحة). {findings.lowPerCust.length > 0 && <>مناطق مبيعات العميل فيها أقل من متوسط الشركة بأكثر من 20%: {findings.lowPerCust.map(r => `${r.label} (${fmt(r.perCustActual, 1)})`).join('، ')} — تحتاج تشكيلة أوسع وترويج داخل المحل.</>}</li>
+          <li><b>زيادة قاعدة العملاء:</b> الوصول إلى <b>{fmt(PLAN_CUSTOMERS)}</b> عميل فعّال شهرياً في المناطق النشطة بدون الوكالات (حالياً {fmt(t.retailActive)}) — إضافة {fmt(PLAN_CUSTOMERS - t.retailActive)} عميل موزعة حسب جدول (1). أولوية الاستقطاب للمناطق الأكبر فجوة: {findings.lagging.filter(r => r.type === 'retail').slice(0, 3).map(r => `${r.label} (+${fmt(r.additional)} عميل)`).join('، ')}.</li>
+          <li><b>رفع مبيعات العميل:</b> مع {fmt(PLAN_CUSTOMERS)} عميل يحتاج كل عميل إلى <b>{fmt(t.retailPerCustTarget, 1)}</b> حبة يومياً مقابل {fmt(t.retailPerCustActual, 1)} حالياً ({t.retailLift > 0 ? `زيادة ${pct(t.retailLift, 0)}` : 'لا يحتاج زيادة'}). {t.atCurrentRetail > PLAN_CUSTOMERS && <>بالإنتاجية الحالية نحتاج {fmt(t.atCurrentRetail)} عميل — أي أن هدف {fmt(PLAN_CUSTOMERS)} لا يكفي وحده بدون رفع مبيعات العميل (تشكيلة أوزان أوسع، عرض داخل المحل، زيارتين أسبوعياً للعملاء الكبار).</>} {findings.lowPerCust.length > 0 && <>مناطق مبيعات العميل فيها أقل من متوسط الشركة بأكثر من 20%: {findings.lowPerCust.map(r => `${r.label} (${fmt(r.perCustActual, 1)})`).join('، ')}.</>}</li>
           <li><b>اكتمال الطاقة البيعية:</b> تعيين {t.reps - t.activeRepsSheet} مندوب للوصول إلى {t.reps} مندوب مخطط، بأولوية الدمام (1 → 5) والرياض (10 → 15) والقصيم (7 → 12)، مع خط سير لكل مندوب 10–15 زيارة يومياً.</li>
           <li><b>الوكالات (جدة والمدينة):</b> عقد كميات شهري ثابت {fmt(planDailyForRegion('jeddah'))} حبة/يوم لكل وكيل بدفعة مقدمة أو ضمان بنكي، وتسعير وكالة واضح، ومتابعة سحب أسبوعية.</li>
           <li><b>مزيج الأصناف:</b> الخطة تعتمد على أوزان 900–1100 ({fmt(PLAN_ITEMS.filter(i => ['900', '1000', '1100'].includes(i.key)).reduce((s, i) => s + planDailyForItem(i), 0))} حبة = {pct(PLAN_ITEMS.filter(i => ['900', '1000', '1100'].includes(i.key)).reduce((s, i) => s + planDailyForItem(i), 0) / PLAN_TARGET * 100, 0)}) — يجب تأمين إنتاج هذه الأوزان أولاً قبل التوسع.</li>

@@ -32,3 +32,20 @@ export const PLAN_ITEMS = [
 
 export const planDailyForRegion = key => PLAN_ITEMS.reduce((s, it) => s + (it.qty[key] || 0), 0);
 export const planDailyForItem = it => Object.values(it.qty).reduce((s, v) => s + v, 0);
+
+/* Customer target: 2,500 active customers for the retail (مفرق) regions only — agencies are
+   excluded. Split across regions in proportion to each region's planned daily volume
+   (largest-remainder rounding, so the split always sums to exactly 2,500). */
+export const PLAN_CUSTOMERS = 2500;
+
+export function planCustomersByRegion() {
+  const retail = PLAN_REGIONS.filter(r => r.type === 'retail');
+  const vol = retail.map(r => planDailyForRegion(r.key));
+  const totalVol = vol.reduce((s, v) => s + v, 0);
+  const raw = vol.map(v => (v / totalVol) * PLAN_CUSTOMERS);
+  const out = raw.map(Math.floor);
+  let left = PLAN_CUSTOMERS - out.reduce((s, v) => s + v, 0);
+  raw.map((v, i) => [v - Math.floor(v), i]).sort((a, b) => b[0] - a[0])
+    .forEach(([, i]) => { if (left > 0) { out[i] += 1; left -= 1; } });
+  return Object.fromEntries(retail.map((r, i) => [r.key, out[i]]));
+}

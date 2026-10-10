@@ -49,6 +49,7 @@ export default function AgingByPeriodPage() {
     || (perms?.aging_by_period?.[user.role] ?? 0) >= 2);
   const queryClient = useQueryClient();
   const [badDebtFilter,    setBadDebtFilter]    = useState('');
+  const [selectedYears,    setSelectedYears]    = useState([]);
   const [regionId,         setRegionId]         = useState('');
   const [routeId,          setRouteId]          = useState('');
   const [salesRep,         setSalesRep]         = useState('');
@@ -98,11 +99,41 @@ export default function AgingByPeriodPage() {
     onError: err => alert(err.response?.data?.error || 'تعذّر حفظ حالة المديونية'),
   });
 
-  const periods   = data?.periods || [];
-  const yearCols  = periods.filter(p => p.kind === 'year');
   const curYear   = data?.current_year;
+
+  /* Year filter (multi-select, client-side). Empty = all years. A selected year keeps its own
+     column (prior years) or its month columns (current year); "بدون تاريخ" only shows with no
+     filter. Each customer's total is recomputed over the visible columns and customers with
+     nothing in the chosen years drop out — so table, footer, KPIs, bad-debt cards and Excel all
+     follow the selection. Ages (oldest/newest) stay customer-wide. */
+  const yearOptions = useMemo(() => {
+    const ys = new Set();
+    for (const p of data?.periods || []) {
+      if (p.kind === 'year') ys.add(Number(p.key.slice(1)));
+      else if (p.kind === 'month' && curYear) ys.add(curYear);
+    }
+    return [...ys].sort((a, b) => a - b);
+  }, [data, curYear]);
+  const periods = useMemo(() => {
+    const all = data?.periods || [];
+    if (!selectedYears.length) return all;
+    return all.filter(p => (p.kind === 'year' && selectedYears.includes(Number(p.key.slice(1))))
+                        || (p.kind === 'month' && selectedYears.includes(curYear)));
+  }, [data, selectedYears, curYear]);
+  const customers = useMemo(() => {
+    const all = data?.customers || [];
+    if (!selectedYears.length) return all;
+    const keys = periods.map(p => p.key);
+    return all.map(c => {
+      const by_period = Object.fromEntries(keys.filter(k => c.by_period[k] != null).map(k => [k, c.by_period[k]]));
+      const total = Math.round(Object.values(by_period).reduce((s, v) => s + Number(v || 0), 0) * 100) / 100;
+      return { ...c, by_period, total };
+    }).filter(c => c.total !== 0);
+  }, [data, periods, selectedYears]);
+  const yearCols  = periods.filter(p => p.kind === 'year');
+  const toggleYear = y => setSelectedYears(cur => cur.includes(y) ? cur.filter(x => x !== y) : [...cur, y].sort((a, b) => a - b));
   const rows = useMemo(() => {
-    let list = data?.customers || [];
+    let list = customers;
     if (badDebtFilter === 'only')    list = list.filter(c => c.bad_debt);
     if (badDebtFilter === 'exclude') list = list.filter(c => !c.bad_debt);
     list = [...list];
@@ -116,7 +147,7 @@ export default function AgingByPeriodPage() {
       return sortDir === 'desc' ? -cmp : cmp;
     });
     return list;
-  }, [data, sortBy, sortDir, badDebtFilter]);
+  }, [customers, sortBy, sortDir, badDebtFilter]);
 
   // Footer/KPIs summed from the visible rows so they follow the bad-debt filter.
   const totals = useMemo(() => {
@@ -127,13 +158,13 @@ export default function AgingByPeriodPage() {
     }
     return t;
   }, [rows]);
-  const badDebtCount = useMemo(() => (data?.customers || []).filter(c => c.bad_debt).length, [data]);
+  const badDebtCount = useMemo(() => customers.filter(c => c.bad_debt).length, [customers]);
 
   // Bad-debt cards: flagged customers under the current filters, independent of the bad-debt
   // filter itself (so "استبعاد المعدومة" doesn't zero them). Per year: amount, how many flagged
   // customers carry debt from that year, and its share of that year's whole debt.
   const badDebtStats = useMemo(() => {
-    const all = data?.customers || [];
+    const all = customers;
     const sum = (list, key) => list.reduce((s, c) => s + Number((key ? c.by_period[key] : c.total) || 0), 0);
     const flagged = all.filter(c => c.bad_debt);
     const yearOf = p => (p.kind === 'year' ? p.key : p.kind === 'month' ? `y${curYear}` : null);
@@ -156,7 +187,7 @@ export default function AgingByPeriodPage() {
     });
     const total = sum(flagged), whole = sum(all);
     return { count: flagged.length, total, pct: whole ? (total / whole) * 100 : 0, years };
-  }, [data, periods, curYear]);
+  }, [customers, periods, curYear]);
 
   const curYearTotal = periods
     .filter(p => p.kind === 'month')
@@ -168,6 +199,7 @@ export default function AgingByPeriodPage() {
   };
 
   const exclusionNote = [
+    selectedYears.length && `السنوات: ${selectedYears.join('، ')}`,
     excludeDirect && 'مديونية المندوب مستبعدة',
     excludeCarrefour && 'مديونية كارفور مستبعدة',
     badDebtFilter === 'only' && 'المديونية المعدومة فقط',
@@ -197,9 +229,9 @@ export default function AgingByPeriodPage() {
     window.onafterprint = () => { document.title = prev; };
   };
 
-  const isDirty = regionId || routeId || salesRep || search || !excludeDirect || excludeCarrefour || badDebtFilter;
+  const isDirty = regionId || routeId || salesRep || search || !excludeDirect || excludeCarrefour || badDebtFilter || selectedYears.length;
   const reset = () => {
-    setRegionId(''); setRouteId(''); setSalesRep(''); setSearch(''); setBadDebtFilter('');
+    setRegionId(''); setRouteId(''); setSalesRep(''); setSearch(''); setBadDebtFilter(''); setSelectedYears([]);
     setExcludeDirect(true); setExcludeCarrefour(false);
   };
 
@@ -265,6 +297,17 @@ export default function AgingByPeriodPage() {
             <option value="">كل المندوبين</option>
             {(meta?.reps || []).map(r => <option key={r} value={r}>{r}</option>)}
           </select>
+        </div>
+        <div className="age-filter-group">
+          <span className="age-filter-label">العام (اختيار أكثر من عام)</span>
+          <div className="abp-year-chips">
+            <button type="button" className={`abp-year-chip${selectedYears.length === 0 ? ' abp-year-chip--on' : ''}`}
+              onClick={() => setSelectedYears([])}>الكل</button>
+            {yearOptions.map(y => (
+              <button key={y} type="button" className={`abp-year-chip${selectedYears.includes(y) ? ' abp-year-chip--on' : ''}`}
+                onClick={() => toggleYear(y)}>{y}</button>
+            ))}
+          </div>
         </div>
         <div className="age-filter-group">
           <span className="age-filter-label">المديونية المعدومة{badDebtCount ? ` (${badDebtCount})` : ''}</span>

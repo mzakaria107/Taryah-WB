@@ -3229,6 +3229,13 @@ are built from the data, not hardcoded, so 2027 rolls over by itself.
   exact definitions the aging page uses, so the two pages show the same ages.
 - Frontend reuses `AgingPage.css` (`age-*` classes); only the year-column tint and KPI accents are
   in `AgingByPeriodPage.css`. Sorting is client-side. Excel export = one sheet, same columns.
+- **Year filter (multi-select chips "العام", added 10 Oct 2026)**: client-side over the endpoint's
+  `periods`/`by_period` (no API change). Empty = all. A selected prior year keeps its column, the
+  current year keeps its month columns, "بدون تاريخ" shows only with no filter. Each customer's
+  `total` is recomputed over the visible columns and customers with 0 in the chosen years drop
+  out, so table, footer, KPIs, bad-debt cards, Excel and print header all follow the selection.
+  Oldest/newest debt ages remain customer-wide. Browser-tested: {2025} → 500, {2025, 2026} → 620
+  on a 4-customer fixture.
 - Clicking a customer name opens the same invoice-detail modal as the aging page (not a navigation).
   The modal lives in `frontend/src/components/AgingInvoiceModal.jsx` (extracted from AgingPage.jsx,
   which now imports it too); it calls `GET /api/aging/invoices/:customerId` and has the "ملف العميل"

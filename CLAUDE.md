@@ -3359,3 +3359,12 @@ Management daily chilled-chicken plan (now 59,900 units/day) compared with live 
   methodology. Filename is ASCII (`Sales-Plan_YYYY-MM-DD.docx`) — Chromium drops an Arabic
   `download` attribute and saves as "download". Verified by clicking the button in Playwright,
   validating the file against the OOXML schema (passes) and rendering every page via LibreOffice.
+- **Current customers = September close (changed 11 Oct 2026)**: management asked that "العملاء
+  الحاليين الفعالين" be the count of active customers (net chilled qty > 0) in the LAST complete
+  month of the window, not a monthly average. Backend returns `last_month {y, m, working_days}` and
+  per region `last_month_active_customers` + `last_month_qty`. The page (section 1, KPI card, 2,000
+  split, ramp start, expansion "new needed") and the Word export use that count; per-customer
+  daily sales use the same month's qty ÷ its working days so customers and volume share one
+  period. `avg_active_customers` / `recent_active_customers` are still returned but unused.
+  Verified on local Postgres: per-region September counts equal an independent
+  `SUM(qty) > 0` count exactly.

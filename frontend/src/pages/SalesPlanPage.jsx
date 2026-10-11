@@ -37,19 +37,26 @@ export default function SalesPlanPage() {
     const byDb = new Map(data.regions.map(r => [r.region, r]));
 
     const totalActualDaily = data.regions.reduce((s, r) => s + r.qty, 0) / days;
-    const totalActive = data.regions.reduce((s, r) => s + r.avg_active_customers, 0);
-    const companyPerCust = totalActive ? totalActualDaily / totalActive : 0;
+    /* Current customers = the CLOSE of the last complete month (September), as a count — not a
+       monthly average. Per-customer productivity uses that same month's sales so customers and
+       volume come from one period. */
+    const lm = data.last_month || { working_days: days };
+    const custOf = r => r?.last_month_active_customers ?? r?.avg_active_customers ?? 0;
+    const lmDaily = r => (r?.last_month_qty || 0) / (lm.working_days || 1);
+    const totalActive = data.regions.reduce((s, r) => s + custOf(r), 0);
+    const totalLmDaily = data.regions.reduce((s, r) => s + lmDaily(r), 0);
+    const companyPerCust = totalActive ? totalLmDaily / totalActive : 0;
 
     // Customer targets need today's active base: non-focus regions hold it, focus regions grow.
     const targets = planCustomerTargets(Object.fromEntries(
-      PLAN_REGIONS.map(p => [p.key, byDb.get(p.db)?.avg_active_customers || 0])));
+      PLAN_REGIONS.map(p => [p.key, custOf(byDb.get(p.db))])));
 
     const regions = PLAN_REGIONS.map(p => {
       const a = byDb.get(p.db) || {};
       const actualDaily = (a.qty || 0) / days;
       const planDaily = planDailyForRegion(p.key);
-      const active = a.avg_active_customers || 0;
-      const perCustActual = active ? actualDaily / active : 0;
+      const active = custOf(a);
+      const perCustActual = active ? lmDaily(a) / active : 0;
       // Customer target (retail only — agencies are excluded from the 2,500).
       const target = p.type === 'retail' ? targets[p.key] : null;
       const focus = FOCUS_REGIONS.includes(p.key);
@@ -133,7 +140,7 @@ export default function SalesPlanPage() {
     const planRevenue = sum(items, i => i.planRevenue);
     const actualRevenueDaily = totals.revenue / days;
 
-    return { days, last3, last3Daily, regions, outside, totals, items, itemActual, planRevenue, actualRevenueDaily, companyPerCust };
+    return { days, last3, last3Daily, lm, custOf, regions, outside, totals, items, itemActual, planRevenue, actualRevenueDaily, companyPerCust };
   }, [data, daysMode]);
 
   /* ── Data-driven findings ─────────────────────────────── */
@@ -170,20 +177,22 @@ export default function SalesPlanPage() {
   /* ── Ramp: today's run-rate (last 3 months) → plan over the next 3 months ── */
   const ramp = useMemo(() => {
     if (!data?.ramp_months || !data?.recent) return null;
+    const custOf = r => r?.last_month_active_customers ?? r?.recent_active_customers ?? 0;
     const byDb = new Map(data.regions.map(r => [r.region, r]));
     const rd = data.recent.working_days || 1;
     const recentMonths = data.recent.months.length || 1;
     const custTargets = planCustomerTargets(Object.fromEntries(
-      PLAN_REGIONS.map(p => [p.key, byDb.get(p.db)?.recent_active_customers || 0])));
-    const companyActive = data.regions.reduce((s, r) => s + (r.recent_active_customers || 0), 0);
-    const companyDaily = data.regions.reduce((s, r) => s + (r.recent_qty || 0), 0) / rd;
+      PLAN_REGIONS.map(p => [p.key, custOf(byDb.get(p.db))])));
+    const lmWd = data.last_month?.working_days || rd;
+    const companyActive = data.regions.reduce((s, r) => s + custOf(r), 0);
+    const companyDaily = data.regions.reduce((s, r) => s + (r.last_month_qty ?? r.recent_qty ?? 0), 0) / lmWd;
     const companyPerCust = companyActive ? companyDaily / companyActive : 0;
 
     const rows = PLAN_REGIONS.map(p => {
       const a = byDb.get(p.db) || {};
       const cur = (a.recent_qty || 0) / rd;
       const plan = planDailyForRegion(p.key);
-      const curCust = a.recent_active_customers || 0;
+      const curCust = custOf(a);
       const finalCust = p.type === 'retail' ? custTargets[p.key] : null;
       const curReps = p.staff.activeReps ?? null;
       const finalReps = p.staff.plannedReps ?? null;
@@ -195,7 +204,7 @@ export default function SalesPlanPage() {
         return { daily, monthly: daily * wd, cust, reps, perCust: cust ? daily / cust : null };
       });
       const pool = a.pool || {};
-      const perCust = curCust ? cur / curCust : null;
+      const perCust = curCust ? ((a.last_month_qty || 0) / lmWd) / curCust : null;
       // Customers to win back + new ones still needed to reach the final target
       const newNeeded = finalCust != null ? Math.max(0, finalCust - curCust - (pool.lost || 0)) : null;
       const newPerMonthNow = (pool.new_customers || 0) / recentMonths;
@@ -280,7 +289,7 @@ export default function SalesPlanPage() {
         <div className="sp-kpi sp-kpi--main"><span>المتوسط اليومي الفعلي ({w.months.length} أشهر)</span><b>{fmt(t.actualDaily)}</b><small>آخر 3 أشهر ({MONTHS_AR[calc.last3[0].m - 1]}–{MONTHS_AR[calc.last3[calc.last3.length - 1].m - 1]}): <b className="sp-inline">{fmt(calc.last3Daily)}</b> / يوم</small></div>
         <div className="sp-kpi"><span>المستهدف اليومي</span><b>{fmt(PLAN_TARGET)}</b><small>نسبة التحقيق {pct(t.achievement)}</small></div>
         <div className="sp-kpi sp-kpi--gap"><span>الفجوة اليومية</span><b>{fmt(t.gap)}</b><small>نمو مطلوب {pct((t.gap / t.actualDaily) * 100, 0)}</small></div>
-        <div className="sp-kpi"><span>متوسط العملاء الفعّالين / شهر</span><b>{fmt(t.active)}</b><small>{fmt(calc.companyPerCust, 1)} حبة / عميل / يوم</small></div>
+        <div className="sp-kpi"><span>العملاء الفعّالين (إقفال {MONTHS_AR[(data.last_month?.m || 1) - 1]})</span><b>{fmt(t.active)}</b><small>{fmt(calc.companyPerCust, 1)} حبة / عميل / يوم</small></div>
         <div className="sp-kpi sp-kpi--target"><span>العملاء المستهدفين (مفرق بدون الوكالات)</span><b>{fmt(PLAN_CUSTOMERS)}</b><small>الحالي {fmt(t.retailActive)} · إضافي {fmt(PLAN_CUSTOMERS - t.retailActive)} عميل</small></div>
         <div className="sp-kpi"><span>إيراد يومي مخطط</span><b>{fmtK(calc.planRevenue)}</b><small>الفعلي {fmtK(calc.actualRevenueDaily)} ر.س / يوم</small></div>
       </div>
@@ -294,7 +303,7 @@ export default function SalesPlanPage() {
               <tr>
                 <th>المنطقة</th><th>النوع</th>
                 <th>الفعلي / يوم</th><th>المخطط / يوم</th><th>الفجوة</th><th>التحقيق</th>
-                <th>عملاء فعّالين (متوسط شهري)</th><th>حبة / عميل / يوم فعلي</th>
+                <th>عملاء فعّالين (إقفال {MONTHS_AR[(data.last_month?.m || 1) - 1]})</th><th>حبة / عميل / يوم فعلي ({MONTHS_AR[(data.last_month?.m || 1) - 1]})</th>
                 <th>العملاء المستهدفين</th><th>إضافي مطلوب</th>
                 <th>حبة / عميل / يوم مطلوب</th><th>زيادة مطلوبة في مبيعات العميل</th>
                 <th>عملاء مطلوبين بالإنتاجية الحالية</th>
@@ -326,7 +335,7 @@ export default function SalesPlanPage() {
                 <tr key={o.region} className="sp-row--outside">
                   <td>{o.region}</td><td>خارج الخطة</td>
                   <td>{fmt(o.qty / calc.days)}</td><td>—</td><td>—</td><td>—</td>
-                  <td>{fmt(o.avg_active_customers)}</td><td>{fmt(o.avg_active_customers ? (o.qty / calc.days) / o.avg_active_customers : null, 1)}</td>
+                  <td>{fmt(calc.custOf(o))}</td><td>{fmt(calc.custOf(o) ? ((o.last_month_qty || 0) / (calc.lm.working_days || 1)) / calc.custOf(o) : null, 1)}</td>
                   <td>—</td><td>—</td><td>—</td><td>—</td><td>—</td>
                 </tr>
               ))}
@@ -410,7 +419,7 @@ export default function SalesPlanPage() {
             </table>
           </div>
           <p className="sp-explain">
-            العملاء: من العدد الحالي إلى هدف {fmt(PLAN_CUSTOMERS)} عميل (مفرق بدون الوكالات، التركيز على الرياض والقصيم والدمام). المناديب: من المناديب النشطة إلى المخطط (32 → 50).
+            العملاء: من عدد العملاء الفعّالين في إقفال {MONTHS_AR[(data.last_month?.m || 1) - 1]} إلى هدف {fmt(PLAN_CUSTOMERS)} عميل (مفرق بدون الوكالات، التركيز على الرياض والقصيم والدمام). المناديب: من المناديب النشطة إلى المخطط (32 → 50).
             المنطقة التي تبيع حالياً أكثر من خطتها تبقى على مستواها الحالي.
           </p>
         </section>

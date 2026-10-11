@@ -276,6 +276,13 @@ router.get('/', verifyToken, requirePagePermission('sales_plan', 1), async (req,
          FROM sales_activity sa WHERE ${saBase} AND ${saCat}
          GROUP BY sa.customer_code`, [...saParams, recentFrom]),
     ]);
+    // Customer base = the CLOSE of the last complete month (management's instruction: "current
+    // active customers" means the September close as a count, not an average).
+    const lastM = win[win.length - 1];
+    const lastYm = lastM.y * 100 + lastM.m;
+    const lastQty = new Map(), lastActive = new Map();
+    for (const r of branchMonthly) if (Number(r.ym) === lastYm) lastQty.set(r.branch, n(r.qty));
+    for (const r of activeByMonth) if (Number(r.ym) === lastYm) lastActive.set(r.branch, n(r.active));
     const recentQty = new Map(), recentActive = new Map(), recentReps = new Map();
     for (const r of branchMonthly) if (Number(r.ym) >= recentFrom) recentQty.set(r.branch, (recentQty.get(r.branch) || 0) + n(r.qty));
     for (const r of activeByMonth) if (Number(r.ym) >= recentFrom) recentActive.set(r.branch, (recentActive.get(r.branch) || 0) + n(r.active) / recent.length);
@@ -331,6 +338,8 @@ router.get('/', verifyToken, requirePagePermission('sales_plan', 1), async (req,
       recent_qty: recentQty.get(b) || 0,
       recent_active_customers: recentActive.get(b) || 0,
       recent_active_reps: recentReps.get(b) || 0,
+      last_month_qty: lastQty.get(b) || 0,
+      last_month_active_customers: lastActive.get(b) || 0,
       pool: pool_.get(b) || { lost: 0, lost_daily: 0, declining: 0, declining_loss: 0, new_customers: 0, new_daily: 0 },
     })).filter(r => r.qty || r.debt || r.invoiced || r.collected);
 
@@ -344,6 +353,7 @@ router.get('/', verifyToken, requirePagePermission('sales_plan', 1), async (req,
       category_options: allCats.map(c => ({ name: c.name, qty: n(c.qty) })),
       regions: rows,
       recent: { months: recent, working_days: recentDays, prior_working_days: priorDays },
+      last_month: { y: lastM.y, m: lastM.m, working_days: workingDays(lastM.y, lastM.m) },
       ramp_months: rampMonths,
       lost_customers: lost.slice(0, 20),
       declining_customers: declining.slice(0, 20),

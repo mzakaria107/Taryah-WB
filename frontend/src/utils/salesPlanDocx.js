@@ -126,6 +126,7 @@ export async function exportSalesPlanDocx({ data, calc, ramp, findings, periodLa
   const rampLabel = data.ramp_months.map(m => `${MONTHS_AR[m.m - 1]} ${m.y}`);
   const recentLabel = data.recent.months.map(m => MONTHS_AR[m.m - 1]).join(' – ');
   const retailRegions = calc.regions.filter(r => r.type === 'retail');
+  const closeLabel = `إقفال ${MONTHS_AR[(data.last_month?.m || 1) - 1]}`;
   const rt = ramp.totals;
   const focusRows = ramp.rows.filter(r => r.focus);
   const c = [];
@@ -144,7 +145,7 @@ export async function exportSalesPlanDocx({ data, calc, ramp, findings, periodLa
     { label: 'الوضع الحالي (آخر 3 أشهر)', value: fmt(rt.cur), sub: 'حبة / يوم عمل', fill: BRAND, dark: true },
     { label: 'الهدف اليومي', value: fmt(PLAN_TARGET), sub: `بنهاية ${rampLabel[2]}` },
     { label: 'الفجوة', value: fmt(PLAN_TARGET - rt.cur), sub: `نمو مطلوب ${pct(rt.cur ? (PLAN_TARGET / rt.cur - 1) * 100 : null)}`, color: RED },
-    { label: 'العملاء الفعّالين (مفرق)', value: `${fmt(rt.curCust)} ← ${fmt(PLAN_CUSTOMERS)}`, sub: `إضافة ${fmt(PLAN_CUSTOMERS - rt.curCust)} عميل` },
+    { label: `العملاء الفعّالين (مفرق، ${closeLabel})`, value: `${fmt(rt.curCust)} ← ${fmt(PLAN_CUSTOMERS)}`, sub: `إضافة ${fmt(PLAN_CUSTOMERS - rt.curCust)} عميل` },
     { label: 'المناديب', value: `${t.activeRepsSheet} ← ${t.reps}`, sub: `تعيين ${t.reps - t.activeRepsSheet} مندوب` },
   ]));
   c.push(spacer());
@@ -159,7 +160,7 @@ export async function exportSalesPlanDocx({ data, calc, ramp, findings, periodLa
   /* 2. Plan vs actual by region */
   c.push(h1('2. الخطة مقابل الفعلي لكل منطقة', { pageBreakBefore: true }));
   c.push(table(
-    ['المنطقة', 'النوع', 'الفعلي / يوم', 'المخطط / يوم', 'الفجوة', 'التحقيق', 'عملاء فعّالين', 'حبة/عميل/يوم', 'العملاء المستهدفين', 'إضافي', 'حبة/عميل مطلوب'],
+    ['المنطقة', 'النوع', 'الفعلي / يوم', 'المخطط / يوم', 'الفجوة', 'التحقيق', `عملاء (${closeLabel})`, 'حبة/عميل/يوم', 'العملاء المستهدفين', 'إضافي', 'حبة/عميل مطلوب'],
     [
       ...calc.regions.map(r => ({ fill: r.type === 'agency' ? 'EFF6FF' : undefined, cells: [
         { v: r.label + (r.focus ? ' ★' : ''), bold: true }, r.type === 'agency' ? 'وكالة' : 'مفرق',
@@ -207,7 +208,7 @@ export async function exportSalesPlanDocx({ data, calc, ramp, findings, periodLa
   c.push(spacer());
   c.push(h2('العملاء والمناديب شهرياً'));
   c.push(table(
-    ['المنطقة', 'العملاء الحاليين', ...rampLabel.map(l => `عملاء ${l}`), 'حبة/عميل/يوم (الشهر 3)', 'المناديب الحاليين', ...rampLabel.map(l => `مناديب ${l}`)],
+    ['المنطقة', `عملاء ${closeLabel}`, ...rampLabel.map(l => `عملاء ${l}`), 'حبة/عميل/يوم (الشهر 3)', 'المناديب الحاليين', ...rampLabel.map(l => `مناديب ${l}`)],
     [
       ...ramp.rows.filter(r => r.type === 'retail').map(r => ({ cells: [
         { v: r.label + (r.focus ? ' ★' : ''), bold: true }, fmt(r.curCust), ...r.steps.map(st => fmt(st.cust)),
@@ -309,7 +310,7 @@ export async function exportSalesPlanDocx({ data, calc, ramp, findings, periodLa
   [
     `الصنف: دجاج مبرد طرية، شامل مبيعات المستودع المركزي (direct). الفترة: ${periodLabel}.`,
     'المتوسط اليومي = الكمية ÷ أيام العمل (بدون الجمعة وإجازة العيد) — مطابق لصفحة تقييم المناطق.',
-    'العميل الفعّال = صافي كمية موجبة في الشهر؛ المتوسط الشهري على أشهر الفترة.',
+    `العميل الفعّال = صافي كمية موجبة في الشهر. العملاء الحاليين = عدد العملاء الفعّالين في ${closeLabel} (وليس متوسطاً)، ومبيعات العميل اليومية من نفس الشهر.`,
     `هدف العملاء ${fmt(PLAN_CUSTOMERS)} للمفرق فقط: كل منطقة تحتفظ بعملائها وتأخذ نصيباً من الزيادة حسب كميتها المخططة، بوزن 3× للرياض والقصيم والدمام.`,
     'المديونية = صافي الأرصدة بدون المستودع المركزي؛ التقادم حسب تاريخ الفاتورة.',
   ].forEach(x => c.push(bullet(x, { size: 18 })));

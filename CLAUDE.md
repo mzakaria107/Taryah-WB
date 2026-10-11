@@ -3236,6 +3236,16 @@ are built from the data, not hardcoded, so 2027 rolls over by itself.
   out, so table, footer, KPIs, bad-debt cards, Excel and print header all follow the selection.
   Oldest/newest debt ages remain customer-wide. Browser-tested: {2025} → 500, {2025, 2026} → 620
   on a 4-customer fixture.
+- **Print = per-page totals (11 Oct 2026)**: a single `<tfoot>` is repeated by the browser on every
+  printed page with the GRAND total, which management found misleading. The print view now renders
+  `.abp-print-pages` (hidden on screen; the screen table `.abp-screen-table` is hidden in print):
+  the sorted/filtered rows split into chunks (`PRINT_FIRST_PAGE_ROWS` = 12 — page 1 also holds the
+  header and KPI cards — then `PRINT_PAGE_ROWS` = 26), one table per chunk with
+  "إجمالي الصفحة i من n" summing only that chunk, plus "الإجمالي العام" on the last page.
+  Fixed print row height (24px, customer name clamped to 2 lines) keeps each chunk on one A4
+  landscape page; tfoot is `table-row-group` in print so it never repeats. Header / row / totals
+  JSX is shared (`headRow`, `renderRow`, `totalsRow`). Verified with Playwright `page.pdf()` on 60
+  customers: PDF page count = chunk count, each page total = its rows' sum, Σ page totals = grand.
 - Clicking a customer name opens the same invoice-detail modal as the aging page (not a navigation).
   The modal lives in `frontend/src/components/AgingInvoiceModal.jsx` (extracted from AgingPage.jsx,
   which now imports it too); it calls `GET /api/aging/invoices/:customerId` and has the "ملف العميل"

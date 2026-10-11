@@ -229,6 +229,117 @@ export default function AgingByPeriodPage() {
     window.onafterprint = () => { document.title = prev; };
   };
 
+  /* ── Table pieces shared by the screen table and the per-page print tables ── */
+  const headRow = (
+                <tr>
+                  <th onClick={() => onSort('customer_name')} className={sortBy === 'customer_name' ? 'age-th--sorted' : ''}>
+                    <SortIcon col="customer_name" sortBy={sortBy} sortDir={sortDir} /> العميل
+                  </th>
+                  {[['customer_id', 'رقم العميل'], ['region_name', 'المنطقة']].map(([k, l]) => (
+                    <th key={k} onClick={() => onSort(k)} className={sortBy === k ? 'age-th--sorted' : ''}>
+                      <SortIcon col={k} sortBy={sortBy} sortDir={sortDir} /> {l}
+                    </th>
+                  ))}
+                  {periods.map(p => (
+                    <th
+                      key={p.key}
+                      onClick={() => onSort(p.key)}
+                      className={`abp-th--${p.kind}${sortBy === p.key ? ' age-th--sorted' : ''}`}
+                    >
+                      <SortIcon col={p.key} sortBy={sortBy} sortDir={sortDir} /> {p.label}
+                    </th>
+                  ))}
+                  <th onClick={() => onSort('total')} className={sortBy === 'total' ? 'age-th--sorted' : ''}>
+                    <SortIcon col="total" sortBy={sortBy} sortDir={sortDir} /> إجمالي الدين
+                  </th>
+                  {[['oldest_age_days', 'عمر أقدم دين'], ['newest_age_days', 'عمر أقرب دين']].map(([k, l]) => (
+                    <th key={k} onClick={() => onSort(k)} className={sortBy === k ? 'age-th--sorted' : ''}>
+                      <SortIcon col={k} sortBy={sortBy} sortDir={sortDir} /> {l}
+                    </th>
+                  ))}
+                  <th onClick={() => onSort('bad_debt')} className={sortBy === 'bad_debt' ? 'age-th--sorted' : ''}>
+                    <SortIcon col="bad_debt" sortBy={sortBy} sortDir={sortDir} /> مديونية معدومة
+                  </th>
+                </tr>
+  );
+  const renderRow = c => (
+                  <tr key={c.customer_id} className={c.bad_debt ? 'abp-row--bad-debt' : ''}>
+                    <td>
+                      <button
+                        className="age-customer-link"
+                        style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
+                        onClick={() => setModalCustomer({ id: c.customer_id, name: c.customer_name })}
+                      >
+                        {c.customer_name}
+                      </button>
+                    </td>
+                    <td className="abp-td--code">{c.customer_id}</td>
+                    <td className="abp-td--region">{c.region_name || '—'}</td>
+                    {periods.map(p => {
+                      const v = Number(c.by_period[p.key] || 0);
+                      return (
+                        <td key={p.key} className={`abp-td--${p.kind}${v === 0 ? ' age-cell--zero' : v < 0 ? ' abp-td--neg' : ''}`}>
+                          {fmt(v)}
+                        </td>
+                      );
+                    })}
+                    <td style={{ fontWeight: 700 }}>{fmt(c.total)}</td>
+                    <td><AgeBadge days={c.oldest_age_days} /></td>
+                    <td><AgeBadge days={c.newest_age_days} /></td>
+                    <td className="abp-td--bad-debt">
+                      <div className="abp-bd-cell">
+                        <button
+                          className={`abp-bad-debt-btn${c.bad_debt ? ' abp-bad-debt-btn--on' : ''}`}
+                          disabled={!canEditBadDebt || badDebtMutation.isPending}
+                          title={c.bad_debt
+                            ? `معدومة — بواسطة ${c.bad_debt_marked_by || '—'} في ${fmtStamp(c.bad_debt_marked_at)}${canEditBadDebt ? ' — اضغط للإلغاء' : ''}`
+                            : (canEditBadDebt ? 'اضغط لتحديدها كمديونية معدومة' : 'غير معدومة')}
+                          onClick={() => badDebtMutation.mutate({ customerId: c.customer_id, badDebt: !c.bad_debt })}
+                        >
+                          {c.bad_debt
+                            ? '✓ معدومة'
+                            : (canEditBadDebt ? 'تنشيط' : '—')}
+                        </button>
+                        {c.bad_debt && (
+                          <div className="abp-bad-debt-sig" title={`${c.bad_debt_marked_by || '—'} — ${fmtStamp(c.bad_debt_marked_at)}`}>
+                            <b>{c.bad_debt_marked_by || '—'}</b>
+                            <span>{fmtStampShort(c.bad_debt_marked_at)}</span>
+                          </div>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+  );
+  const sumRows = list => {
+    const t = { total: 0 };
+    for (const c of list) {
+      t.total += Number(c.total || 0);
+      for (const [k, v] of Object.entries(c.by_period)) t[k] = (t[k] || 0) + Number(v || 0);
+    }
+    return t;
+  };
+  const totalsRow = (label, tot, cls = '') => (
+    <tr className={cls}>
+      <td>{label}</td>
+      <td />
+      <td />
+      {periods.map(p => <td key={p.key}>{fmt(tot[p.key])}</td>)}
+      <td style={{ fontWeight: 800 }}>{fmt(tot.total)}</td>
+      <td />
+      <td />
+      <td />
+    </tr>
+  );
+  // Rows per printed page (A4 landscape, fixed row height in print CSS). Page 1 is shorter —
+  // it also carries the print header and the KPI cards.
+  const PRINT_FIRST_PAGE_ROWS = 12, PRINT_PAGE_ROWS = 26;
+  const printPages = useMemo(() => {
+    if (!rows.length) return [];
+    const out = [rows.slice(0, PRINT_FIRST_PAGE_ROWS)];
+    for (let i = PRINT_FIRST_PAGE_ROWS; i < rows.length; i += PRINT_PAGE_ROWS) out.push(rows.slice(i, i + PRINT_PAGE_ROWS));
+    return out;
+  }, [rows]);
+
   const isDirty = regionId || routeId || salesRep || search || !excludeDirect || excludeCarrefour || badDebtFilter || selectedYears.length;
   const reset = () => {
     setRegionId(''); setRouteId(''); setSalesRep(''); setSearch(''); setBadDebtFilter(''); setSelectedYears([]);
@@ -363,108 +474,42 @@ export default function AgingByPeriodPage() {
             </div>
           )}
 
-          <div className="age-table-wrap">
+          <div className="age-table-wrap abp-screen-table">
             <table className="age-table abp-table">
               <thead>
-                <tr>
-                  <th onClick={() => onSort('customer_name')} className={sortBy === 'customer_name' ? 'age-th--sorted' : ''}>
-                    <SortIcon col="customer_name" sortBy={sortBy} sortDir={sortDir} /> العميل
-                  </th>
-                  {[['customer_id', 'رقم العميل'], ['region_name', 'المنطقة']].map(([k, l]) => (
-                    <th key={k} onClick={() => onSort(k)} className={sortBy === k ? 'age-th--sorted' : ''}>
-                      <SortIcon col={k} sortBy={sortBy} sortDir={sortDir} /> {l}
-                    </th>
-                  ))}
-                  {periods.map(p => (
-                    <th
-                      key={p.key}
-                      onClick={() => onSort(p.key)}
-                      className={`abp-th--${p.kind}${sortBy === p.key ? ' age-th--sorted' : ''}`}
-                    >
-                      <SortIcon col={p.key} sortBy={sortBy} sortDir={sortDir} /> {p.label}
-                    </th>
-                  ))}
-                  <th onClick={() => onSort('total')} className={sortBy === 'total' ? 'age-th--sorted' : ''}>
-                    <SortIcon col="total" sortBy={sortBy} sortDir={sortDir} /> إجمالي الدين
-                  </th>
-                  {[['oldest_age_days', 'عمر أقدم دين'], ['newest_age_days', 'عمر أقرب دين']].map(([k, l]) => (
-                    <th key={k} onClick={() => onSort(k)} className={sortBy === k ? 'age-th--sorted' : ''}>
-                      <SortIcon col={k} sortBy={sortBy} sortDir={sortDir} /> {l}
-                    </th>
-                  ))}
-                  <th onClick={() => onSort('bad_debt')} className={sortBy === 'bad_debt' ? 'age-th--sorted' : ''}>
-                    <SortIcon col="bad_debt" sortBy={sortBy} sortDir={sortDir} /> مديونية معدومة
-                  </th>
-                </tr>
+                {headRow}
               </thead>
               <tbody>
-                {rows.map(c => (
-                  <tr key={c.customer_id} className={c.bad_debt ? 'abp-row--bad-debt' : ''}>
-                    <td>
-                      <button
-                        className="age-customer-link"
-                        style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
-                        onClick={() => setModalCustomer({ id: c.customer_id, name: c.customer_name })}
-                      >
-                        {c.customer_name}
-                      </button>
-                    </td>
-                    <td className="abp-td--code">{c.customer_id}</td>
-                    <td className="abp-td--region">{c.region_name || '—'}</td>
-                    {periods.map(p => {
-                      const v = Number(c.by_period[p.key] || 0);
-                      return (
-                        <td key={p.key} className={`abp-td--${p.kind}${v === 0 ? ' age-cell--zero' : v < 0 ? ' abp-td--neg' : ''}`}>
-                          {fmt(v)}
-                        </td>
-                      );
-                    })}
-                    <td style={{ fontWeight: 700 }}>{fmt(c.total)}</td>
-                    <td><AgeBadge days={c.oldest_age_days} /></td>
-                    <td><AgeBadge days={c.newest_age_days} /></td>
-                    <td className="abp-td--bad-debt">
-                      <div className="abp-bd-cell">
-                        <button
-                          className={`abp-bad-debt-btn${c.bad_debt ? ' abp-bad-debt-btn--on' : ''}`}
-                          disabled={!canEditBadDebt || badDebtMutation.isPending}
-                          title={c.bad_debt
-                            ? `معدومة — بواسطة ${c.bad_debt_marked_by || '—'} في ${fmtStamp(c.bad_debt_marked_at)}${canEditBadDebt ? ' — اضغط للإلغاء' : ''}`
-                            : (canEditBadDebt ? 'اضغط لتحديدها كمديونية معدومة' : 'غير معدومة')}
-                          onClick={() => badDebtMutation.mutate({ customerId: c.customer_id, badDebt: !c.bad_debt })}
-                        >
-                          {c.bad_debt
-                            ? '✓ معدومة'
-                            : (canEditBadDebt ? 'تنشيط' : '—')}
-                        </button>
-                        {c.bad_debt && (
-                          <div className="abp-bad-debt-sig" title={`${c.bad_debt_marked_by || '—'} — ${fmtStamp(c.bad_debt_marked_at)}`}>
-                            <b>{c.bad_debt_marked_by || '—'}</b>
-                            <span>{fmtStampShort(c.bad_debt_marked_at)}</span>
-                          </div>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                {rows.map(renderRow)}
                 {!rows.length && (
                   <tr><td colSpan={periods.length + 8} className="age-loading">لا توجد مديونيات مطابقة</td></tr>
                 )}
               </tbody>
               {rows.length > 0 && (
-                <tfoot>
-                  <tr>
-                    <td>الإجمالي ({rows.length} عميل)</td>
-                    <td />
-                    <td />
-                    {periods.map(p => <td key={p.key}>{fmt(totals[p.key])}</td>)}
-                    <td style={{ fontWeight: 800 }}>{fmt(totals.total)}</td>
-                    <td />
-                    <td />
-                    <td />
-                  </tr>
-                </tfoot>
+                <tfoot>{totalsRow(`الإجمالي (${rows.length} عميل)`, totals)}</tfoot>
               )}
             </table>
+          </div>
+
+          {/* Print only: fixed-size page chunks, each table closes with the total of ITS rows;
+              the last page also carries the grand total. Browsers repeat a single <tfoot> on
+              every printed page, which is why the screen table is not reused for print. */}
+          <div className="abp-print-pages">
+            {printPages.map((chunk, i) => {
+              const last = i === printPages.length - 1;
+              return (
+                <div key={i} className={`abp-print-page${last ? '' : ' abp-print-page--break'}`}>
+                  <table className="age-table abp-table abp-print-table">
+                    <thead>{headRow}</thead>
+                    <tbody>{chunk.map(renderRow)}</tbody>
+                    <tfoot>
+                      {totalsRow(`إجمالي الصفحة ${i + 1} من ${printPages.length} (${chunk.length} عميل)`, sumRows(chunk), 'abp-page-total')}
+                      {last && totalsRow(`الإجمالي العام (${rows.length} عميل)`, totals, 'abp-grand-total')}
+                    </tfoot>
+                  </table>
+                </div>
+              );
+            })}
           </div>
         </>
       )}

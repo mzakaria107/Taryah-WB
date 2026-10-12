@@ -174,3 +174,68 @@
     print-color-adjust: exact; -webkit-print-color-adjust: exact;
   }
 }
+
+/* ── Notes column ─────────────────────────────────────────────── */
+.abp-table th.abp-th--note { min-width: 130px; }
+.abp-table td.abp-td--note { width: 150px; max-width: 170px; text-align: right; }
+.abp-note-cell {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 1px;
+  width: 100%; max-width: 170px; background: none; border: none; padding: 0;
+  cursor: pointer; font-family: inherit; text-align: right; line-height: 1.15;
+}
+.abp-note-cell-text {
+  display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: 0.66rem; color: var(--color-text, #1f2937); font-weight: 600;
+}
+.abp-note-cell-meta { font-size: 0.56rem; color: var(--color-text-muted, #6b7280); white-space: nowrap; }
+.abp-note-cell:hover .abp-note-cell-text { color: #b45309; text-decoration: underline; }
+.abp-note-cell--empty { font-size: 0.64rem; color: var(--color-text-muted, #94a3b8); }
+.abp-note-cell--empty:hover { color: #b45309; }
+
+/* Note modal */
+.abp-note-modal { max-width: 620px; }
+.abp-note-sub { font-size: 0.72rem; color: var(--color-text-muted); }
+.abp-note-textarea {
+  width: 100%; box-sizing: border-box; padding: 10px 12px; border-radius: 10px;
+  border: 1px solid var(--color-border, #cbd5e1); font-family: inherit; font-size: 0.86rem;
+  resize: vertical; min-height: 90px; background: var(--color-bg, #fff); color: inherit;
+}
+.abp-note-actions { display: flex; align-items: center; gap: 10px; margin: 8px 0 16px; }
+.abp-note-save {
+  background: #b45309; color: #fff; border: none; border-radius: 8px; padding: 7px 16px;
+  font-family: inherit; font-weight: 700; cursor: pointer;
+}
+.abp-note-save:disabled { opacity: 0.5; cursor: default; }
+.abp-note-error { color: #dc2626; font-size: 0.78rem; }
+.abp-note-count { margin-inline-start: auto; font-size: 0.7rem; color: var(--color-text-muted); }
+.abp-note-readonly { padding: 10px 12px; border-radius: 10px; background: var(--color-bg); margin-bottom: 16px; white-space: pre-wrap; }
+.abp-note-history-title { font-weight: 800; font-size: 0.86rem; margin-bottom: 8px; }
+.abp-note-history { list-style: none; margin: 0; padding: 0; max-height: 300px; overflow-y: auto; }
+.abp-note-history li { border-inline-start: 3px solid #f59e0b; padding: 6px 10px; margin-bottom: 8px; background: var(--color-bg); border-radius: 6px; }
+.abp-note-meta { font-size: 0.7rem; color: var(--color-text-muted); margin-bottom: 3px; }
+.abp-note-text { font-size: 0.82rem; white-space: pre-wrap; }
+.abp-note-text--cleared { color: var(--color-text-muted); font-style: italic; }
+.abp-note-empty { font-size: 0.8rem; color: var(--color-text-muted); }
+
+/* ── Tighter columns (notes column added) ──────────────────────── */
+.abp-table th:first-child,
+.abp-table td:first-child { min-width: 110px; max-width: 150px; }
+.abp-table td.abp-td--code { font-size: 0.64rem; }
+.abp-table td.abp-td--region { max-width: 64px; font-size: 0.66rem; }
+.abp-table th { padding: 6px 3px; }
+.abp-table td { padding: 5px 3px; }
+.abp-table .age-avg-badge { padding: 1px 5px; font-size: 0.64rem; }
+
+@media print {
+  .abp-note-cell-text { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+  .abp-note-cell--empty { visibility: hidden; }
+}
+/* Fixed row height: one-line customer names (full name in the tooltip) and a compact note cell */
+.abp-screen-table .abp-table td:first-child { white-space: nowrap; }
+.abp-screen-table .abp-table td:first-child .age-customer-link {
+  display: block; max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.abp-table td.abp-td--note { padding-top: 2px; padding-bottom: 2px; }
+.abp-note-cell { line-height: 1.05; }
+.abp-note-cell-text { font-size: 0.62rem; }
+.abp-note-cell-meta { font-size: 0.54rem; }

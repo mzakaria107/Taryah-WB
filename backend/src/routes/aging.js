@@ -283,7 +283,7 @@ router.get('/by-period', verifyToken, applyRegionFilter, requirePagePermission('
     const { conditions, params } = buildAgingFilters(req);
     const where = conditions.join(' AND ');
 
-    const [{ rows: [now] }, { rows }, { rows: regions }, { rows: custInfo }, { rows: badDebt }] = await Promise.all([
+    const [{ rows: [now] }, { rows }, { rows: regions }, { rows: custInfo }, { rows: badDebt }, { rows: debtNotes }] = await Promise.all([
       pool.query(`SELECT EXTRACT(YEAR FROM CURRENT_DATE)::int AS y, EXTRACT(MONTH FROM CURRENT_DATE)::int AS m`),
       pool.query(`
         SELECT
@@ -325,7 +325,11 @@ router.get('/by-period', verifyToken, applyRegionFilter, requirePagePermission('
       ensureBadDebtTable()
         .then(() => pool.query(BAD_DEBT_SELECT))
         .catch(err => { console.error('[Aging/by-period] bad_debt_customers:', err.message); return { rows: [] }; }),
+      ensureDebtNotesTables()
+        .then(() => pool.query(`SELECT customer_id, note_text, updated_at, updated_by_name FROM debt_notes WHERE note_text <> ''`))
+        .catch(err => { console.error('[Aging/by-period] debt_notes:', err.message); return { rows: [] }; }),
     ]);
+    const noteById = new Map(debtNotes.map(r => [r.customer_id, r]));
     const infoById = new Map(custInfo.map(r => [r.customer_id, r]));
     const badDebtById = new Map(badDebt.map(r => [r.customer_id, r]));
 
@@ -370,6 +374,9 @@ router.get('/by-period', verifyToken, applyRegionFilter, requirePagePermission('
           bad_debt:           badDebtById.has(c.customer_id),
           bad_debt_marked_at: badDebtById.get(c.customer_id)?.marked_at ?? null,
           bad_debt_marked_by: badDebtById.get(c.customer_id)?.marked_by_name ?? null,
+          note: noteById.get(c.customer_id)?.note_text ?? '',
+          note_updated_at: noteById.get(c.customer_id)?.updated_at ?? null,
+          note_updated_by: noteById.get(c.customer_id)?.updated_by_name ?? null,
         };
       })
       .filter(c => c.total !== 0)
@@ -462,6 +469,83 @@ router.put('/bad-debt/:customerId', verifyToken, requirePagePermission('aging_by
     res.json({ customer_id: customerId, bad_debt: false, bad_debt_marked_at: null, bad_debt_marked_by: null });
   } catch (err) {
     console.error('[Aging/bad-debt]', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/* ═══════════════════════════════════════════════════════════════
+   Debt notes (عمود «ملاحظات» on the debt-by-period page)
+   debt_notes = current note per customer; debt_notes_history = every save (who / when / text),
+   including clearing a note. Created lazily — startup migrations can stall (see CLAUDE.md).
+═══════════════════════════════════════════════════════════════ */
+let debtNotesReady = null;
+function ensureDebtNotesTables() {
+  if (!debtNotesReady) {
+    debtNotesReady = pool.query(`
+      CREATE TABLE IF NOT EXISTS debt_notes (
+        customer_id     VARCHAR(100) PRIMARY KEY,
+        note_text       TEXT         NOT NULL DEFAULT '',
+        updated_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+        updated_by      UUID,
+        updated_by_name VARCHAR(200)
+      );
+      CREATE TABLE IF NOT EXISTS debt_notes_history (
+        id          SERIAL PRIMARY KEY,
+        customer_id VARCHAR(100) NOT NULL,
+        note_text   TEXT         NOT NULL DEFAULT '',
+        saved_at    TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+        saved_by    UUID,
+        saved_by_name VARCHAR(200)
+      );
+      CREATE INDEX IF NOT EXISTS idx_debt_notes_history_cust ON debt_notes_history (customer_id, saved_at DESC);
+    `).catch(err => { debtNotesReady = null; throw err; });
+  }
+  return debtNotesReady;
+}
+
+router.put('/debt-notes/:customerId', verifyToken, requirePagePermission('aging_by_period', 2), async (req, res) => {
+  const { customerId } = req.params;
+  const note = typeof req.body?.note === 'string' ? req.body.note.trim().slice(0, 2000) : null;
+  if (note == null) return res.status(400).json({ error: 'note مطلوب' });
+  try {
+    await ensureDebtNotesTables();
+    const { rows: [me] } = await pool.query('SELECT name FROM users WHERE id = $1', [req.user.id]);
+    const userName = me?.name || req.user.name || req.user.email || null;
+    const { rows: [cur] } = await pool.query('SELECT note_text FROM debt_notes WHERE customer_id = $1', [customerId]);
+    if ((cur?.note_text ?? '') === note) {
+      return res.json({ customer_id: customerId, note, unchanged: true });
+    }
+    const { rows: [row] } = await pool.query(
+      `INSERT INTO debt_notes (customer_id, note_text, updated_at, updated_by, updated_by_name)
+       VALUES ($1, $2, NOW(), $3, $4)
+       ON CONFLICT (customer_id) DO UPDATE
+         SET note_text = EXCLUDED.note_text, updated_at = NOW(),
+             updated_by = EXCLUDED.updated_by, updated_by_name = EXCLUDED.updated_by_name
+       RETURNING note_text, updated_at, updated_by_name`,
+      [customerId, note, req.user.id, userName]
+    );
+    await pool.query(
+      `INSERT INTO debt_notes_history (customer_id, note_text, saved_by, saved_by_name) VALUES ($1, $2, $3, $4)`,
+      [customerId, note, req.user.id, userName]
+    );
+    res.json({ customer_id: customerId, note: row.note_text, note_updated_at: row.updated_at, note_updated_by: row.updated_by_name });
+  } catch (err) {
+    console.error('[Aging/debt-notes PUT]', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get('/debt-notes/:customerId/history', verifyToken, requirePagePermission('aging_by_period', 1), async (req, res) => {
+  try {
+    await ensureDebtNotesTables();
+    const { rows } = await pool.query(
+      `SELECT id, note_text, saved_at, saved_by_name FROM debt_notes_history
+       WHERE customer_id = $1 ORDER BY saved_at DESC, id DESC LIMIT 100`,
+      [req.params.customerId]
+    );
+    res.json({ history: rows });
+  } catch (err) {
+    console.error('[Aging/debt-notes history]', err.message);
     res.status(500).json({ error: err.message });
   }
 });

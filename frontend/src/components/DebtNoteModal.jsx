@@ -1,0 +1,95 @@
+import React, { useEffect, useState } from 'react';
+import ReactDOM from 'react-dom';
+import { useQuery } from '@tanstack/react-query';
+import { MessageSquareText, X } from 'lucide-react';
+import api from '../api/client';
+import '../pages/AgingPage.css';
+
+/* Debt note editor + full history for one customer (debt-by-period page).
+   Saving writes the current note and appends a history row server-side. */
+const fmtStamp = iso => iso
+  ? new Date(iso).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+  : '—';
+
+export default function DebtNoteModal({ customer, canEdit, onClose, onSaved }) {
+  const [text, setText] = useState(customer.note || '');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState(null);
+
+  const { data, isLoading, refetch } = useQuery({
+    queryKey: ['debt-note-history', customer.customer_id],
+    queryFn: () => api.get(`/aging/debt-notes/${encodeURIComponent(customer.customer_id)}/history`).then(r => r.data.history),
+  });
+
+  useEffect(() => {
+    const onKey = e => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  const dirty = text.trim() !== (customer.note || '').trim();
+  const save = async () => {
+    setSaving(true); setError(null);
+    try {
+      const { data: res } = await api.put(`/aging/debt-notes/${encodeURIComponent(customer.customer_id)}`, { note: text });
+      onSaved(res);
+      refetch();
+    } catch (e) {
+      setError(e.response?.data?.error || 'تعذّر حفظ الملاحظة');
+    } finally { setSaving(false); }
+  };
+
+  return ReactDOM.createPortal(
+    <div className="age-modal-overlay" onClick={onClose}>
+      <div className="age-modal abp-note-modal" onClick={e => e.stopPropagation()}>
+        <div className="age-modal-header">
+          <MessageSquareText size={18} color="#b45309" />
+          <div className="age-modal-customer">
+            <div className="age-modal-customer-name">ملاحظات المديونية — {customer.customer_name}</div>
+            <div className="abp-note-sub">رقم العميل {customer.customer_id}</div>
+          </div>
+          <button className="age-modal-close" onClick={onClose}><X size={18} /></button>
+        </div>
+        <div className="age-modal-body">
+          {canEdit ? (
+            <>
+              <textarea
+                className="abp-note-textarea"
+                value={text}
+                onChange={e => setText(e.target.value)}
+                placeholder="اكتب ملاحظة عن المديونية (موعد سداد، تواصل، إجراء…)"
+                maxLength={2000}
+                rows={4}
+                autoFocus
+              />
+              <div className="abp-note-actions">
+                <button className="abp-note-save" disabled={!dirty || saving} onClick={save}>
+                  {saving ? 'جاري الحفظ…' : 'حفظ الملاحظة'}
+                </button>
+                {error && <span className="abp-note-error">{error}</span>}
+                <span className="abp-note-count">{text.length} / 2000</span>
+              </div>
+            </>
+          ) : (
+            <div className="abp-note-readonly">{customer.note || 'لا توجد ملاحظة'}</div>
+          )}
+
+          <div className="abp-note-history-title">سجل الملاحظات</div>
+          {isLoading ? <div className="abp-note-empty">جاري التحميل…</div>
+            : !data?.length ? <div className="abp-note-empty">لا يوجد سجل بعد</div>
+            : (
+              <ul className="abp-note-history">
+                {data.map(h => (
+                  <li key={h.id}>
+                    <div className="abp-note-meta"><b>{h.saved_by_name || '—'}</b> · {fmtStamp(h.saved_at)}</div>
+                    <div className={`abp-note-text${h.note_text ? '' : ' abp-note-text--cleared'}`}>{h.note_text || '(تم مسح الملاحظة)'}</div>
+                  </li>
+                ))}
+              </ul>
+            )}
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+}

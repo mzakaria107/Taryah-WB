@@ -3246,6 +3246,20 @@ are built from the data, not hardcoded, so 2027 rolls over by itself.
   landscape page; tfoot is `table-row-group` in print so it never repeats. Header / row / totals
   JSX is shared (`headRow`, `renderRow`, `totalsRow`). Verified with Playwright `page.pdf()` on 60
   customers: PDF page count = chunk count, each page total = its rows' sum, Σ page totals = grand.
+- **Notes column "ملاحظات" (12 Oct 2026)**: debt-specific notes with full history, separate from
+  the general customer notes (`routes/notes.js`). Tables `debt_notes` (current note per customer:
+  text, updated_at, updated_by, updated_by_name) and `debt_notes_history` (every save incl. clearing:
+  text, saved_at, saved_by, saved_by_name) — created lazily by `ensureDebtNotesTables()` in
+  `routes/aging.js` (startup migrations stall at 058). `PUT /api/aging/debt-notes/:customerId`
+  `{ note }` (≤ 2000 chars, level 2 on aging_by_period; an unchanged save is not logged),
+  `GET /api/aging/debt-notes/:customerId/history` (level 1, newest first, 100 max). `GET /by-period`
+  adds `note`, `note_updated_at`, `note_updated_by`. UI: last column shows the note on one line +
+  "name · dd/mm/yy HH:MM"; click opens `components/DebtNoteModal.jsx` (textarea + save + history).
+  Read-only users see the note and history but cannot edit. Excel adds "ملاحظات" + "آخر تعديل".
+  Columns re-tightened: customer name one line with ellipsis (full name in tooltip), so every row is
+  exactly 28 px; fits 1366 and 1600 widths without horizontal scroll (measured in Playwright).
+  Also fixed a stray "0" under the filters introduced with the year filter (`isDirty` evaluated to
+  the number 0 and React rendered it) — `isDirty` is now a Boolean.
 - Clicking a customer name opens the same invoice-detail modal as the aging page (not a navigation).
   The modal lives in `frontend/src/components/AgingInvoiceModal.jsx` (extracted from AgingPage.jsx,
   which now imports it too); it calls `GET /api/aging/invoices/:customerId` and has the "ملف العميل"

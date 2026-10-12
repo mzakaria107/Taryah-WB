@@ -6,6 +6,7 @@ import api from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { usePermissions } from '../context/PermissionsContext';
 import AgingInvoiceModal from '../components/AgingInvoiceModal';
+import DebtNoteModal from '../components/DebtNoteModal';
 import './AgingPage.css';
 import './AgingByPeriodPage.css';
 
@@ -50,6 +51,7 @@ export default function AgingByPeriodPage() {
   const queryClient = useQueryClient();
   const [badDebtFilter,    setBadDebtFilter]    = useState('');
   const [selectedYears,    setSelectedYears]    = useState([]);
+  const [noteCustomer,     setNoteCustomer]     = useState(null);
   const [regionId,         setRegionId]         = useState('');
   const [routeId,          setRouteId]          = useState('');
   const [salesRep,         setSalesRep]         = useState('');
@@ -207,16 +209,17 @@ export default function AgingByPeriodPage() {
   ].filter(Boolean).join(' · ');
 
   const handleExport = () => {
-    const header = ['العميل', 'رقم العميل', 'المنطقة', ...periods.map(p => p.label), 'إجمالي الدين', 'عمر أقدم دين (يوم)', 'عمر أقرب دين (يوم)', 'مديونية معدومة', 'سُجّلت بواسطة', 'تاريخ التسجيل'];
+    const header = ['العميل', 'رقم العميل', 'المنطقة', ...periods.map(p => p.label), 'إجمالي الدين', 'عمر أقدم دين (يوم)', 'عمر أقرب دين (يوم)', 'مديونية معدومة', 'سُجّلت بواسطة', 'تاريخ التسجيل', 'ملاحظات', 'آخر تعديل للملاحظة'];
     const body = rows.map(c => [
       c.customer_name, c.customer_id, c.region_name || '',
       ...periods.map(p => Number(c.by_period[p.key] || 0)),
       c.total, c.oldest_age_days ?? '', c.newest_age_days ?? '', c.bad_debt ? 'نعم' : '',
       c.bad_debt ? (c.bad_debt_marked_by || '') : '', c.bad_debt ? fmtStamp(c.bad_debt_marked_at) : '',
+      c.note || '', c.note ? `${c.note_updated_by || ''} ${fmtStamp(c.note_updated_at)}` : '',
     ]);
-    const foot = ['الإجمالي', '', '', ...periods.map(p => Number(totals[p.key] || 0)), Number(totals.total || 0), '', '', '', '', ''];
+    const foot = ['الإجمالي', '', '', ...periods.map(p => Number(totals[p.key] || 0)), Number(totals.total || 0), '', '', '', '', '', '', ''];
     const ws = XLSX.utils.aoa_to_sheet([header, ...body, foot]);
-    ws['!cols'] = [{ wch: 32 }, { wch: 12 }, { wch: 14 }, ...periods.map(() => ({ wch: 13 })), { wch: 14 }, { wch: 16 }, { wch: 16 }, { wch: 14 }, { wch: 22 }, { wch: 22 }];
+    ws['!cols'] = [{ wch: 32 }, { wch: 12 }, { wch: 14 }, ...periods.map(() => ({ wch: 13 })), { wch: 14 }, { wch: 16 }, { wch: 16 }, { wch: 14 }, { wch: 22 }, { wch: 22 }, { wch: 40 }, { wch: 26 }];
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'المديونية حسب الفترة');
     XLSX.writeFile(wb, `المديونية_حسب_الفترة_${new Date().toLocaleDateString('en-CA')}.xlsx`);
@@ -260,6 +263,7 @@ export default function AgingByPeriodPage() {
                   <th onClick={() => onSort('bad_debt')} className={sortBy === 'bad_debt' ? 'age-th--sorted' : ''}>
                     <SortIcon col="bad_debt" sortBy={sortBy} sortDir={sortDir} /> مديونية معدومة
                   </th>
+                  <th className="abp-th--note">ملاحظات</th>
                 </tr>
   );
   const renderRow = c => (
@@ -267,6 +271,7 @@ export default function AgingByPeriodPage() {
                     <td>
                       <button
                         className="age-customer-link"
+                        title={c.customer_name}
                         style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
                         onClick={() => setModalCustomer({ id: c.customer_id, name: c.customer_name })}
                       >
@@ -308,6 +313,18 @@ export default function AgingByPeriodPage() {
                         )}
                       </div>
                     </td>
+                    <td className="abp-td--note">
+                      <button
+                        type="button"
+                        className={`abp-note-cell${c.note ? '' : ' abp-note-cell--empty'}`}
+                        title={c.note ? `${c.note}\n— ${c.note_updated_by || '—'} · ${fmtStamp(c.note_updated_at)}` : 'إضافة ملاحظة'}
+                        onClick={() => setNoteCustomer(c)}
+                      >
+                        {c.note
+                          ? <><span className="abp-note-cell-text">{c.note}</span><span className="abp-note-cell-meta">{c.note_updated_by || '—'} · {fmtStampShort(c.note_updated_at)}</span></>
+                          : (canEditBadDebt ? '＋ ملاحظة' : '—')}
+                      </button>
+                    </td>
                   </tr>
   );
   const sumRows = list => {
@@ -328,6 +345,7 @@ export default function AgingByPeriodPage() {
       <td />
       <td />
       <td />
+      <td />
     </tr>
   );
   // Rows per printed page (A4 landscape, fixed row height in print CSS). Page 1 is shorter —
@@ -340,7 +358,8 @@ export default function AgingByPeriodPage() {
     return out;
   }, [rows]);
 
-  const isDirty = regionId || routeId || salesRep || search || !excludeDirect || excludeCarrefour || badDebtFilter || selectedYears.length;
+  // Boolean() — a bare `selectedYears.length` of 0 would render a stray "0" via {isDirty && …}.
+  const isDirty = Boolean(regionId || routeId || salesRep || search || !excludeDirect || excludeCarrefour || badDebtFilter || selectedYears.length > 0);
   const reset = () => {
     setRegionId(''); setRouteId(''); setSalesRep(''); setSearch(''); setBadDebtFilter(''); setSelectedYears([]);
     setExcludeDirect(true); setExcludeCarrefour(false);
@@ -482,7 +501,7 @@ export default function AgingByPeriodPage() {
               <tbody>
                 {rows.map(renderRow)}
                 {!rows.length && (
-                  <tr><td colSpan={periods.length + 8} className="age-loading">لا توجد مديونيات مطابقة</td></tr>
+                  <tr><td colSpan={periods.length + 9} className="age-loading">لا توجد مديونيات مطابقة</td></tr>
                 )}
               </tbody>
               {rows.length > 0 && (
@@ -512,6 +531,23 @@ export default function AgingByPeriodPage() {
             })}
           </div>
         </>
+      )}
+
+      {noteCustomer && (
+        <DebtNoteModal
+          customer={noteCustomer}
+          canEdit={canEditBadDebt}
+          onClose={() => setNoteCustomer(null)}
+          onSaved={res => {
+            queryClient.setQueriesData({ queryKey: ['aging-by-period'] }, old => old && ({
+              ...old,
+              customers: old.customers.map(x => x.customer_id === res.customer_id
+                ? { ...x, note: res.note, note_updated_at: res.note_updated_at ?? x.note_updated_at, note_updated_by: res.note_updated_by ?? x.note_updated_by }
+                : x),
+            }));
+            setNoteCustomer(cur => cur && ({ ...cur, note: res.note }));
+          }}
+        />
       )}
 
       {modalCustomer && (

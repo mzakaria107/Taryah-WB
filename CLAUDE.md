@@ -3256,6 +3256,12 @@ are built from the data, not hardcoded, so 2027 rolls over by itself.
   adds `note`, `note_updated_at`, `note_updated_by`. UI: last column shows the note on one line +
   "name · dd/mm/yy HH:MM"; click opens `components/DebtNoteModal.jsx` (textarea + save + history).
   Read-only users see the note and history but cannot edit. Excel adds "ملاحظات" + "آخر تعديل".
+  **Admin delete (12 Oct 2026)**: `DELETE /api/aging/debt-notes/history/:id` —
+  `requireRoles('super_admin','it_admin')` only (not the page-permission level). In one transaction
+  it deletes the entry and re-syncs `debt_notes` to the newest remaining history entry (or removes
+  the note when none remain), so the table's note always equals the latest history row. The modal
+  shows a "حذف" button per entry for admins only, with a confirm dialog. Verified on Postgres:
+  403 for sales_manager, delete-latest rolls back, delete-last clears, missing id → 404.
   Columns re-tightened: customer name one line with ellipsis (full name in tooltip), so every row is
   exactly 28 px; fits 1366 and 1600 widths without horizontal scroll (measured in Playwright).
   Also fixed a stray "0" under the filters introduced with the year filter (`isDirty` evaluated to

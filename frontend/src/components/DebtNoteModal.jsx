@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import ReactDOM from 'react-dom';
 import { useQuery } from '@tanstack/react-query';
-import { MessageSquareText, X } from 'lucide-react';
+import { MessageSquareText, Trash2, X } from 'lucide-react';
 import api from '../api/client';
 import '../pages/AgingPage.css';
 
@@ -11,7 +11,7 @@ const fmtStamp = iso => iso
   ? new Date(iso).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
   : '—';
 
-export default function DebtNoteModal({ customer, canEdit, onClose, onSaved }) {
+export default function DebtNoteModal({ customer, canEdit, isAdmin, onClose, onSaved }) {
   const [text, setText] = useState(customer.note || '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
@@ -26,6 +26,22 @@ export default function DebtNoteModal({ customer, canEdit, onClose, onSaved }) {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
+
+  // Admin-only: remove one history entry. The server rolls the current note back to the newest
+  // remaining entry, so the textarea follows it too.
+  const [deletingId, setDeletingId] = useState(null);
+  const removeEntry = async h => {
+    if (!window.confirm(`حذف هذا السجل نهائياً؟\n\n«${h.note_text || '(تم مسح الملاحظة)'}»\n— ${h.saved_by_name || '—'} · ${fmtStamp(h.saved_at)}`)) return;
+    setDeletingId(h.id); setError(null);
+    try {
+      const { data: res } = await api.delete(`/aging/debt-notes/history/${h.id}`);
+      onSaved(res);
+      setText(res.note || '');
+      refetch();
+    } catch (e) {
+      setError(e.response?.data?.error || 'تعذّر حذف السجل');
+    } finally { setDeletingId(null); }
+  };
 
   const dirty = text.trim() !== (customer.note || '').trim();
   const save = async () => {
@@ -81,7 +97,15 @@ export default function DebtNoteModal({ customer, canEdit, onClose, onSaved }) {
               <ul className="abp-note-history">
                 {data.map(h => (
                   <li key={h.id}>
-                    <div className="abp-note-meta"><b>{h.saved_by_name || '—'}</b> · {fmtStamp(h.saved_at)}</div>
+                    <div className="abp-note-meta">
+                      <span><b>{h.saved_by_name || '—'}</b> · {fmtStamp(h.saved_at)}</span>
+                      {isAdmin && (
+                        <button type="button" className="abp-note-del" title="حذف هذا السجل (للأدمن فقط)"
+                          disabled={deletingId === h.id} onClick={() => removeEntry(h)}>
+                          <Trash2 size={13} /> {deletingId === h.id ? 'جاري الحذف…' : 'حذف'}
+                        </button>
+                      )}
+                    </div>
                     <div className={`abp-note-text${h.note_text ? '' : ' abp-note-text--cleared'}`}>{h.note_text || '(تم مسح الملاحظة)'}</div>
                   </li>
                 ))}

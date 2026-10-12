@@ -239,3 +239,10 @@
 .abp-note-cell { line-height: 1.05; }
 .abp-note-cell-text { font-size: 0.62rem; }
 .abp-note-cell-meta { font-size: 0.54rem; }
+.abp-note-meta { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.abp-note-del {
+  display: inline-flex; align-items: center; gap: 3px; background: none; border: 1px solid transparent;
+  color: #b91c1c; font-family: inherit; font-size: 0.7rem; cursor: pointer; padding: 1px 6px; border-radius: 6px;
+}
+.abp-note-del:hover { border-color: #fca5a5; background: #fef2f2; }
+.abp-note-del:disabled { opacity: 0.5; cursor: wait; }

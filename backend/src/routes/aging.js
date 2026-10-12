@@ -17,7 +17,7 @@
 
 const express = require('express');
 const pool    = require('../db/pool');
-const { verifyToken, applyRegionFilter, requirePagePermission } = require('../middleware/auth');
+const { verifyToken, applyRegionFilter, requirePagePermission, requireRoles } = require('../middleware/auth');
 const { suiteQL } = require('../utils/netsuite');
 
 const router = express.Router();
@@ -532,6 +532,44 @@ router.put('/debt-notes/:customerId', verifyToken, requirePagePermission('aging_
   } catch (err) {
     console.error('[Aging/debt-notes PUT]', err.message);
     res.status(500).json({ error: err.message });
+  }
+});
+
+/* Admin-only: delete one history entry. The current note always mirrors the newest remaining
+   history entry, so deleting the latest one rolls the note back (or clears it when none remain). */
+router.delete('/debt-notes/history/:id', verifyToken, requireRoles('super_admin', 'it_admin'), async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'معرّف غير صالح' });
+  const client = await pool.connect();
+  try {
+    await ensureDebtNotesTables();
+    await client.query('BEGIN');
+    const { rows: [del] } = await client.query('DELETE FROM debt_notes_history WHERE id = $1 RETURNING customer_id', [id]);
+    if (!del) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'السجل غير موجود' }); }
+    const { rows: [latest] } = await client.query(
+      `SELECT note_text, saved_at, saved_by, saved_by_name FROM debt_notes_history
+       WHERE customer_id = $1 ORDER BY saved_at DESC, id DESC LIMIT 1`, [del.customer_id]);
+    if (latest) {
+      await client.query(
+        `INSERT INTO debt_notes (customer_id, note_text, updated_at, updated_by, updated_by_name)
+         VALUES ($1, $2, $3, $4, $5)
+         ON CONFLICT (customer_id) DO UPDATE SET note_text = EXCLUDED.note_text, updated_at = EXCLUDED.updated_at,
+           updated_by = EXCLUDED.updated_by, updated_by_name = EXCLUDED.updated_by_name`,
+        [del.customer_id, latest.note_text, latest.saved_at, latest.saved_by, latest.saved_by_name]);
+    } else {
+      await client.query('DELETE FROM debt_notes WHERE customer_id = $1', [del.customer_id]);
+    }
+    await client.query('COMMIT');
+    res.json({
+      customer_id: del.customer_id, deleted_id: id,
+      note: latest?.note_text ?? '', note_updated_at: latest?.saved_at ?? null, note_updated_by: latest?.saved_by_name ?? null,
+    });
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    console.error('[Aging/debt-notes DELETE]', err.message);
+    res.status(500).json({ error: err.message });
+  } finally {
+    client.release();
   }
 });
 

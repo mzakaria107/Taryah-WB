@@ -537,6 +537,7 @@ export default function AgingByPeriodPage() {
         <DebtNoteModal
           customer={noteCustomer}
           canEdit={canEditBadDebt}
+          isAdmin={!!user && ['super_admin', 'it_admin'].includes(user.role)}
           onClose={() => setNoteCustomer(null)}
           onSaved={res => {
             queryClient.setQueriesData({ queryKey: ['aging-by-period'] }, old => old && ({

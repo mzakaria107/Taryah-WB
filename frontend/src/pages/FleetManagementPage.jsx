@@ -17,6 +17,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import * as XLSX from 'xlsx';
 import client from '../api/client';
 import { useAuth } from '../context/AuthContext';
+import { usePermissions } from '../context/PermissionsContext';
 import './FleetManagementPage.css';
 
 /* Vehicle categories (تصنيفات السيارات) and expense line items (بنود
@@ -1260,6 +1261,28 @@ function VehicleProfile({ vehicleId, onChanged }) {
      type's schedule and reverses/re-applies the parts stock on save. */
   const { user: profileUser } = useAuth();
   const canEditMaint = ADMIN_ROLES.includes(profileUser?.role);
+
+  /* Narrow correction of the LAST service (odometer / date only) for one schedule row — open to
+     the page's edit level, not just admins. Fixes typos like 12,126 instead of 112,126 that show a
+     false "overdue". Server corrects the latest log row (or the baseline when none) and logs it. */
+  const { perms: fleetPerms } = usePermissions();
+  const canFixLastService = canEditMaint || (fleetPerms?.fleet_management?.[profileUser?.role] ?? 0) >= 2;
+  const [fixingId, setFixingId] = useState(null);
+  const [fixForm, setFixForm] = useState({ odometer_km: '', service_date: '' });
+  const [fixSaving, setFixSaving] = useState(false);
+  const [fixError, setFixError] = useState('');
+  const startFix = s => { setFixingId(s.id); setFixForm({ odometer_km: s.last_service_km ?? '', service_date: s.last_service_date || '' }); setFixError(''); };
+  const submitFix = async s => {
+    if (fixForm.odometer_km === '' || fixForm.odometer_km == null) { setFixError('قراءة العداد مطلوبة'); return; }
+    setFixSaving(true); setFixError('');
+    try {
+      await client.patch(`/fleet/vehicles/${vehicleId}/schedule/${s.id}/last-service`, {
+        odometer_km: Number(fixForm.odometer_km), service_date: fixForm.service_date || null,
+      });
+      setFixingId(null); refetch(); onChanged?.();
+    } catch (err) { setFixError(err?.response?.data?.error || 'خطأ في تعديل آخر خدمة'); }
+    finally { setFixSaving(false); }
+  };
   const [editingMaintId, setEditingMaintId] = useState(null);
   const [editMaintForm, setEditMaintForm] = useState(null);
   const [editMaintSaving, setEditMaintSaving] = useState(false);
@@ -1390,13 +1413,14 @@ function VehicleProfile({ vehicleId, onChanged }) {
           <div className="flt-profile__title">📅 جدول الصيانة الدورية</div>
           <div className="flt-table-wrap">
             <table className="flt-table flt-table--nested">
-              <thead><tr><th>النوع</th><th>آخر خدمة (كم/تاريخ)</th><th>الفترة</th><th>الحالة</th></tr></thead>
+              <thead><tr><th>النوع</th><th>آخر خدمة (كم/تاريخ)</th><th>الفترة</th><th>الحالة</th>{canFixLastService && <th />}</tr></thead>
               <tbody>
                 {data.schedule.map(s => {
                   const overdue = s.km_remaining <= 0;
                   const dueSoon = !overdue && s.km_remaining <= s.interval_km * 0.1;
                   return (
-                    <tr key={s.id}>
+                    <React.Fragment key={s.id}>
+                    <tr>
                       <td>{s.type_name}</td>
                       <td>{fmt(s.last_service_km)} كم {s.last_service_date ? `— ${s.last_service_date}` : ''}</td>
                       <td>{fmt(s.interval_km)} كم</td>
@@ -1407,7 +1431,42 @@ function VehicleProfile({ vehicleId, onChanged }) {
                             ? <span className="flt-badge flt-badge--warn">قريبة ({fmt(s.km_remaining)} كم متبقي)</span>
                             : <span className="flt-badge flt-badge--ok">{fmt(s.km_remaining)} كم متبقي</span>}
                       </td>
+                      {canFixLastService && (
+                        <td>
+                          <button type="button" className="flt-btn flt-btn--outline flt-btn--sm"
+                            title="تعديل قراءة العداد أو تاريخ آخر خدمة"
+                            onClick={() => fixingId === s.id ? setFixingId(null) : startFix(s)}>
+                            {fixingId === s.id ? '✖️' : '✏️ تعديل'}
+                          </button>
+                        </td>
+                      )}
                     </tr>
+                    {canFixLastService && fixingId === s.id && (
+                      <tr className="flt-fix-row">
+                        <td colSpan={5}>
+                          <div className="flt-fix-form">
+                            <span className="flt-fix-label">تعديل آخر خدمة — {s.type_name}:</span>
+                            <label>العداد (كم)
+                              <input type="number" min="0" className="flt-inline-input" value={fixForm.odometer_km}
+                                onChange={e => setFixForm(f => ({ ...f, odometer_km: e.target.value }))} />
+                            </label>
+                            <label>التاريخ
+                              <input type="date" className="flt-inline-input" value={fixForm.service_date}
+                                max={new Date().toISOString().slice(0, 10)}
+                                onChange={e => setFixForm(f => ({ ...f, service_date: e.target.value }))} />
+                            </label>
+                            <button type="button" className="flt-btn flt-btn--primary flt-btn--sm" disabled={fixSaving} onClick={() => submitFix(s)}>
+                              {fixSaving ? 'جارٍ الحفظ…' : '💾 حفظ'}
+                            </button>
+                            {data.vehicle?.current_odometer_km != null && (
+                              <span className="flt-fix-hint">عداد السيارة الحالي: {fmt(data.vehicle.current_odometer_km)} كم</span>
+                            )}
+                            {fixError && <span className="flt-fix-error">{fixError}</span>}
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                    </React.Fragment>
                   );
                 })}
               </tbody>

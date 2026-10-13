@@ -275,3 +275,12 @@
   padding: 6px 8px; border: 1px solid var(--color-border, #e2e8f0); border-radius: 6px;
   font-size: 0.8rem; min-width: 90px;
 }
+
+/* Last-service correction row (schedule table) */
+.flt-fix-row td { background: #fffbeb; }
+.flt-fix-form { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; padding: 6px 0; }
+.flt-fix-form label { display: flex; flex-direction: column; gap: 3px; font-size: 0.72rem; color: var(--color-text-muted); font-weight: 600; }
+.flt-fix-form .flt-inline-input { min-width: 130px; }
+.flt-fix-label { font-weight: 700; font-size: 0.8rem; align-self: center; }
+.flt-fix-hint { font-size: 0.72rem; color: var(--color-text-muted); align-self: center; }
+.flt-fix-error { font-size: 0.76rem; color: #dc2626; align-self: center; }

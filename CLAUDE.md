@@ -3398,3 +3398,22 @@ Management daily chilled-chicken plan (now 59,900 units/day) compared with live 
   period. `avg_active_customers` / `recent_active_customers` are still returned but unused.
   Verified on local Postgres: per-region September counts equal an independent
   `SUM(qty) > 0` count exactly.
+
+## Fleet — correct the last service reading (13 Oct 2026)
+Users at the fleet page's EDIT level (e.g. `fleet_supervisor`, not only admins) can fix the odometer
+reading and/or date of the LAST service of a maintenance type — prompted by a typo (12,126 instead of
+~112,126) that showed engine oil "متأخرة 99,321 كم".
+- `PATCH /api/fleet/vehicles/:id/schedule/:scheduleId/last-service` `{ odometer_km, service_date? }`,
+  `requirePagePermission('fleet_management', 2)`. Only these two fields — full maintenance-row edits
+  (type, cost, parts…) stay admin-only via `PUT /maintenance-log/:id`.
+- If a logged service exists for (vehicle, type), its latest row is corrected and
+  `recomputeMaintenanceSchedule()` re-derives the schedule; otherwise (the "last service" is only the
+  baseline from vehicle creation / migration 113) the schedule baseline itself is corrected.
+- Validation: km ≥ 0 and ≤ the vehicle's `current_odometer_km`; date not in the future.
+- Audit table `fleet_maintenance_edits` (vehicle, type, log_id or NULL for baseline, old/new km,
+  old/new date, edited_by, edited_by_name, edited_at) — created lazily (`ensureMaintEditsTable`).
+- UI: "✏️ تعديل" per row of "جدول الصيانة الدورية" in the vehicle profile → inline row with
+  odometer + date (+ current odometer hint). Shown when admin or page level ≥ 2.
+- Verified end-to-end (real fleet router + Postgres, browser via Playwright): fleet_supervisor fixed
+  12,126 → 112,126 and the badge went from "متأخرة 99,321 كم" to "679 كم متبقي"; top_management saw
+  no edit buttons; >current odometer, future date and level-1 users are rejected.

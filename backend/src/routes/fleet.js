@@ -734,6 +734,115 @@ async function recomputeMaintenanceSchedule(client, vehicleId, typeId) {
   }
 }
 
+/* ════════════════════════════════════════════════════════════
+   PATCH /api/fleet/vehicles/:id/schedule/:scheduleId/last-service
+   Narrow correction open to the page's EDIT level (not admin-only): fix the
+   odometer reading and/or date of the LAST service of one maintenance type
+   — e.g. a typo like 12,126 instead of 112,126 that shows a false 99k-km
+   "overdue". Only these two fields; full edits (type, cost, parts…) stay
+   admin-only via PUT /maintenance-log/:id.
+   • If a logged service exists for (vehicle, type), its LATEST row is
+     corrected, then the schedule is recomputed from the log.
+   • If none exists (the "last service" is only the baseline set when the
+     vehicle was added / migration 113), the schedule baseline itself is
+     corrected.
+   Every change is written to fleet_maintenance_edits (old → new, who, when).
+════════════════════════════════════════════════════════════ */
+let maintEditsReady = null;
+function ensureMaintEditsTable() {
+  if (!maintEditsReady) {
+    maintEditsReady = pool.query(`
+      CREATE TABLE IF NOT EXISTS fleet_maintenance_edits (
+        id                  BIGSERIAL PRIMARY KEY,
+        vehicle_id          UUID NOT NULL,
+        maintenance_type_id INTEGER NOT NULL,
+        log_id              BIGINT,
+        old_km              NUMERIC(10,1),
+        new_km              NUMERIC(10,1),
+        old_date            DATE,
+        new_date            DATE,
+        edited_by           UUID,
+        edited_by_name      VARCHAR(200),
+        edited_at           TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `).catch(err => { maintEditsReady = null; throw err; });
+  }
+  return maintEditsReady;
+}
+
+router.patch('/vehicles/:id/schedule/:scheduleId/last-service', verifyToken, requirePagePermission('fleet_management', 2), async (req, res) => {
+  const { odometer_km, service_date } = req.body || {};
+  const km = Number(odometer_km);
+  if (odometer_km == null || odometer_km === '' || !Number.isFinite(km) || km < 0) {
+    return res.status(400).json({ error: 'قراءة العداد غير صالحة' });
+  }
+  if (service_date && !/^\d{4}-\d{2}-\d{2}$/.test(service_date)) return res.status(400).json({ error: 'التاريخ غير صالح' });
+  if (service_date && service_date > new Date().toISOString().slice(0, 10)) {
+    return res.status(400).json({ error: 'تاريخ الخدمة لا يمكن أن يكون في المستقبل' });
+  }
+
+  const client = await pool.connect();
+  try {
+    await ensureMaintEditsTable();
+    await client.query('BEGIN');
+    const sr = await client.query(
+      `SELECT ms.id, ms.vehicle_id, ms.maintenance_type_id, ms.last_service_km, ms.last_service_date::text AS last_service_date,
+              v.current_odometer_km
+       FROM fleet_maintenance_schedule ms JOIN fleet_vehicles v ON v.id = ms.vehicle_id
+       WHERE ms.id = $1 AND ms.vehicle_id = $2 FOR UPDATE OF ms`,
+      [req.params.scheduleId, req.params.id]
+    );
+    if (!sr.rows.length) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'بند الصيانة غير موجود' }); }
+    const sch = sr.rows[0];
+    const current = Number(sch.current_odometer_km) || 0;
+    if (current > 0 && km > current) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: `قراءة العداد (${km.toLocaleString('en-US')}) أكبر من قراءة السيارة الحالية (${current.toLocaleString('en-US')} كم)` });
+    }
+
+    const { rows: [me] } = await client.query('SELECT name FROM users WHERE id = $1', [req.user.id]);
+    const userName = me?.name || req.user.name || null;
+
+    const lr = await client.query(
+      `SELECT id, odometer_km, service_date::text AS service_date FROM fleet_maintenance_log
+       WHERE vehicle_id = $1 AND maintenance_type_id = $2
+       ORDER BY service_date DESC, id DESC LIMIT 1 FOR UPDATE`,
+      [sch.vehicle_id, sch.maintenance_type_id]
+    );
+    let logId = null, oldKm, oldDate;
+    if (lr.rows.length) {
+      const log = lr.rows[0];
+      logId = log.id; oldKm = log.odometer_km; oldDate = log.service_date;
+      await client.query(
+        `UPDATE fleet_maintenance_log SET odometer_km = $1, service_date = COALESCE($2, service_date) WHERE id = $3`,
+        [km, service_date || null, log.id]
+      );
+      await recomputeMaintenanceSchedule(client, sch.vehicle_id, sch.maintenance_type_id);
+    } else {
+      oldKm = sch.last_service_km; oldDate = sch.last_service_date;
+      await client.query(
+        `UPDATE fleet_maintenance_schedule SET last_service_km = $1, last_service_date = COALESCE($2, last_service_date) WHERE id = $3`,
+        [km, service_date || null, sch.id]
+      );
+    }
+    await client.query(
+      `INSERT INTO fleet_maintenance_edits
+         (vehicle_id, maintenance_type_id, log_id, old_km, new_km, old_date, new_date, edited_by, edited_by_name)
+       VALUES ($1, $2, $3, $4, $5, $6, COALESCE($7::date, $6::date), $8, $9)`,
+      [sch.vehicle_id, sch.maintenance_type_id, logId, oldKm, km, oldDate || null, service_date || null, req.user.id, userName]
+    );
+    await client.query('COMMIT');
+    console.log(`[Fleet] last-service corrected: schedule ${sch.id} ${oldKm}→${km} ${oldDate}→${service_date || oldDate} by ${userName || req.user.id}`);
+    res.json({ ok: true, corrected: logId ? 'log' : 'baseline', log_id: logId });
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    console.error('[Fleet] last-service correction:', err);
+    res.status(500).json({ error: 'خطأ في تعديل آخر خدمة' });
+  } finally {
+    client.release();
+  }
+});
+
 router.put('/maintenance-log/:id', verifyToken, requireRoles(...ADMIN_ROLES), async (req, res) => {
   const { maintenance_type_id, service_date, odometer_km, cost, vendor, notes, parts_used } = req.body || {};
   if (!maintenance_type_id) return res.status(400).json({ error: 'نوع الصيانة مطلوب' });

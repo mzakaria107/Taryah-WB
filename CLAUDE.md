@@ -3266,6 +3266,11 @@ are built from the data, not hardcoded, so 2027 rolls over by itself.
   exactly 28 px; fits 1366 and 1600 widths without horizontal scroll (measured in Playwright).
   Also fixed a stray "0" under the filters introduced with the year filter (`isDirty` evaluated to
   the number 0 and React rendered it) — `isDirty` is now a Boolean.
+- **Search by name or customer number (16 Oct 2026)**: `buildAgingFilters` (shared by `/aging` and
+  `/aging/by-period`) matches `search` (trimmed) with ILIKE against `customer_name`,
+  `customer_name_en` AND `customer_id`, so partial numbers work ("1502" → 15020009). Placeholder on
+  both pages: "اسم العميل أو رقمه...". Verified on Postgres for full/partial number, Arabic, English
+  and padded input on both endpoints.
 - Clicking a customer name opens the same invoice-detail modal as the aging page (not a navigation).
   The modal lives in `frontend/src/components/AgingInvoiceModal.jsx` (extracted from AgingPage.jsx,
   which now imports it too); it calls `GET /api/aging/invoices/:customerId` and has the "ملف العميل"

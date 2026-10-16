@@ -403,7 +403,7 @@ export default function AgingByPeriodPage() {
         </button>
         <div className="age-filter-group">
           <span className="age-filter-label">بحث عن عميل</span>
-          <input className="age-filter-input" placeholder="اسم العميل..." value={search} onChange={e => setSearch(e.target.value)} />
+          <input className="age-filter-input" placeholder="اسم العميل أو رقمه..." value={search} onChange={e => setSearch(e.target.value)} />
         </div>
         <div className="age-filter-group">
           <span className="age-filter-label">المنطقة</span>

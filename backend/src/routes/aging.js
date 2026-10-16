@@ -8,7 +8,7 @@
  * Query params:
  *   region_id        – filter by region (RBAC-enforced for region_manager)
  *   route_id         – filter by route
- *   search           – ILIKE on customer_name
+ *   search           – ILIKE on customer_name / customer_name_en / customer_id (رقم العميل)
  *   customer_type    – 'route' | 'direct'
  *   sort_by          – column to sort (default: total_balance)
  *   sort_dir         – ASC | DESC (default: DESC)
@@ -56,9 +56,9 @@ function buildAgingFilters(req) {
     conditions.push(`i.customer_type = $${p++}`);
     params.push(customer_type);
   }
-  if (search) {
-    conditions.push(`(i.customer_name ILIKE $${p} OR i.customer_name_en ILIKE $${p})`);
-    params.push(`%${search}%`);
+  if (search && String(search).trim()) {
+    conditions.push(`(i.customer_name ILIKE $${p} OR i.customer_name_en ILIKE $${p} OR i.customer_id ILIKE $${p})`);
+    params.push(`%${String(search).trim()}%`);
     p++;
   }
   if (sales_rep_name) {

@@ -455,7 +455,7 @@ export default function AgingPage() {
           <span className="age-filter-label">بحث عن عميل</span>
           <input
             className="age-filter-input"
-            placeholder="اسم العميل..."
+            placeholder="اسم العميل أو رقمه..."
             value={search}
             onChange={e => setSearch(e.target.value)}
           />

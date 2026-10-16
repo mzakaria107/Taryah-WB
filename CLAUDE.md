@@ -3266,6 +3266,10 @@ are built from the data, not hardcoded, so 2027 rolls over by itself.
   exactly 28 px; fits 1366 and 1600 widths without horizontal scroll (measured in Playwright).
   Also fixed a stray "0" under the filters introduced with the year filter (`isDirty` evaluated to
   the number 0 and React rendered it) — `isDirty` is now a Boolean.
+- **Rep column in the invoice-detail modal (16 Oct 2026)**: `GET /api/aging/invoices/:customerId`
+  returns `sales_rep_name` (blank → NULL → "—"); `AgingInvoiceModal` shows "المندوب" after the
+  invoice date (footer colSpan 3 → 4). Shared modal, so the aging page gets it too. Modal widened
+  (`.age-modal--wide`, min(1060px, 96vw)) and table cells nowrap so date/age/rep stay on one line.
 - **Search by name or customer number (16 Oct 2026)**: `buildAgingFilters` (shared by `/aging` and
   `/aging/by-period`) matches `search` (trimmed) with ILIKE against `customer_name`,
   `customer_name_en` AND `customer_id`, so partial numbers work ("1502" → 15020009). Placeholder on

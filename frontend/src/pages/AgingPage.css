@@ -452,3 +452,7 @@
    differently so the two are not mistaken for each other at a glance. */
 .age-exclude-carrefour-btn { border-color: #c7d2fe; color: #4338ca; background: #eef2ff; }
 .age-exclude-carrefour-btn.age-exclude-direct-btn--on { border-color: #4338ca; }
+.age-inv-rep { white-space: nowrap; font-size: 0.82rem; color: var(--color-text); }
+/* Invoice-detail modal: room for the المندوب column; keep date/age/rep on one line */
+.age-modal--wide { width: min(1060px, 96vw); }
+.age-inv-table td, .age-inv-table th { white-space: nowrap; }

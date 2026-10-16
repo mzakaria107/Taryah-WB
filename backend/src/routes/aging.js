@@ -973,6 +973,7 @@ router.get('/invoices/:customerId', verifyToken, applyRegionFilter, async (req, 
       SELECT
         invoice_number,
         invoice_date::text AS invoice_date,
+        NULLIF(TRIM(sales_rep_name), '') AS sales_rep_name,
         original_amount,
         paid_amount,
         balance,

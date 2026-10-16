@@ -46,7 +46,7 @@ export default function AgingInvoiceModal({ customer, onClose }) {
 
   return ReactDOM.createPortal(
     <div className="age-modal-overlay" onClick={onClose}>
-      <div className="age-modal" onClick={e => e.stopPropagation()}>
+      <div className="age-modal age-modal--wide" onClick={e => e.stopPropagation()}>
         <div className="age-modal-header">
           <ClockArrowUp size={18} color="#dc2626" />
           <div>
@@ -105,6 +105,7 @@ export default function AgingInvoiceModal({ customer, onClose }) {
                   <tr>
                     <th>رقم الفاتورة</th>
                     <th>تاريخ الفاتورة</th>
+                    <th>المندوب</th>
                     <th>العمر</th>
                     <th>قيمة الفاتورة</th>
                     <th>المسدد</th>
@@ -121,6 +122,7 @@ export default function AgingInvoiceModal({ customer, onClose }) {
                       <tr key={inv.invoice_number || i}>
                         <td style={{ fontFamily: 'monospace', direction: 'ltr', textAlign: 'right' }}>{inv.invoice_number}</td>
                         <td>{fmtDate(inv.invoice_date)}</td>
+                        <td className="age-inv-rep">{inv.sales_rep_name || '—'}</td>
                         <td>
                           <span className={`age-badge ${ageBadgeClass(inv.age_days)}`}>
                             {inv.age_days} يوم
@@ -151,7 +153,7 @@ export default function AgingInvoiceModal({ customer, onClose }) {
                 </tbody>
                 <tfoot>
                   <tr>
-                    <td colSpan={3} style={{ fontWeight: 700 }}>الإجمالي</td>
+                    <td colSpan={4} style={{ fontWeight: 700 }}>الإجمالي</td>
                     <td style={{ fontWeight: 700 }}>
                       {fmtN(invoices.reduce((s, i) => s + parseFloat(i.original_amount || 0), 0))}
                     </td>

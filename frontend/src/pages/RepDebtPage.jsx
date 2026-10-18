@@ -503,7 +503,7 @@ export default function RepDebtPage() {
           ) : (
             /* ── Per-customer net debt table ── */
             <div className="rd-table-wrap">
-              <table className="rd-table">
+              <table className="rd-table rd-table--cust">
                 <thead>
                   <tr>
                     {CUST_COLUMNS.map(col => (
@@ -518,7 +518,7 @@ export default function RepDebtPage() {
                         </span>
                       </th>
                     ))}
-                    <th className="rd-th rd-th--note">ملاحظات</th>
+                    <th className="rd-th rd-th--note rd-th--note-main">ملاحظات</th>
                     <th className="rd-th rd-th--note">العميل صاحب الدين الفعلي</th>
                   </tr>
                 </thead>
@@ -534,7 +534,7 @@ export default function RepDebtPage() {
                         <td className="rd-td-num rd-td-balance">{fmt(c.total_balance)}</td>
                         <td className="rd-td-age"><AgeBadge days={c.oldest_age_days} /></td>
                         <td className="rd-td-age"><AgeBadge days={c.newest_age_days} /></td>
-                        <td className="rd-td-note">
+                        <td className="rd-td-note rd-td-note--main">
                           {c.customer_id && (
                             <DebtNoteCell
                               note={notes[c.customer_id]?.note}

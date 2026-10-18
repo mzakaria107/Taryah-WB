@@ -3287,6 +3287,10 @@ are built from the data, not hardcoded, so 2027 rolls over by itself.
   placeholder), `DebtNoteCell` takes `addLabel`. Both note columns are 244px (220px text) so the
   table fits 1366px. Excel gets the new column. Verified on Postgres (kinds independent, delete rolls
   back only its own kind) and in Playwright (save sends kind=owner, cell updates, table fits).
+  **Compact layout (18 Oct 2026)**: the customers table has `.rd-table--cust` — 6px cell padding,
+  wrapping headers, customer name 120–170px with wrap, smaller age badges; ملاحظات
+  (`.rd-th--note-main` / `.rd-td-note--main`) is 380px max (measured 342px at 1366–1920, was 220),
+  «العميل صاحب الدين الفعلي» ~171px. Still no horizontal scroll at 1366/1500/1920.
 - **Debt notes shared with the rep-debt page (18 Oct 2026)**: `RepDebtPage` ("صافي مديونية العملاء"
   tab) has a "ملاحظات" column backed by the SAME `debt_notes` / `debt_notes_history` — a note saved on
   either page shows on both, with one shared history. New `GET /api/aging/debt-notes?ids=a,b,c`

@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { MessageSquareText, Trash2, X } from 'lucide-react';
 import api from '../api/client';
 import '../pages/AgingPage.css';
+import './DebtNotes.css';
 
 /* Debt note editor + full history for one customer (debt-by-period page).
    Saving writes the current note and appends a history row server-side. */

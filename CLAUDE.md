@@ -3266,6 +3266,19 @@ are built from the data, not hardcoded, so 2027 rolls over by itself.
   exactly 28 px; fits 1366 and 1600 widths without horizontal scroll (measured in Playwright).
   Also fixed a stray "0" under the filters introduced with the year filter (`isDirty` evaluated to
   the number 0 and React rendered it) — `isDirty` is now a Boolean.
+- **Debt notes shared with the rep-debt page (18 Oct 2026)**: `RepDebtPage` ("صافي مديونية العملاء"
+  tab) has a "ملاحظات" column backed by the SAME `debt_notes` / `debt_notes_history` — a note saved on
+  either page shows on both, with one shared history. New `GET /api/aging/debt-notes?ids=a,b,c`
+  (any signed-in user) returns current notes; `GET /debt-notes/:id/history` is now readable by any
+  signed-in user (was level 1 on aging_by_period) so everyone sees notes; editing (PUT) stays level 2
+  on aging_by_period, admin delete unchanged. UI shared: `components/DebtNoteCell.jsx` +
+  `components/DebtNoteModal.jsx`, styles moved to `components/DebtNotes.css` (all `.abp-note-*`).
+  Each page invalidates the other's query after a save (`['debt-notes']` ↔ `['aging-by-period']`).
+  Rep Excel (customers tab) gets a notes column. Verified end-to-end (real aging + invoices routers on
+  Postgres, Playwright): note added on rep page appears on debt-by-period, edit there appears back on
+  the rep page with both history rows; sales_rep can read (200) but not edit (403).
+  Test note: block service workers in Playwright (`serviceWorkers: 'block'`) — the PWA service worker
+  otherwise serves /api requests on later navigations and bypasses route mocks.
 - **Tabs "تفصيل شهري" / "إجمالي السنة" (18 Oct 2026)**: same page, same query. The yearly tab merges
   the current year's month columns (after the year filter) into one column `{ key: 'cur', kind:
   'curyear', label: 'دين <year>' }` and sums each customer's month amounts into `by_period.cur`;

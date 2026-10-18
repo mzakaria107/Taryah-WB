@@ -314,3 +314,15 @@
     border-radius: 4px;
   }
 }
+
+/* Notes column (shared debt notes — same as المديونية حسب الفترة) */
+.rd-th--note { cursor: default; min-width: 150px; }
+.rd-td-note { max-width: 220px; text-align: right; }
+.rd-td-note .abp-note-cell, .rd-td-note .abp-note-cell-text { max-width: 220px; }
+@media print {
+  .rd-td-note .abp-note-cell--empty { visibility: hidden; }
+  .rd-td-note .abp-note-cell-text { white-space: normal; }
+}
+.rd-td-note .abp-note-cell-text { font-size: 0.8rem; }
+.rd-td-note .abp-note-cell-meta { font-size: 0.64rem; }
+.rd-td-note .abp-note-cell--empty { font-size: 0.74rem; }

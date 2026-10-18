@@ -1,10 +1,13 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import * as XLSX from 'xlsx';
 import { ArrowRight, Printer, FileSpreadsheet, FileText, AlertCircle, Layers, Ban, EyeOff } from 'lucide-react';
 import client from '../api/client';
 import { useAuth } from '../context/AuthContext';
+import { usePermissions } from '../context/PermissionsContext';
+import DebtNoteCell from '../components/DebtNoteCell';
+import DebtNoteModal from '../components/DebtNoteModal';
 import './RepDebtPage.css';
 
 /* ── Formatters ──────────────────────────────────── */
@@ -152,12 +155,30 @@ export default function RepDebtPage() {
   // (unless an exclusion filter is active, in which case the footer is
   // recomputed from the filtered rows — see filteredCustSummary below).
   const rawCustomerRows = data?.customers_net || [];
+  /* Debt notes — the SAME notes (and history) as the debt-by-period page: one debt_notes table,
+     so a note saved here shows there and vice-versa. Everyone sees them; editing needs full
+     access on the debt-by-period page (same rule as there). */
+  const queryClient = useQueryClient();
+  const { perms } = usePermissions();
+  const canEditNotes = !!user && (['super_admin', 'it_admin'].includes(user.role)
+    || (perms?.aging_by_period?.[user.role] ?? 0) >= 2);
+  const [noteCustomer, setNoteCustomer] = useState(null);
+
   const customerRows = useMemo(() => {
     let rows = rawCustomerRows;
     if (excludeCarrefour) rows = rows.filter(c => !isCarrefour(c.customer_name));
     if (excludeZero) rows = rows.filter(c => Number(c.total_balance || 0) !== 0);
     return rows;
   }, [rawCustomerRows, excludeCarrefour, excludeZero]);
+
+  const noteIds = useMemo(() => customerRows.map(c => c.customer_id).filter(Boolean).sort().join(','), [customerRows]);
+  const { data: notesData } = useQuery({
+    queryKey: ['debt-notes', noteIds],
+    queryFn: () => client.get('/aging/debt-notes', { params: { ids: noteIds } }).then(r => r.data.notes || {}),
+    enabled: !!noteIds,
+    staleTime: 30_000,
+  });
+  const notes = notesData || {};
 
   const sortedCustomers = useMemo(() => {
     if (!custSortCol) return customerRows;
@@ -224,7 +245,7 @@ export default function RepDebtPage() {
     let header, rows, sheetName, fileTag;
 
     if (activeTab === 'customers') {
-      header = ['العميل', 'المنطقة', 'عدد الفواتير', 'المبلغ الأصلي', 'المدفوع', 'صافي المديونية'];
+      header = ['العميل', 'المنطقة', 'عدد الفواتير', 'المبلغ الأصلي', 'المدفوع', 'صافي المديونية', 'ملاحظات'];
       rows = sortedCustomers.map(c => [
         c.customer_name,
         c.region_name_ar || '—',
@@ -232,12 +253,14 @@ export default function RepDebtPage() {
         Number(c.total_amount || 0),
         Number(c.total_paid || 0),
         Number(c.total_balance || 0),
+        notes[c.customer_id]?.note || '',
       ]);
       rows.push([
         `الإجمالي (${sortedCustomers.length} عميل)`, '', sortedCustomers.reduce((s, c) => s + c.invoice_count, 0),
         Number(custSummary.total_amount || 0),
         Number(custSummary.total_paid || 0),
         Number(custSummary.total_balance || 0),
+        '',
       ]);
       sheetName = 'صافي مديونية العملاء';
       fileTag = 'صافي_مديونية_العملاء';
@@ -269,7 +292,7 @@ export default function RepDebtPage() {
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, sheetName);
     XLSX.writeFile(wb, `${fileTag}_${decodedName}_${dateSuffix}.xlsx`);
-  }, [activeTab, sortedInvoices, sortedCustomers, custSummary, invSummary, decodedName]);
+  }, [activeTab, sortedInvoices, sortedCustomers, custSummary, invSummary, decodedName, notes]);
 
   return (
     <div className="rd-page">
@@ -481,11 +504,12 @@ export default function RepDebtPage() {
                         </span>
                       </th>
                     ))}
+                    <th className="rd-th rd-th--note">ملاحظات</th>
                   </tr>
                 </thead>
                 <tbody>
                   {sortedCustomers.length === 0 ? (
-                    <tr><td colSpan={6} className="rd-empty">لا توجد فواتير غير مسددة لهذا المندوب</td></tr>
+                    <tr><td colSpan={7} className="rd-empty">لا توجد فواتير غير مسددة لهذا المندوب</td></tr>
                   ) : (
                     sortedCustomers.map(c => (
                       <tr key={c.customer_id || c.customer_name}>
@@ -495,6 +519,17 @@ export default function RepDebtPage() {
                         <td className="rd-td-num">{fmt(c.total_amount)}</td>
                         <td className="rd-td-num">{fmt(c.total_paid)}</td>
                         <td className="rd-td-num rd-td-balance">{fmt(c.total_balance)}</td>
+                        <td className="rd-td-note">
+                          {c.customer_id && (
+                            <DebtNoteCell
+                              note={notes[c.customer_id]?.note}
+                              updatedAt={notes[c.customer_id]?.note_updated_at}
+                              updatedBy={notes[c.customer_id]?.note_updated_by}
+                              canEdit={canEditNotes}
+                              onOpen={() => setNoteCustomer({ customer_id: c.customer_id, customer_name: c.customer_name, note: notes[c.customer_id]?.note || '' })}
+                            />
+                          )}
+                        </td>
                       </tr>
                     ))
                   )}
@@ -507,6 +542,7 @@ export default function RepDebtPage() {
                       <td className="rd-td-num">{fmt(custSummary.total_amount)}</td>
                       <td className="rd-td-num">{fmt(custSummary.total_paid)}</td>
                       <td className="rd-td-num rd-td-balance">{fmt(custSummary.total_balance)}</td>
+                      <td />
                     </tr>
                   </tfoot>
                 )}
@@ -539,6 +575,25 @@ export default function RepDebtPage() {
             </div>
           </div>
         </>
+      )}
+
+      {noteCustomer && (
+        <DebtNoteModal
+          customer={noteCustomer}
+          canEdit={canEditNotes}
+          isAdmin={!!user && ['super_admin', 'it_admin'].includes(user.role)}
+          onClose={() => setNoteCustomer(null)}
+          onSaved={res => {
+            queryClient.setQueryData(['debt-notes', noteIds], old => {
+              const next = { ...(old || {}) };
+              if (res.note) next[res.customer_id] = { note: res.note, note_updated_at: res.note_updated_at, note_updated_by: res.note_updated_by };
+              else delete next[res.customer_id];
+              return next;
+            });
+            queryClient.invalidateQueries({ queryKey: ['aging-by-period'] });   // same notes on that page
+            setNoteCustomer(cur => cur && ({ ...cur, note: res.note || '' }));
+          }}
+        />
       )}
     </div>
   );

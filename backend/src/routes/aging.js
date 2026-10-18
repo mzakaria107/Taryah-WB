@@ -542,6 +542,26 @@ router.put('/debt-notes/:customerId', verifyToken, requirePagePermission('aging_
   }
 });
 
+/* GET /api/aging/debt-notes?ids=a,b,c — current notes for a set of customers (rep-debt page).
+   Any signed-in user; omit ids for all. Same debt_notes rows the debt-by-period page shows. */
+router.get('/debt-notes', verifyToken, async (req, res) => {
+  try {
+    await ensureDebtNotesTables();
+    const ids = String(req.query.ids || '').split(',').map(x => x.trim()).filter(Boolean).slice(0, 5000);
+    const { rows } = await pool.query(
+      `SELECT customer_id, note_text, updated_at, updated_by_name FROM debt_notes
+       WHERE note_text <> ''${ids.length ? ' AND customer_id = ANY($1::text[])' : ''}`,
+      ids.length ? [ids] : []
+    );
+    res.json({ notes: Object.fromEntries(rows.map(r => [r.customer_id, {
+      note: r.note_text, note_updated_at: r.updated_at, note_updated_by: r.updated_by_name,
+    }])) });
+  } catch (err) {
+    console.error('[Aging/debt-notes GET]', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 /* Admin-only: delete one history entry. The current note always mirrors the newest remaining
    history entry, so deleting the latest one rolls the note back (or clears it when none remain). */
 router.delete('/debt-notes/history/:id', verifyToken, requireRoles('super_admin', 'it_admin'), async (req, res) => {
@@ -580,7 +600,8 @@ router.delete('/debt-notes/history/:id', verifyToken, requireRoles('super_admin'
   }
 });
 
-router.get('/debt-notes/:customerId/history', verifyToken, requirePagePermission('aging_by_period', 1), async (req, res) => {
+// Readable by every signed-in user (notes are shown on the rep-debt page too); editing stays level 2.
+router.get('/debt-notes/:customerId/history', verifyToken, async (req, res) => {
   try {
     await ensureDebtNotesTables();
     const { rows } = await pool.query(

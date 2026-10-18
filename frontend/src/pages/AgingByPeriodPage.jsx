@@ -7,6 +7,7 @@ import { useAuth } from '../context/AuthContext';
 import { usePermissions } from '../context/PermissionsContext';
 import AgingInvoiceModal from '../components/AgingInvoiceModal';
 import DebtNoteModal from '../components/DebtNoteModal';
+import DebtNoteCell from '../components/DebtNoteCell';
 import './AgingPage.css';
 import './AgingByPeriodPage.css';
 
@@ -368,16 +369,8 @@ export default function AgingByPeriodPage() {
                       </div>
                     </td>
                     <td className="abp-td--note">
-                      <button
-                        type="button"
-                        className={`abp-note-cell${c.note ? '' : ' abp-note-cell--empty'}`}
-                        title={c.note ? `${c.note}\n— ${c.note_updated_by || '—'} · ${fmtStamp(c.note_updated_at)}` : 'إضافة ملاحظة'}
-                        onClick={() => setNoteCustomer(c)}
-                      >
-                        {c.note
-                          ? <><span className="abp-note-cell-text">{c.note}</span><span className="abp-note-cell-meta">{c.note_updated_by || '—'} · {fmtStampShort(c.note_updated_at)}</span></>
-                          : (canEditBadDebt ? '＋ ملاحظة' : '—')}
-                      </button>
+                      <DebtNoteCell note={c.note} updatedAt={c.note_updated_at} updatedBy={c.note_updated_by}
+                        canEdit={canEditBadDebt} onOpen={() => setNoteCustomer(c)} />
                     </td>
                   </tr>
   );
@@ -621,6 +614,7 @@ export default function AgingByPeriodPage() {
                 : x),
             }));
             setNoteCustomer(cur => cur && ({ ...cur, note: res.note }));
+            queryClient.invalidateQueries({ queryKey: ['debt-notes'] });   // same notes on the rep-debt page
           }}
         />
       )}

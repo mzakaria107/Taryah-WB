@@ -3307,14 +3307,22 @@ are built from the data, not hardcoded, so 2027 rolls over by itself.
   with one repeating grand-total footer.
   **Approvals block (18 Oct 2026)**: «اعتماد المبيعات» (المندوب · المشرف - المدير المباشر · مدير
   المنطقة) and «اعتماد الحسابات» (الحسابات · المدير المالي) as two framed groups side by side, then a
-  full-width «ملاحظات أخرى» box. It is ~300px tall (`PRINT_FOOTER_H`), so when it doesn't fit under
-  the last page's rows, `measurePrintPages` moves rows onto a final page with room for them plus the
-  block — the signatures never print on a page without data.
+  full-width «ملاحظات أخرى» box.
   **`html { zoom: 0.9 }` (index.css) applies in print too**: a 1046px-wide element prints at 941
   physical px. The print table width is therefore set inline as 1046 ÷ the html zoom. Heights from
   getBoundingClientRect are already zoomed, so they compare directly with the 703px page budget.
   AppLayout's print rule also sets `transition: none` on `.app-shell` (its 250ms padding animation
   would otherwise run in the print layout).
+  **Revised after a real Firefox printout (18 Oct 2026)** — pages were under-filled (rows printed ~30%
+  smaller than measured; page 2 had 8 rows): (1) this page now prints at `zoom: 1`
+  (`html:has(.rd-page)` in print) and the page tables are exactly 1046px, so nothing is wider than
+  the paper and no browser shrinks the printout; (2) the off-screen measuring copy is laid out at the
+  same 1046 CSS px and its zoomed heights are divided by the html zoom — widening it by 1/zoom instead
+  changed the wrapping and gave a different split from print; (3) pages are filled in order (each
+  reserves one total row, the last one two); the signature block follows the grand total and
+  continues on the next page if needed — the "move rows to the signature page" step was removed;
+  (4) KPI cards stay 4-in-a-row in print. Screen and print-media measurements now agree (30 rows:
+  11/18/1 both ways). The Firefox fix itself is untested here (no Firefox in the sandbox).
 - **Debt notes shared with the rep-debt page (18 Oct 2026)**: `RepDebtPage` ("صافي مديونية العملاء"
   tab) has a "ملاحظات" column backed by the SAME `debt_notes` / `debt_notes_history` — a note saved on
   either page shows on both, with one shared history. New `GET /api/aging/debt-notes?ids=a,b,c`

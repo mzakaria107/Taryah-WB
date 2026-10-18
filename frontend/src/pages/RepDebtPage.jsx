@@ -27,34 +27,30 @@ const fmtNoteStamp = iso => iso
    notes), so page sizes are MEASURED: the print tables are always rendered off-screen at the
    printable width (A4 landscape 297mm − 2cm margins ≈ 1047px, same CSS as in print) and rows are
    packed greedily into the printable height (210mm − 2.4cm ≈ 703px). */
-const PRINT_PAGE_H = 703 - 24;        // printable height minus a safety margin
-const PRINT_FIRST_PAGE_RESERVE = 210; // print header + KPI cards above the table on page 1
-const PRINT_FOOTER_H = 300;           // balance note + approval boxes + "ملاحظات أخرى" after the last table
+const PRINT_PAGE_H = 703 - 12;        // printable height minus a small safety margin
+const PRINT_FIRST_PAGE_RESERVE = 195; // print header (~95) + one row of KPI cards (~100) on page 1
 function measurePrintPages(container) {
   if (!container) return null;
-  const rows = [...container.querySelectorAll('tr[data-prow]')].map(tr => tr.getBoundingClientRect().height);
+  // The app runs at `html { zoom: 0.9 }` on screen but prints at zoom 1 (RepDebtPage.css), and
+  // getBoundingClientRect returns zoomed px — divide by the current zoom to get print px.
+  const z = parseFloat(getComputedStyle(document.documentElement).zoom) || 1;
+  const hOf = el => (el ? el.getBoundingClientRect().height / z : 0);
+  const rows = [...container.querySelectorAll('tr[data-prow]')].map(hOf);
   if (!rows.length) return [];
-  const theadH = container.querySelector('thead')?.getBoundingClientRect().height || 30;
-  const footH = container.querySelector('tfoot tr')?.getBoundingClientRect().height || 26;
+  const theadH = hOf(container.querySelector('thead')) || 30;
+  const footH = hOf(container.querySelector('tfoot tr')) || 26;
   const sizes = [];
   let page = 0, used = 0, count = 0;
-  const avail = p => PRINT_PAGE_H - (p === 0 ? PRINT_FIRST_PAGE_RESERVE : 0) - theadH - 2 * footH;
+  // Every page ends with its page-total row; the last one also carries the grand-total row.
+  const avail = p => PRINT_PAGE_H - (p === 0 ? PRINT_FIRST_PAGE_RESERVE : 0) - theadH - footH;
   for (const h of rows) {
     if (count > 0 && used + h > avail(page)) { sizes.push(count); page += 1; used = 0; count = 0; }
     used += h; count += 1;
   }
+  if (count > 1 && used + footH > avail(page)) { sizes.push(count - 1); count = 1; } // room for the grand total
   sizes.push(count);
-  // Keep the signature block with data: if it doesn't fit under the last page's rows, move rows
-  // from the end of that page onto a new final page that has room for them plus the footer.
-  const lastUsed = rows.slice(rows.length - count).reduce((a, h) => a + h, 0);
-  if (lastUsed + PRINT_FOOTER_H > avail(page) && count > 1) {
-    let moved = 0, movedH = 0;
-    for (let i = rows.length - 1; moved < count - 1; i--) {
-      if (movedH + rows[i] + PRINT_FOOTER_H > avail(page + 1)) break;
-      movedH += rows[i]; moved += 1;
-    }
-    if (moved > 0) { sizes[sizes.length - 1] = count - moved; sizes.push(moved); }
-  }
+  // Pages are filled in order; the signature block follows the grand total and simply continues on
+  // the next page when it doesn't fit (moving rows to keep it company left half-empty pages).
   return sizes;
 }
 
@@ -237,8 +233,6 @@ export default function RepDebtPage() {
   const ownerNotes = ownerNotesData || {};
 
   const printPagesRef = useRef(null);
-  // index.css sets `html { zoom: 0.9 }`, so 1046 CSS px would print ~10% narrower than the paper.
-  const printInnerWidth = useMemo(() => 1046 / (parseFloat(getComputedStyle(document.documentElement).zoom) || 1), []);
   const [printPageSizes, setPrintPageSizes] = useState(null);
 
   const sortedCustomers = useMemo(() => {
@@ -647,7 +641,7 @@ export default function RepDebtPage() {
 
             {/* ── Print-only: same rows split into A4 pages, each with its own total ── */}
             <div className="rd-print-pages" aria-hidden="true">
-              <div className="rd-print-pages-inner" ref={printPagesRef} style={{ width: printInnerWidth }}>
+              <div className="rd-print-pages-inner" ref={printPagesRef}>
                 {printChunks.map((chunk, pi) => {
                   const last = pi === printChunks.length - 1;
                   const pageTotal = chunk.reduce((s, c) => s + Number(c.total_balance || 0), 0);

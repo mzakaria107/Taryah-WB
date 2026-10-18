@@ -258,7 +258,7 @@
   .rd-page { padding: 0 !important; max-width: 100% !important; }
 
   .rd-kpi { break-inside: avoid; }
-  .rd-kpis { break-after: avoid; }
+  .rd-kpis { break-after: avoid; grid-template-columns: repeat(4, 1fr) !important; margin-bottom: 14px; }
   .rd-table-wrap { overflow: visible !important; }
   .rd-table tr { break-inside: avoid; }
   .rd-table thead { display: table-header-group; }
@@ -387,9 +387,8 @@
   position: fixed; top: 0; left: 0; width: 0; height: 0;
   overflow: hidden; visibility: hidden; pointer-events: none;
 }
-/* A4 landscape printable width (297mm − 2 × 1cm). Fixed in print too, so a re-measure on
-   beforeprint (when print media may already apply) still sees the paper width. The JSX divides
-   it by the html zoom (0.9) via an inline width; this is only the fallback. */
+/* A4 landscape printable width (297mm − 2 × 1cm) in CSS px — the same on screen (where the
+   measuring copy lives) and in print, so rows wrap identically; heights are un-zoomed in JS. */
 .rd-print-pages-inner { width: 1046px; }
 .rd-ptable { width: 100%; table-layout: fixed; border-collapse: collapse; font-size: 11px; color: #1e293b; }
 .rd-ptable th {
@@ -412,6 +411,10 @@
 .rd-ptable thead { display: table-header-group; }
 .rd-ptable tfoot { display: table-row-group; }
 @media print {
+  /* Print this page at zoom 1 (index.css zooms the app to 0.9) and the page tables at exactly the
+     printable width: nothing is wider than the paper, so no browser shrinks the printout ("fit to
+     page width") and the measured page breaks hold in Chrome and Firefox alike. */
+  html:has(.rd-page) { zoom: 1 !important; }
   .rd-cust-screen { display: none !important; }
   .rd-print-pages { position: static; width: auto; height: auto; overflow: visible; visibility: visible; }
   .rd-ptable--break { break-after: page; }

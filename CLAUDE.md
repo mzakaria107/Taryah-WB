@@ -3293,6 +3293,18 @@ are built from the data, not hardcoded, so 2027 rolls over by itself.
   «العميل صاحب الدين الفعلي» ~171px. Still no horizontal scroll at 1366/1500/1920.
   Note cells: line-height 1.35/1.4 (shared DebtNotes.css uses 1.05, which made the text and the
   signature overlap), signature 0.58rem with 3px top margin.
+  **Print = per-page totals (18 Oct 2026)**: the customers tab prints `.rd-print-pages` instead of
+  the screen table (`.rd-cust-screen`, hidden in print): one `.rd-ptable` per A4 page, each ending
+  with "إجمالي الصفحة i من n (N عميل)" = sum of that page's rows, and the last one also with
+  "الإجمالي العام" (custSummary, = the KPI). Rows vary in height (wrapped names/notes), so page sizes
+  are MEASURED, not fixed counts: the print tables are always rendered off-screen (fixed, hidden) at
+  the printable width 1046px with the same CSS as in print, `measurePrintPages()` packs rows into
+  703px − 24px safety (page 1 also reserves 210px for the header + KPI cards), re-run in a layout
+  effect on data changes and synchronously on `beforeprint`. The width stays fixed in print too —
+  measuring at the window width put page 1's total on a page of its own. Verified with Playwright
+  `page.pdf()` on 114 customers with mixed note lengths: 7 chunks = 7 PDF pages, every page total
+  equals its rows' sum, Σ pages = grand total, screen layout unchanged. The invoices tab still prints
+  with one repeating grand-total footer.
 - **Debt notes shared with the rep-debt page (18 Oct 2026)**: `RepDebtPage` ("صافي مديونية العملاء"
   tab) has a "ملاحظات" column backed by the SAME `debt_notes` / `debt_notes_history` — a note saved on
   either page shows on both, with one shared history. New `GET /api/aging/debt-notes?ids=a,b,c`

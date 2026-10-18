@@ -1,4 +1,5 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { flushSync } from 'react-dom';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import * as XLSX from 'xlsx';
@@ -16,6 +17,34 @@ const fmt = (n) =>
   : Number(n).toLocaleString('en-SA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const fmtInt  = (n) => Math.round(Number(n || 0)).toLocaleString('en-SA');
 const fmtDate = (d) => d ? String(d).split('T')[0] : '—';
+const fmtNoteStamp = iso => iso
+  ? new Date(iso).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }).replace(',', '')
+  : '';
+
+/* ── Customers-tab print pagination ──────────────────
+   The printed customers table is split into one table per A4 page so each page can carry its own
+   total ("إجمالي الصفحة") and the last one the grand total. Rows vary in height (wrapped names and
+   notes), so page sizes are MEASURED: the print tables are always rendered off-screen at the
+   printable width (A4 landscape 297mm − 2cm margins ≈ 1047px, same CSS as in print) and rows are
+   packed greedily into the printable height (210mm − 2.4cm ≈ 703px). */
+const PRINT_PAGE_H = 703 - 24;        // printable height minus a safety margin
+const PRINT_FIRST_PAGE_RESERVE = 210; // print header + KPI cards above the table on page 1
+function measurePrintPages(container) {
+  if (!container) return null;
+  const rows = [...container.querySelectorAll('tr[data-prow]')].map(tr => tr.getBoundingClientRect().height);
+  if (!rows.length) return [];
+  const theadH = container.querySelector('thead')?.getBoundingClientRect().height || 30;
+  const footH = container.querySelector('tfoot tr')?.getBoundingClientRect().height || 26;
+  const sizes = [];
+  let page = 0, used = 0, count = 0;
+  const avail = p => PRINT_PAGE_H - (p === 0 ? PRINT_FIRST_PAGE_RESERVE : 0) - theadH - 2 * footH;
+  for (const h of rows) {
+    if (count > 0 && used + h > avail(page)) { sizes.push(count); page += 1; used = 0; count = 0; }
+    used += h; count += 1;
+  }
+  sizes.push(count);
+  return sizes;
+}
 
 const STATUS_MAP = { paid: ['مسددة', 'paid'], partial: ['جزئي', 'partial'], unpaid: ['غير مسددة', 'unpaid'] };
 function StatusBadge({ status }) {
@@ -195,6 +224,9 @@ export default function RepDebtPage() {
   });
   const ownerNotes = ownerNotesData || {};
 
+  const printPagesRef = useRef(null);
+  const [printPageSizes, setPrintPageSizes] = useState(null);
+
   const sortedCustomers = useMemo(() => {
     if (!custSortCol) return customerRows;
     const col = CUST_COLUMNS.find(c => c.key === custSortCol);
@@ -207,6 +239,28 @@ export default function RepDebtPage() {
       return String(av).localeCompare(String(bv), 'ar') * dir;
     });
   }, [customerRows, custSortCol, custSortDir]);
+
+  // Rows grouped into printed pages (one chunk = one A4 page). Until measured — or when the row
+  // count changed since — everything sits in a single chunk, which is what gets measured.
+  const printChunks = useMemo(() => {
+    const sizes = printPageSizes;
+    if (!sizes || sizes.reduce((a, b) => a + b, 0) !== sortedCustomers.length) return [sortedCustomers];
+    const out = []; let i = 0;
+    for (const n of sizes) { out.push(sortedCustomers.slice(i, i + n)); i += n; }
+    return out;
+  }, [printPageSizes, sortedCustomers]);
+  const remeasurePrint = useCallback(() => {
+    const sizes = measurePrintPages(printPagesRef.current);
+    if (sizes) setPrintPageSizes(prev => (prev && prev.join() === sizes.join() ? prev : sizes));
+  }, []);
+  useLayoutEffect(() => { if (activeTab === 'customers') remeasurePrint(); },
+    [activeTab, sortedCustomers, notes, ownerNotes, remeasurePrint]);
+  useEffect(() => {
+    // Ctrl+P / the print button: re-measure synchronously (fonts may have loaded since).
+    const onBefore = () => flushSync(remeasurePrint);
+    window.addEventListener('beforeprint', onBefore);
+    return () => window.removeEventListener('beforeprint', onBefore);
+  }, [remeasurePrint]);
 
   // Footer/summary totals: use the server-computed unconditional summary
   // when no filter is active (so it always matches the backend's rule
@@ -502,7 +556,8 @@ export default function RepDebtPage() {
             </div>
           ) : (
             /* ── Per-customer net debt table ── */
-            <div className="rd-table-wrap">
+            <>
+            <div className="rd-table-wrap rd-cust-screen">
               <table className="rd-table rd-table--cust">
                 <thead>
                   <tr>
@@ -575,6 +630,72 @@ export default function RepDebtPage() {
                 )}
               </table>
             </div>
+
+            {/* ── Print-only: same rows split into A4 pages, each with its own total ── */}
+            <div className="rd-print-pages" aria-hidden="true">
+              <div className="rd-print-pages-inner" ref={printPagesRef}>
+                {printChunks.map((chunk, pi) => {
+                  const last = pi === printChunks.length - 1;
+                  const pageTotal = chunk.reduce((s, c) => s + Number(c.total_balance || 0), 0);
+                  return (
+                    <table key={pi} className={`rd-ptable${last ? '' : ' rd-ptable--break'}`}>
+                      <colgroup>
+                        <col style={{ width: 70 }} /><col style={{ width: 165 }} /><col style={{ width: 62 }} />
+                        <col style={{ width: 92 }} /><col style={{ width: 70 }} /><col style={{ width: 70 }} />
+                        <col /><col style={{ width: 185 }} />
+                      </colgroup>
+                      <thead>
+                        <tr>
+                          {CUST_COLUMNS.map(col => <th key={col.key}>{col.label}</th>)}
+                          <th>ملاحظات</th>
+                          <th>العميل صاحب الدين الفعلي</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {chunk.map(c => {
+                          const n = notes[c.customer_id], o = ownerNotes[c.customer_id];
+                          return (
+                            <tr key={c.customer_id || c.customer_name} data-prow="">
+                              <td className="rd-p-code">{c.customer_id || '—'}</td>
+                              <td className="rd-p-name">{c.customer_name}</td>
+                              <td>{c.region_name_ar || '—'}</td>
+                              <td className="rd-p-num rd-p-bal">{fmt(c.total_balance)}</td>
+                              <td className="rd-p-age"><AgeBadge days={c.oldest_age_days} /></td>
+                              <td className="rd-p-age"><AgeBadge days={c.newest_age_days} /></td>
+                              {[n, o].map((x, k) => (
+                                <td key={k} className="rd-p-note">
+                                  {x?.note && <>
+                                    <div className="rd-p-note-text">{x.note}</div>
+                                    <div className="rd-p-note-meta">{x.note_updated_by || '—'} · {fmtNoteStamp(x.note_updated_at)}</div>
+                                  </>}
+                                </td>
+                              ))}
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                      <tfoot>
+                        {printChunks.length > 1 && (
+                          <tr className="rd-p-pagetotal">
+                            <td colSpan={3}>إجمالي الصفحة {pi + 1} من {printChunks.length} ({chunk.length} عميل)</td>
+                            <td className="rd-p-num rd-p-bal">{fmt(pageTotal)}</td>
+                            <td colSpan={4} />
+                          </tr>
+                        )}
+                        {last && (
+                          <tr className="rd-p-grand">
+                            <td colSpan={3}>الإجمالي العام ({sortedCustomers.length} عميل)</td>
+                            <td className="rd-p-num rd-p-bal">{fmt(custSummary.total_balance)}</td>
+                            <td colSpan={4} />
+                          </tr>
+                        )}
+                      </tfoot>
+                    </table>
+                  );
+                })}
+              </div>
+            </div>
+            </>
           )}
 
           {/* ── Print-only footer note + signature ── */}

@@ -323,8 +323,10 @@
   .rd-td-note .abp-note-cell--empty { visibility: hidden; }
   .rd-td-note .abp-note-cell-text { white-space: normal; }
 }
-.rd-td-note .abp-note-cell-text { font-size: 0.8rem; }
-.rd-td-note .abp-note-cell-meta { font-size: 0.64rem; }
+/* Note text and its signature (name · date) on separate, non-overlapping lines */
+.rd-td-note .abp-note-cell { line-height: 1.35; }
+.rd-td-note .abp-note-cell-text { font-size: 0.8rem; line-height: 1.4; padding-bottom: 1px; }
+.rd-td-note .abp-note-cell-meta { font-size: 0.58rem; line-height: 1.2; margin-top: 3px; }
 .rd-td-note .abp-note-cell--empty { font-size: 0.74rem; }
 
 /* Customer code + debt-age columns (customers tab) */

@@ -486,17 +486,25 @@ router.put('/bad-debt/:customerId', verifyToken, requirePagePermission('aging_by
    including clearing a note. Created lazily — startup migrations can stall (see CLAUDE.md).
 ═══════════════════════════════════════════════════════════════ */
 let debtNotesReady = null;
+/* Two note kinds share one code path, each in its own pair of tables:
+   debt  = «ملاحظات» (debt-by-period + rep-debt pages)
+   owner = «العميل صاحب الدين الفعلي» (rep-debt page) — who actually owes the debt. Picked by ?kind=. */
+const NOTE_TABLES = {
+  debt:  { cur: 'debt_notes',       hist: 'debt_notes_history' },
+  owner: { cur: 'debt_owner_notes', hist: 'debt_owner_notes_history' },
+};
+const noteTables = req => NOTE_TABLES[req.query.kind === 'owner' ? 'owner' : 'debt'];
 function ensureDebtNotesTables() {
   if (!debtNotesReady) {
-    debtNotesReady = pool.query(`
-      CREATE TABLE IF NOT EXISTS debt_notes (
+    debtNotesReady = pool.query(Object.values(NOTE_TABLES).map(({ cur, hist }) => `
+      CREATE TABLE IF NOT EXISTS ${cur} (
         customer_id     VARCHAR(100) PRIMARY KEY,
         note_text       TEXT         NOT NULL DEFAULT '',
         updated_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
         updated_by      UUID,
         updated_by_name VARCHAR(200)
       );
-      CREATE TABLE IF NOT EXISTS debt_notes_history (
+      CREATE TABLE IF NOT EXISTS ${hist} (
         id          SERIAL PRIMARY KEY,
         customer_id VARCHAR(100) NOT NULL,
         note_text   TEXT         NOT NULL DEFAULT '',
@@ -504,8 +512,8 @@ function ensureDebtNotesTables() {
         saved_by    UUID,
         saved_by_name VARCHAR(200)
       );
-      CREATE INDEX IF NOT EXISTS idx_debt_notes_history_cust ON debt_notes_history (customer_id, saved_at DESC);
-    `).catch(err => { debtNotesReady = null; throw err; });
+      CREATE INDEX IF NOT EXISTS idx_${hist}_cust ON ${hist} (customer_id, saved_at DESC);
+    `).join('')).catch(err => { debtNotesReady = null; throw err; });
   }
   return debtNotesReady;
 }
@@ -516,14 +524,15 @@ router.put('/debt-notes/:customerId', verifyToken, requirePagePermission('aging_
   if (note == null) return res.status(400).json({ error: 'note مطلوب' });
   try {
     await ensureDebtNotesTables();
+    const T = noteTables(req);
     const { rows: [me] } = await pool.query('SELECT name FROM users WHERE id = $1', [req.user.id]);
     const userName = me?.name || req.user.name || req.user.email || null;
-    const { rows: [cur] } = await pool.query('SELECT note_text FROM debt_notes WHERE customer_id = $1', [customerId]);
+    const { rows: [cur] } = await pool.query(`SELECT note_text FROM ${T.cur} WHERE customer_id = $1`, [customerId]);
     if ((cur?.note_text ?? '') === note) {
       return res.json({ customer_id: customerId, note, unchanged: true });
     }
     const { rows: [row] } = await pool.query(
-      `INSERT INTO debt_notes (customer_id, note_text, updated_at, updated_by, updated_by_name)
+      `INSERT INTO ${T.cur} (customer_id, note_text, updated_at, updated_by, updated_by_name)
        VALUES ($1, $2, NOW(), $3, $4)
        ON CONFLICT (customer_id) DO UPDATE
          SET note_text = EXCLUDED.note_text, updated_at = NOW(),
@@ -532,7 +541,7 @@ router.put('/debt-notes/:customerId', verifyToken, requirePagePermission('aging_
       [customerId, note, req.user.id, userName]
     );
     await pool.query(
-      `INSERT INTO debt_notes_history (customer_id, note_text, saved_by, saved_by_name) VALUES ($1, $2, $3, $4)`,
+      `INSERT INTO ${T.hist} (customer_id, note_text, saved_by, saved_by_name) VALUES ($1, $2, $3, $4)`,
       [customerId, note, req.user.id, userName]
     );
     res.json({ customer_id: customerId, note: row.note_text, note_updated_at: row.updated_at, note_updated_by: row.updated_by_name });
@@ -547,9 +556,10 @@ router.put('/debt-notes/:customerId', verifyToken, requirePagePermission('aging_
 router.get('/debt-notes', verifyToken, async (req, res) => {
   try {
     await ensureDebtNotesTables();
+    const T = noteTables(req);
     const ids = String(req.query.ids || '').split(',').map(x => x.trim()).filter(Boolean).slice(0, 5000);
     const { rows } = await pool.query(
-      `SELECT customer_id, note_text, updated_at, updated_by_name FROM debt_notes
+      `SELECT customer_id, note_text, updated_at, updated_by_name FROM ${T.cur}
        WHERE note_text <> ''${ids.length ? ' AND customer_id = ANY($1::text[])' : ''}`,
       ids.length ? [ids] : []
     );
@@ -570,21 +580,22 @@ router.delete('/debt-notes/history/:id', verifyToken, requireRoles('super_admin'
   const client = await pool.connect();
   try {
     await ensureDebtNotesTables();
+    const T = noteTables(req);
     await client.query('BEGIN');
-    const { rows: [del] } = await client.query('DELETE FROM debt_notes_history WHERE id = $1 RETURNING customer_id', [id]);
+    const { rows: [del] } = await client.query(`DELETE FROM ${T.hist} WHERE id = $1 RETURNING customer_id`, [id]);
     if (!del) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'السجل غير موجود' }); }
     const { rows: [latest] } = await client.query(
-      `SELECT note_text, saved_at, saved_by, saved_by_name FROM debt_notes_history
+      `SELECT note_text, saved_at, saved_by, saved_by_name FROM ${T.hist}
        WHERE customer_id = $1 ORDER BY saved_at DESC, id DESC LIMIT 1`, [del.customer_id]);
     if (latest) {
       await client.query(
-        `INSERT INTO debt_notes (customer_id, note_text, updated_at, updated_by, updated_by_name)
+        `INSERT INTO ${T.cur} (customer_id, note_text, updated_at, updated_by, updated_by_name)
          VALUES ($1, $2, $3, $4, $5)
          ON CONFLICT (customer_id) DO UPDATE SET note_text = EXCLUDED.note_text, updated_at = EXCLUDED.updated_at,
            updated_by = EXCLUDED.updated_by, updated_by_name = EXCLUDED.updated_by_name`,
         [del.customer_id, latest.note_text, latest.saved_at, latest.saved_by, latest.saved_by_name]);
     } else {
-      await client.query('DELETE FROM debt_notes WHERE customer_id = $1', [del.customer_id]);
+      await client.query(`DELETE FROM ${T.cur} WHERE customer_id = $1`, [del.customer_id]);
     }
     await client.query('COMMIT');
     res.json({
@@ -604,8 +615,9 @@ router.delete('/debt-notes/history/:id', verifyToken, requireRoles('super_admin'
 router.get('/debt-notes/:customerId/history', verifyToken, async (req, res) => {
   try {
     await ensureDebtNotesTables();
+    const T = noteTables(req);
     const { rows } = await pool.query(
-      `SELECT id, note_text, saved_at, saved_by_name FROM debt_notes_history
+      `SELECT id, note_text, saved_at, saved_by_name FROM ${T.hist}
        WHERE customer_id = $1 ORDER BY saved_at DESC, id DESC LIMIT 100`,
       [req.params.customerId]
     );

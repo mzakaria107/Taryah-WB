@@ -3277,6 +3277,16 @@ are built from the data, not hardcoded, so 2027 rolls over by itself.
   Playwright (order, sort, footer, Excel).
   Notes column widened (18 Oct 2026): `.rd-th--note`/`.rd-td-note` 274px (border-box, so the note text
   gets 250px; was 220) — measured 208 → 248px with the table still fitting 1366/1500px screens.
+  **Columns changed again (18 Oct 2026)**: "عدد الفواتير" removed; new column «العميل صاحب الدين الفعلي»
+  after ملاحظات — notes about the real customer behind the debt (name, phone, CR…). It is a second
+  note KIND on the same endpoints: `?kind=owner` on GET /debt-notes, PUT /debt-notes/:id,
+  GET /debt-notes/:id/history and admin DELETE /debt-notes/history/:id, stored in its own
+  `debt_owner_notes` / `debt_owner_notes_history` (lazily created by `ensureDebtNotesTables()`,
+  table names picked from the `NOTE_TABLES` whitelist). Same permissions and history as ملاحظات.
+  Shown on the rep-debt page only (not debt-by-period). `DebtNoteModal` takes `kind` (title /
+  placeholder), `DebtNoteCell` takes `addLabel`. Both note columns are 244px (220px text) so the
+  table fits 1366px. Excel gets the new column. Verified on Postgres (kinds independent, delete rolls
+  back only its own kind) and in Playwright (save sends kind=owner, cell updates, table fits).
 - **Debt notes shared with the rep-debt page (18 Oct 2026)**: `RepDebtPage` ("صافي مديونية العملاء"
   tab) has a "ملاحظات" column backed by the SAME `debt_notes` / `debt_notes_history` — a note saved on
   either page shows on both, with one shared history. New `GET /api/aging/debt-notes?ids=a,b,c`

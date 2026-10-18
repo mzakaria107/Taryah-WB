@@ -55,7 +55,6 @@ const CUST_COLUMNS = [
   { key: 'customer_id',     label: 'كود العميل',         type: 'string' },
   { key: 'customer_name',   label: 'العميل',             type: 'string' },
   { key: 'region_name_ar',  label: 'المنطقة',            type: 'string' },
-  { key: 'invoice_count',   label: 'عدد الفواتير',        type: 'number' },
   { key: 'total_balance',   label: 'صافي المديونية',      type: 'number' },
   { key: 'oldest_age_days', label: 'عمر أقدم مديونية',    type: 'number' },
   { key: 'newest_age_days', label: 'عمر أقرب مديونية',    type: 'number' },
@@ -187,6 +186,14 @@ export default function RepDebtPage() {
     staleTime: 30_000,
   });
   const notes = notesData || {};
+  // «العميل صاحب الدين الفعلي» — second note kind, own tables + history (kind=owner)
+  const { data: ownerNotesData } = useQuery({
+    queryKey: ['debt-owner-notes', noteIds],
+    queryFn: () => client.get('/aging/debt-notes', { params: { ids: noteIds, kind: 'owner' } }).then(r => r.data.notes || {}),
+    enabled: !!noteIds,
+    staleTime: 30_000,
+  });
+  const ownerNotes = ownerNotesData || {};
 
   const sortedCustomers = useMemo(() => {
     if (!custSortCol) return customerRows;
@@ -253,22 +260,21 @@ export default function RepDebtPage() {
     let header, rows, sheetName, fileTag;
 
     if (activeTab === 'customers') {
-      header = ['كود العميل', 'العميل', 'المنطقة', 'عدد الفواتير', 'صافي المديونية', 'عمر أقدم مديونية (يوم)', 'عمر أقرب مديونية (يوم)', 'ملاحظات'];
+      header = ['كود العميل', 'العميل', 'المنطقة', 'صافي المديونية', 'عمر أقدم مديونية (يوم)', 'عمر أقرب مديونية (يوم)', 'ملاحظات', 'العميل صاحب الدين الفعلي'];
       rows = sortedCustomers.map(c => [
         c.customer_id || '',
         c.customer_name,
         c.region_name_ar || '—',
-        Number(c.invoice_count || 0),
         Number(c.total_balance || 0),
         c.oldest_age_days ?? '',
         c.newest_age_days ?? '',
         notes[c.customer_id]?.note || '',
+        ownerNotes[c.customer_id]?.note || '',
       ]);
       rows.push([
         `الإجمالي (${sortedCustomers.length} عميل)`, '', '',
-        sortedCustomers.reduce((s, c) => s + Number(c.invoice_count || 0), 0),   // counts arrive as strings from pg
         Number(custSummary.total_balance || 0),
-        '', '', '',
+        '', '', '', '',
       ]);
       sheetName = 'صافي مديونية العملاء';
       fileTag = 'صافي_مديونية_العملاء';
@@ -513,6 +519,7 @@ export default function RepDebtPage() {
                       </th>
                     ))}
                     <th className="rd-th rd-th--note">ملاحظات</th>
+                    <th className="rd-th rd-th--note">العميل صاحب الدين الفعلي</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -524,7 +531,6 @@ export default function RepDebtPage() {
                         <td className="rd-td-code">{c.customer_id || '—'}</td>
                         <td className="rd-td-name">{c.customer_name}</td>
                         <td>{c.region_name_ar || '—'}</td>
-                        <td className="rd-td-num">{fmtInt(c.invoice_count)}</td>
                         <td className="rd-td-num rd-td-balance">{fmt(c.total_balance)}</td>
                         <td className="rd-td-age"><AgeBadge days={c.oldest_age_days} /></td>
                         <td className="rd-td-age"><AgeBadge days={c.newest_age_days} /></td>
@@ -535,7 +541,19 @@ export default function RepDebtPage() {
                               updatedAt={notes[c.customer_id]?.note_updated_at}
                               updatedBy={notes[c.customer_id]?.note_updated_by}
                               canEdit={canEditNotes}
-                              onOpen={() => setNoteCustomer({ customer_id: c.customer_id, customer_name: c.customer_name, note: notes[c.customer_id]?.note || '' })}
+                              onOpen={() => setNoteCustomer({ kind: 'debt', customer_id: c.customer_id, customer_name: c.customer_name, note: notes[c.customer_id]?.note || '' })}
+                            />
+                          )}
+                        </td>
+                        <td className="rd-td-note">
+                          {c.customer_id && (
+                            <DebtNoteCell
+                              note={ownerNotes[c.customer_id]?.note}
+                              updatedAt={ownerNotes[c.customer_id]?.note_updated_at}
+                              updatedBy={ownerNotes[c.customer_id]?.note_updated_by}
+                              canEdit={canEditNotes}
+                              addLabel="بيانات"
+                              onOpen={() => setNoteCustomer({ kind: 'owner', customer_id: c.customer_id, customer_name: c.customer_name, note: ownerNotes[c.customer_id]?.note || '' })}
                             />
                           )}
                         </td>
@@ -547,9 +565,8 @@ export default function RepDebtPage() {
                   <tfoot>
                     <tr>
                       <td colSpan={3} className="rd-tf-lbl">الإجمالي ({customerRows.length} عميل)</td>
-                      {/* Sum of the rows' counts so the column foots (each row counts all of the customer's invoices) */}
-                      <td className="rd-td-num">{fmtInt(customerRows.reduce((s, c) => s + Number(c.invoice_count || 0), 0))}</td>
                       <td className="rd-td-num rd-td-balance">{fmt(custSummary.total_balance)}</td>
+                      <td />
                       <td />
                       <td />
                       <td />
@@ -590,17 +607,19 @@ export default function RepDebtPage() {
       {noteCustomer && (
         <DebtNoteModal
           customer={noteCustomer}
+          kind={noteCustomer.kind}
           canEdit={canEditNotes}
           isAdmin={!!user && ['super_admin', 'it_admin'].includes(user.role)}
           onClose={() => setNoteCustomer(null)}
           onSaved={res => {
-            queryClient.setQueryData(['debt-notes', noteIds], old => {
+            const isOwner = noteCustomer.kind === 'owner';
+            queryClient.setQueryData([isOwner ? 'debt-owner-notes' : 'debt-notes', noteIds], old => {
               const next = { ...(old || {}) };
               if (res.note) next[res.customer_id] = { note: res.note, note_updated_at: res.note_updated_at, note_updated_by: res.note_updated_by };
               else delete next[res.customer_id];
               return next;
             });
-            queryClient.invalidateQueries({ queryKey: ['aging-by-period'] });   // same notes on that page
+            if (!isOwner) queryClient.invalidateQueries({ queryKey: ['aging-by-period'] });   // same notes on that page
             setNoteCustomer(cur => cur && ({ ...cur, note: res.note || '' }));
           }}
         />

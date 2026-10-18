@@ -6,20 +6,27 @@ import api from '../api/client';
 import '../pages/AgingPage.css';
 import './DebtNotes.css';
 
-/* Debt note editor + full history for one customer (debt-by-period page).
-   Saving writes the current note and appends a history row server-side. */
+/* Debt note editor + full history for one customer (debt-by-period / rep-debt pages).
+   Saving writes the current note and appends a history row server-side.
+   kind: 'debt' (ملاحظات المديونية) or 'owner' (العميل صاحب الدين الفعلي) — separate notes + histories. */
+const KIND_TEXT = {
+  debt:  { title: 'ملاحظات المديونية', placeholder: 'اكتب ملاحظة عن المديونية (موعد سداد، تواصل، إجراء…)', empty: 'لا توجد ملاحظة' },
+  owner: { title: 'العميل صاحب الدين الفعلي', placeholder: 'بيانات العميل الفعلي صاحب المديونية (الاسم، الجوال، السجل التجاري، العنوان…)', empty: 'لا توجد بيانات' },
+};
 const fmtStamp = iso => iso
   ? new Date(iso).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
   : '—';
 
-export default function DebtNoteModal({ customer, canEdit, isAdmin, onClose, onSaved }) {
+export default function DebtNoteModal({ customer, kind = 'debt', canEdit, isAdmin, onClose, onSaved }) {
+  const txt = KIND_TEXT[kind] || KIND_TEXT.debt;
+  const kindParams = kind === 'owner' ? { params: { kind } } : undefined;
   const [text, setText] = useState(customer.note || '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
 
   const { data, isLoading, refetch } = useQuery({
-    queryKey: ['debt-note-history', customer.customer_id],
-    queryFn: () => api.get(`/aging/debt-notes/${encodeURIComponent(customer.customer_id)}/history`).then(r => r.data.history),
+    queryKey: ['debt-note-history', kind, customer.customer_id],
+    queryFn: () => api.get(`/aging/debt-notes/${encodeURIComponent(customer.customer_id)}/history`, kindParams).then(r => r.data.history),
   });
 
   useEffect(() => {
@@ -35,7 +42,7 @@ export default function DebtNoteModal({ customer, canEdit, isAdmin, onClose, onS
     if (!window.confirm(`حذف هذا السجل نهائياً؟\n\n«${h.note_text || '(تم مسح الملاحظة)'}»\n— ${h.saved_by_name || '—'} · ${fmtStamp(h.saved_at)}`)) return;
     setDeletingId(h.id); setError(null);
     try {
-      const { data: res } = await api.delete(`/aging/debt-notes/history/${h.id}`);
+      const { data: res } = await api.delete(`/aging/debt-notes/history/${h.id}`, kindParams);
       onSaved(res);
       setText(res.note || '');
       refetch();
@@ -48,7 +55,7 @@ export default function DebtNoteModal({ customer, canEdit, isAdmin, onClose, onS
   const save = async () => {
     setSaving(true); setError(null);
     try {
-      const { data: res } = await api.put(`/aging/debt-notes/${encodeURIComponent(customer.customer_id)}`, { note: text });
+      const { data: res } = await api.put(`/aging/debt-notes/${encodeURIComponent(customer.customer_id)}`, { note: text }, kindParams);
       onSaved(res);
       refetch();
     } catch (e) {
@@ -62,7 +69,7 @@ export default function DebtNoteModal({ customer, canEdit, isAdmin, onClose, onS
         <div className="age-modal-header">
           <MessageSquareText size={18} color="#b45309" />
           <div className="age-modal-customer">
-            <div className="age-modal-customer-name">ملاحظات المديونية — {customer.customer_name}</div>
+            <div className="age-modal-customer-name">{txt.title} — {customer.customer_name}</div>
             <div className="abp-note-sub">رقم العميل {customer.customer_id}</div>
           </div>
           <button className="age-modal-close" onClick={onClose}><X size={18} /></button>
@@ -74,7 +81,7 @@ export default function DebtNoteModal({ customer, canEdit, isAdmin, onClose, onS
                 className="abp-note-textarea"
                 value={text}
                 onChange={e => setText(e.target.value)}
-                placeholder="اكتب ملاحظة عن المديونية (موعد سداد، تواصل، إجراء…)"
+                placeholder={txt.placeholder}
                 maxLength={2000}
                 rows={4}
                 autoFocus
@@ -88,7 +95,7 @@ export default function DebtNoteModal({ customer, canEdit, isAdmin, onClose, onS
               </div>
             </>
           ) : (
-            <div className="abp-note-readonly">{customer.note || 'لا توجد ملاحظة'}</div>
+            <div className="abp-note-readonly">{customer.note || txt.empty}</div>
           )}
 
           <div className="abp-note-history-title">سجل الملاحظات</div>

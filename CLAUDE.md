@@ -3266,6 +3266,18 @@ are built from the data, not hardcoded, so 2027 rolls over by itself.
   exactly 28 px; fits 1366 and 1600 widths without horizontal scroll (measured in Playwright).
   Also fixed a stray "0" under the filters introduced with the year filter (`isDirty` evaluated to
   the number 0 and React rendered it) — `isDirty` is now a Boolean.
+- **Balance match status "حالة المطابقة" (18 Oct 2026)**: manual per-customer flag مطابق / غير مطابق
+  (the existing `customer_reconciliations` only stores uploaded files, no status). Tables
+  `customer_match_status` (customer_id PK, status 'matched'|'unmatched', updated_at/by/by_name; no row
+  = لم تُحدد) and `customer_match_status_log` (old → new, changed_by_name, changed_at) — created
+  lazily by `ensureMatchStatusTables()` in `routes/aging.js`. `PUT /api/aging/match-status/:customerId`
+  `{ status: 'matched'|'unmatched'|null }` (level 2 on aging_by_period; unchanged → not logged).
+  `GET /by-period` adds `match_status`, `match_updated_at`, `match_updated_by`. UI: column before
+  "مديونية معدومة" with two pills (green ✓ مطابق / red ✗ غير مطابق; clicking the active one clears;
+  who/when in the tooltip; read-only users see only the active pill), sortable; filter
+  "حالة المطابقة" (الكل / مطابق / غير مطابق / لم تُحدد) that also feeds print header; Excel column.
+  Verified on Postgres (set / switch / clear / unchanged / invalid 400 / viewer 403 / log rows) and
+  in Playwright (clicks, filter, read-only, still fits 1600px with 28px rows).
 - **Rep column in the invoice-detail modal (16 Oct 2026)**: `GET /api/aging/invoices/:customerId`
   returns `sales_rep_name` (blank → NULL → "—"); `AgingInvoiceModal` shows "المندوب" after the
   invoice date (footer colSpan 3 → 4). Shared modal, so the aging page gets it too. Modal widened

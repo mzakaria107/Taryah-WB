@@ -246,3 +246,25 @@
 }
 .abp-note-del:hover { border-color: #fca5a5; background: #fef2f2; }
 .abp-note-del:disabled { opacity: 0.5; cursor: wait; }
+
+/* ── Balance match status column ───────────────────────────────── */
+.abp-table td.abp-td--match { white-space: nowrap; }
+.abp-match { display: inline-flex; gap: 3px; align-items: center; }
+.abp-match-btn {
+  border: 1px solid var(--color-border, #cbd5e1); background: var(--color-surface, #fff);
+  color: var(--color-text-muted, #64748b); border-radius: 999px; padding: 1px 6px;
+  font-family: inherit; font-size: 0.62rem; font-weight: 600; cursor: pointer; white-space: nowrap;
+}
+.abp-match-btn--matched:hover:not(:disabled)   { border-color: #16a34a; color: #15803d; }
+.abp-match-btn--unmatched:hover:not(:disabled) { border-color: #dc2626; color: #b91c1c; }
+.abp-match-btn--matched.abp-match-btn--on   { background: #16a34a; border-color: #16a34a; color: #fff; }
+.abp-match-btn--unmatched.abp-match-btn--on { background: #dc2626; border-color: #dc2626; color: #fff; }
+.abp-match-btn:disabled { cursor: default; opacity: 1; }
+.abp-match-none { color: var(--color-text-muted); }
+@media print {
+  .abp-match-btn:not(.abp-match-btn--on) { display: none; }
+  .abp-match-btn--on { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+}
+.abp-match-btn--on, .abp-match-btn--on:hover:not(:disabled) { color: #fff; }
+.abp-match-btn--matched.abp-match-btn--on:hover:not(:disabled)   { background: #15803d; border-color: #15803d; }
+.abp-match-btn--unmatched.abp-match-btn--on:hover:not(:disabled) { background: #b91c1c; border-color: #b91c1c; }

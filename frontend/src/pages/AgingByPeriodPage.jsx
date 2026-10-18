@@ -51,6 +51,10 @@ export default function AgingByPeriodPage() {
   const queryClient = useQueryClient();
   const [badDebtFilter,    setBadDebtFilter]    = useState('');
   const [selectedYears,    setSelectedYears]    = useState([]);
+  const [viewMode, setViewModeState] = useState(() => {
+    try { return localStorage.getItem('abp-view-mode') === 'yearly' ? 'yearly' : 'monthly'; } catch { return 'monthly'; }
+  });
+  const setViewMode = m => { setViewModeState(m); try { localStorage.setItem('abp-view-mode', m); } catch { /* ignore */ } };
   const [noteCustomer,     setNoteCustomer]     = useState(null);
   const [matchFilter,      setMatchFilter]      = useState(''); // '' | matched | unmatched (reconciliation file uploaded?)
   const [regionId,         setRegionId]         = useState('');
@@ -118,22 +122,50 @@ export default function AgingByPeriodPage() {
     }
     return [...ys].sort((a, b) => a - b);
   }, [data, curYear]);
-  const periods = useMemo(() => {
+  const filteredPeriods = useMemo(() => {
     const all = data?.periods || [];
     if (!selectedYears.length) return all;
     return all.filter(p => (p.kind === 'year' && selectedYears.includes(Number(p.key.slice(1))))
                         || (p.kind === 'month' && selectedYears.includes(curYear)));
   }, [data, selectedYears, curYear]);
-  const customers = useMemo(() => {
+  const filteredCustomers = useMemo(() => {
     const all = data?.customers || [];
     if (!selectedYears.length) return all;
-    const keys = periods.map(p => p.key);
+    const keys = filteredPeriods.map(p => p.key);
     return all.map(c => {
       const by_period = Object.fromEntries(keys.filter(k => c.by_period[k] != null).map(k => [k, c.by_period[k]]));
       const total = Math.round(Object.values(by_period).reduce((s, v) => s + Number(v || 0), 0) * 100) / 100;
       return { ...c, by_period, total };
     }).filter(c => c.total !== 0);
-  }, [data, periods, selectedYears]);
+  }, [data, filteredPeriods, selectedYears]);
+
+  /* Tabs: "تفصيل شهري" (current year split by month) vs "إجمالي السنة" (the current year's months
+     merged into ONE column, key 'cur', kind 'curyear'). Same query, same customer objects — so
+     notes, bad-debt flags and reconciliation are shared by both tabs automatically. */
+  const periods = useMemo(() => {
+    if (viewMode !== 'yearly') return filteredPeriods;
+    const out = [];
+    let added = false;
+    for (const p of filteredPeriods) {
+      if (p.kind === 'month') {
+        if (!added) { out.push({ key: 'cur', label: `دين ${curYear}`, kind: 'curyear' }); added = true; }
+      } else out.push(p);
+    }
+    return out;
+  }, [filteredPeriods, viewMode, curYear]);
+  const customers = useMemo(() => {
+    if (viewMode !== 'yearly') return filteredCustomers;
+    const monthKeys = filteredPeriods.filter(p => p.kind === 'month').map(p => p.key);
+    return filteredCustomers.map(c => {
+      const by_period = {};
+      let cur = 0, hasCur = false;
+      for (const [k, v] of Object.entries(c.by_period)) {
+        if (monthKeys.includes(k)) { cur += Number(v || 0); hasCur = true; } else by_period[k] = v;
+      }
+      if (hasCur) by_period.cur = Math.round(cur * 100) / 100;
+      return { ...c, by_period };
+    });
+  }, [filteredCustomers, filteredPeriods, viewMode]);
   const yearCols  = periods.filter(p => p.kind === 'year');
   const toggleYear = y => setSelectedYears(cur => cur.includes(y) ? cur.filter(x => x !== y) : [...cur, y].sort((a, b) => a - b));
   const rows = useMemo(() => {
@@ -173,7 +205,7 @@ export default function AgingByPeriodPage() {
     const all = customers;
     const sum = (list, key) => list.reduce((s, c) => s + Number((key ? c.by_period[key] : c.total) || 0), 0);
     const flagged = all.filter(c => c.bad_debt);
-    const yearOf = p => (p.kind === 'year' ? p.key : p.kind === 'month' ? `y${curYear}` : null);
+    const yearOf = p => (p.kind === 'year' ? p.key : (p.kind === 'month' || p.kind === 'curyear') ? `y${curYear}` : null);
     const groups = new Map();   // yKey -> period keys
     for (const p of periods) {
       const y = yearOf(p);
@@ -196,7 +228,7 @@ export default function AgingByPeriodPage() {
   }, [customers, periods, curYear]);
 
   const curYearTotal = periods
-    .filter(p => p.kind === 'month')
+    .filter(p => p.kind === 'month' || p.kind === 'curyear')
     .reduce((s, p) => s + Number(totals[p.key] || 0), 0);
 
   const onSort = col => {
@@ -205,6 +237,7 @@ export default function AgingByPeriodPage() {
   };
 
   const exclusionNote = [
+    viewMode === 'yearly' && `عرض إجمالي ${curYear} بدون تقسيم شهور`,
     selectedYears.length && `السنوات: ${selectedYears.join('، ')}`,
     excludeDirect && 'مديونية المندوب مستبعدة',
     excludeCarrefour && 'مديونية كارفور مستبعدة',
@@ -405,6 +438,17 @@ export default function AgingByPeriodPage() {
         </button>
         <button className="age-print-btn" onClick={handlePrint}>
           <Printer size={16} /> طباعة / PDF
+        </button>
+      </div>
+
+      <div className="abp-tabs age-no-print" role="tablist">
+        <button type="button" role="tab" aria-selected={viewMode === 'monthly'}
+          className={`abp-tab${viewMode === 'monthly' ? ' abp-tab--on' : ''}`} onClick={() => setViewMode('monthly')}>
+          تفصيل شهري {curYear || ''}
+        </button>
+        <button type="button" role="tab" aria-selected={viewMode === 'yearly'}
+          className={`abp-tab${viewMode === 'yearly' ? ' abp-tab--on' : ''}`} onClick={() => setViewMode('yearly')}>
+          إجمالي السنة {curYear || ''}
         </button>
       </div>
 

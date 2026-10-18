@@ -3266,6 +3266,16 @@ are built from the data, not hardcoded, so 2027 rolls over by itself.
   exactly 28 px; fits 1366 and 1600 widths without horizontal scroll (measured in Playwright).
   Also fixed a stray "0" under the filters introduced with the year filter (`isDirty` evaluated to
   the number 0 and React rendered it) — `isDirty` is now a Boolean.
+- **Tabs "تفصيل شهري" / "إجمالي السنة" (18 Oct 2026)**: same page, same query. The yearly tab merges
+  the current year's month columns (after the year filter) into one column `{ key: 'cur', kind:
+  'curyear', label: 'دين <year>' }` and sums each customer's month amounts into `by_period.cur`;
+  prior-year columns, totals, KPIs, bad-debt cards, Excel and print all follow (`periods`/`customers`
+  are the post-collapse arrays; `filteredPeriods`/`filteredCustomers` are the year-filtered ones).
+  Because both tabs render the same customer objects from the same React Query cache, notes /
+  bad-debt / reconciliation edited in either tab show in the other immediately (single
+  `debt_notes` table). Selected tab remembered in localStorage (`abp-view-mode`); print header notes
+  the yearly view. Browser-verified: sums, unchanged grand total, note saved in yearly visible in
+  monthly, works with the year filter.
 - **Reconciliation column "المطابقة" (18 Oct 2026)**: read-only, derived from the reconciliation
   files uploaded on the customer page (`customer_reconciliations`) — exactly the customer page's rule:
   ≥ 1 file → "مطابق" (green dot + "N ملف"), none → "غير مطابق" (red dot). `GET /by-period` returns

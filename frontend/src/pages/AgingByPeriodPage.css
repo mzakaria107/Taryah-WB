@@ -262,3 +262,19 @@
 @media print {
   .abp-recon-dot, .abp-recon-count { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
 }
+
+/* ── View tabs: monthly detail vs current-year total ───────────── */
+.abp-tabs { display: flex; gap: 4px; margin: 0 0 12px; border-bottom: 2px solid var(--color-border, #e2e8f0); }
+.abp-tab {
+  background: none; border: none; border-bottom: 3px solid transparent; margin-bottom: -2px;
+  padding: 8px 18px; font-family: inherit; font-size: 0.9rem; font-weight: 700;
+  color: var(--color-text-muted, #64748b); cursor: pointer;
+}
+.abp-tab:hover { color: var(--color-text, #1f2937); }
+.abp-tab--on { color: #b91c1c; border-bottom-color: #b91c1c; }
+/* the merged current-year column */
+.abp-table th.abp-th--curyear,
+.abp-table td.abp-td--curyear { background: #fff7ed; color: #9a3412; font-weight: 700; }
+@media print {
+  .abp-table th.abp-th--curyear, .abp-table td.abp-td--curyear { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+}

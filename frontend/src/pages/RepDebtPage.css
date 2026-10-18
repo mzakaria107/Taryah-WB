@@ -326,3 +326,16 @@
 .rd-td-note .abp-note-cell-text { font-size: 0.8rem; }
 .rd-td-note .abp-note-cell-meta { font-size: 0.64rem; }
 .rd-td-note .abp-note-cell--empty { font-size: 0.74rem; }
+
+/* Customer code + debt-age columns (customers tab) */
+.rd-td-code { font-variant-numeric: tabular-nums; color: var(--color-text-muted, #64748b); white-space: nowrap; }
+.rd-td-age { text-align: center; white-space: nowrap; }
+.rd-age { display: inline-block; border-radius: 20px; padding: 2px 10px; font-size: 0.78rem; font-weight: 700; direction: ltr; }
+.rd-age--b1 { background: #dcfce7; color: #15803d; }
+.rd-age--b2 { background: #ecfccb; color: #4d7c0f; }
+.rd-age--b3 { background: #fef9c3; color: #854d0e; }
+.rd-age--b4 { background: #ffedd5; color: #c2410c; }
+.rd-age--b5 { background: #fee2e2; color: #dc2626; }
+.rd-age--b6 { background: #450a0a; color: #fca5a5; }
+.rd-age--none { color: var(--color-text-muted, #94a3b8); }
+@media print { .rd-age { print-color-adjust: exact; -webkit-print-color-adjust: exact; } }

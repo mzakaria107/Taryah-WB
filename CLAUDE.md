@@ -3266,6 +3266,15 @@ are built from the data, not hardcoded, so 2027 rolls over by itself.
   exactly 28 px; fits 1366 and 1600 widths without horizontal scroll (measured in Playwright).
   Also fixed a stray "0" under the filters introduced with the year filter (`isDirty` evaluated to
   the number 0 and React rendered it) — `isDirty` is now a Boolean.
+- **Rep-debt customers table columns (18 Oct 2026)**: كود العميل (first) · العميل · المنطقة · عدد الفواتير ·
+  صافي المديونية · عمر أقدم مديونية · عمر أقرب مديونية · ملاحظات — "المبلغ الأصلي" and "المدفوع" removed.
+  `GET /api/invoices/rep/:repName` → `customers_net[]` adds `oldest_age_days` / `newest_age_days` =
+  MAX / MIN of `CURRENT_DATE - invoice_date` over the customer's invoices with `balance > 0` (no date
+  → 121, aging-page rule); NULL when nothing is owed (credit-only customer → "—"). Colour bands as on
+  the aging pages. Footer invoice count is now the SUM of the visible rows' counts (it was the
+  open-invoice count, so the column didn't foot); Excel likewise (it was string-concatenating counts).
+  Verified on Postgres (45/12 days with a paid 300-day invoice ignored, credit-only → null) and in
+  Playwright (order, sort, footer, Excel).
 - **Debt notes shared with the rep-debt page (18 Oct 2026)**: `RepDebtPage` ("صافي مديونية العملاء"
   tab) has a "ملاحظات" column backed by the SAME `debt_notes` / `debt_notes_history` — a note saved on
   either page shows on both, with one shared history. New `GET /api/aging/debt-notes?ids=a,b,c`

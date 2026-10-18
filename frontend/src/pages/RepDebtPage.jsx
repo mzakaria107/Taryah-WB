@@ -52,13 +52,21 @@ function sortValue(row, col) {
 }
 
 const CUST_COLUMNS = [
-  { key: 'customer_name',  label: 'العميل',           type: 'string' },
-  { key: 'region_name_ar', label: 'المنطقة',          type: 'string' },
-  { key: 'invoice_count',  label: 'عدد الفواتير',      type: 'number' },
-  { key: 'total_amount',   label: 'المبلغ الأصلي',     type: 'number' },
-  { key: 'total_paid',     label: 'المدفوع',           type: 'number' },
-  { key: 'total_balance',  label: 'صافي المديونية',    type: 'number' },
+  { key: 'customer_id',     label: 'كود العميل',         type: 'string' },
+  { key: 'customer_name',   label: 'العميل',             type: 'string' },
+  { key: 'region_name_ar',  label: 'المنطقة',            type: 'string' },
+  { key: 'invoice_count',   label: 'عدد الفواتير',        type: 'number' },
+  { key: 'total_balance',   label: 'صافي المديونية',      type: 'number' },
+  { key: 'oldest_age_days', label: 'عمر أقدم مديونية',    type: 'number' },
+  { key: 'newest_age_days', label: 'عمر أقرب مديونية',    type: 'number' },
 ];
+
+// Same colour bands as the aging pages (≤15 / ≤30 / ≤60 / ≤90 / ≤120 / >120 days).
+function AgeBadge({ days }) {
+  if (days == null) return <span className="rd-age rd-age--none">—</span>;
+  const b = days <= 15 ? 1 : days <= 30 ? 2 : days <= 60 ? 3 : days <= 90 ? 4 : days <= 120 ? 5 : 6;
+  return <span className={`rd-age rd-age--b${b}`}>{days} يوم</span>;
+}
 
 /* ═══════════════════════════════════════════════════
    MAIN PAGE
@@ -245,22 +253,22 @@ export default function RepDebtPage() {
     let header, rows, sheetName, fileTag;
 
     if (activeTab === 'customers') {
-      header = ['العميل', 'المنطقة', 'عدد الفواتير', 'المبلغ الأصلي', 'المدفوع', 'صافي المديونية', 'ملاحظات'];
+      header = ['كود العميل', 'العميل', 'المنطقة', 'عدد الفواتير', 'صافي المديونية', 'عمر أقدم مديونية (يوم)', 'عمر أقرب مديونية (يوم)', 'ملاحظات'];
       rows = sortedCustomers.map(c => [
+        c.customer_id || '',
         c.customer_name,
         c.region_name_ar || '—',
-        c.invoice_count,
-        Number(c.total_amount || 0),
-        Number(c.total_paid || 0),
+        Number(c.invoice_count || 0),
         Number(c.total_balance || 0),
+        c.oldest_age_days ?? '',
+        c.newest_age_days ?? '',
         notes[c.customer_id]?.note || '',
       ]);
       rows.push([
-        `الإجمالي (${sortedCustomers.length} عميل)`, '', sortedCustomers.reduce((s, c) => s + c.invoice_count, 0),
-        Number(custSummary.total_amount || 0),
-        Number(custSummary.total_paid || 0),
+        `الإجمالي (${sortedCustomers.length} عميل)`, '', '',
+        sortedCustomers.reduce((s, c) => s + Number(c.invoice_count || 0), 0),   // counts arrive as strings from pg
         Number(custSummary.total_balance || 0),
-        '',
+        '', '', '',
       ]);
       sheetName = 'صافي مديونية العملاء';
       fileTag = 'صافي_مديونية_العملاء';
@@ -509,16 +517,17 @@ export default function RepDebtPage() {
                 </thead>
                 <tbody>
                   {sortedCustomers.length === 0 ? (
-                    <tr><td colSpan={7} className="rd-empty">لا توجد فواتير غير مسددة لهذا المندوب</td></tr>
+                    <tr><td colSpan={8} className="rd-empty">لا توجد فواتير غير مسددة لهذا المندوب</td></tr>
                   ) : (
                     sortedCustomers.map(c => (
                       <tr key={c.customer_id || c.customer_name}>
+                        <td className="rd-td-code">{c.customer_id || '—'}</td>
                         <td className="rd-td-name">{c.customer_name}</td>
                         <td>{c.region_name_ar || '—'}</td>
                         <td className="rd-td-num">{fmtInt(c.invoice_count)}</td>
-                        <td className="rd-td-num">{fmt(c.total_amount)}</td>
-                        <td className="rd-td-num">{fmt(c.total_paid)}</td>
                         <td className="rd-td-num rd-td-balance">{fmt(c.total_balance)}</td>
+                        <td className="rd-td-age"><AgeBadge days={c.oldest_age_days} /></td>
+                        <td className="rd-td-age"><AgeBadge days={c.newest_age_days} /></td>
                         <td className="rd-td-note">
                           {c.customer_id && (
                             <DebtNoteCell
@@ -537,11 +546,12 @@ export default function RepDebtPage() {
                 {customerRows.length > 0 && (
                   <tfoot>
                     <tr>
-                      <td colSpan={2} className="rd-tf-lbl">الإجمالي ({customerRows.length} عميل)</td>
-                      <td className="rd-td-num">{fmtInt(invoices.length)}</td>
-                      <td className="rd-td-num">{fmt(custSummary.total_amount)}</td>
-                      <td className="rd-td-num">{fmt(custSummary.total_paid)}</td>
+                      <td colSpan={3} className="rd-tf-lbl">الإجمالي ({customerRows.length} عميل)</td>
+                      {/* Sum of the rows' counts so the column foots (each row counts all of the customer's invoices) */}
+                      <td className="rd-td-num">{fmtInt(customerRows.reduce((s, c) => s + Number(c.invoice_count || 0), 0))}</td>
                       <td className="rd-td-num rd-td-balance">{fmt(custSummary.total_balance)}</td>
+                      <td />
+                      <td />
                       <td />
                     </tr>
                   </tfoot>

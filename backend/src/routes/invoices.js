@@ -778,7 +778,11 @@ router.get('/rep/:repName', verifyToken, applyRegionFilter, async (req, res) => 
                 COUNT(*)                          AS invoice_count,
                 COALESCE(SUM(i.original_amount),0) AS total_amount,
                 COALESCE(SUM(i.paid_amount),0)     AS total_paid,
-                COALESCE(SUM(i.balance),0)         AS total_balance
+                COALESCE(SUM(i.balance),0)         AS total_balance,
+                -- Age (days) of the oldest / newest invoice still carrying debt (balance > 0);
+                -- an invoice with no date counts as 121 days, same rule as the aging pages.
+                MAX(COALESCE(CURRENT_DATE - i.invoice_date, 121)) FILTER (WHERE i.balance > 0)::int AS oldest_age_days,
+                MIN(COALESCE(CURRENT_DATE - i.invoice_date, 121)) FILTER (WHERE i.balance > 0)::int AS newest_age_days
          FROM invoices i
          LEFT JOIN regions r ON r.id = i.region_id
          ${netWhere}
@@ -817,6 +821,8 @@ router.get('/rep/:repName', verifyToken, applyRegionFilter, async (req, res) => 
         total_amount:    Number(r.total_amount),
         total_paid:      Number(r.total_paid),
         total_balance:   Number(r.total_balance),
+        oldest_age_days: r.oldest_age_days ?? null,
+        newest_age_days: r.newest_age_days ?? null,
       })),
     });
   } catch (err) {

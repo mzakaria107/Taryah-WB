@@ -3275,6 +3275,8 @@ are built from the data, not hardcoded, so 2027 rolls over by itself.
   open-invoice count, so the column didn't foot); Excel likewise (it was string-concatenating counts).
   Verified on Postgres (45/12 days with a paid 300-day invoice ignored, credit-only → null) and in
   Playwright (order, sort, footer, Excel).
+  Notes column widened (18 Oct 2026): `.rd-th--note`/`.rd-td-note` 274px (border-box, so the note text
+  gets 250px; was 220) — measured 208 → 248px with the table still fitting 1366/1500px screens.
 - **Debt notes shared with the rep-debt page (18 Oct 2026)**: `RepDebtPage` ("صافي مديونية العملاء"
   tab) has a "ملاحظات" column backed by the SAME `debt_notes` / `debt_notes_history` — a note saved on
   either page shows on both, with one shared history. New `GET /api/aging/debt-notes?ids=a,b,c`

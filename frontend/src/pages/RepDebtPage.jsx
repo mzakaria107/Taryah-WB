@@ -29,6 +29,7 @@ const fmtNoteStamp = iso => iso
    packed greedily into the printable height (210mm − 2.4cm ≈ 703px). */
 const PRINT_PAGE_H = 703 - 24;        // printable height minus a safety margin
 const PRINT_FIRST_PAGE_RESERVE = 210; // print header + KPI cards above the table on page 1
+const PRINT_FOOTER_H = 300;           // balance note + approval boxes + "ملاحظات أخرى" after the last table
 function measurePrintPages(container) {
   if (!container) return null;
   const rows = [...container.querySelectorAll('tr[data-prow]')].map(tr => tr.getBoundingClientRect().height);
@@ -43,6 +44,17 @@ function measurePrintPages(container) {
     used += h; count += 1;
   }
   sizes.push(count);
+  // Keep the signature block with data: if it doesn't fit under the last page's rows, move rows
+  // from the end of that page onto a new final page that has room for them plus the footer.
+  const lastUsed = rows.slice(rows.length - count).reduce((a, h) => a + h, 0);
+  if (lastUsed + PRINT_FOOTER_H > avail(page) && count > 1) {
+    let moved = 0, movedH = 0;
+    for (let i = rows.length - 1; moved < count - 1; i--) {
+      if (movedH + rows[i] + PRINT_FOOTER_H > avail(page + 1)) break;
+      movedH += rows[i]; moved += 1;
+    }
+    if (moved > 0) { sizes[sizes.length - 1] = count - moved; sizes.push(moved); }
+  }
   return sizes;
 }
 
@@ -225,6 +237,8 @@ export default function RepDebtPage() {
   const ownerNotes = ownerNotesData || {};
 
   const printPagesRef = useRef(null);
+  // index.css sets `html { zoom: 0.9 }`, so 1046 CSS px would print ~10% narrower than the paper.
+  const printInnerWidth = useMemo(() => 1046 / (parseFloat(getComputedStyle(document.documentElement).zoom) || 1), []);
   const [printPageSizes, setPrintPageSizes] = useState(null);
 
   const sortedCustomers = useMemo(() => {
@@ -633,7 +647,7 @@ export default function RepDebtPage() {
 
             {/* ── Print-only: same rows split into A4 pages, each with its own total ── */}
             <div className="rd-print-pages" aria-hidden="true">
-              <div className="rd-print-pages-inner" ref={printPagesRef}>
+              <div className="rd-print-pages-inner" ref={printPagesRef} style={{ width: printInnerWidth }}>
                 {printChunks.map((chunk, pi) => {
                   const last = pi === printChunks.length - 1;
                   const pageTotal = chunk.reduce((s, c) => s + Number(c.total_balance || 0), 0);
@@ -707,19 +721,28 @@ export default function RepDebtPage() {
             <p className="rd-print-meta">
               تمت الطباعة بواسطة: <strong>{user?.name || '—'}</strong> — تاريخ الطباعة: <strong>{printDate}</strong>
             </p>
+            {/* Approvals: sales (rep → supervisor → region manager) and accounts (accounts → CFO) */}
             <div className="rd-print-signatures">
-              <div className="rd-print-signature">
-                <span className="rd-print-signature-label">الاعتماد من المندوب</span>
-                <div className="rd-print-signature-box"></div>
-              </div>
-              <div className="rd-print-signature">
-                <span className="rd-print-signature-label">التوقيع بالاعتماد من الحسابات</span>
-                <div className="rd-print-signature-box"></div>
-              </div>
-              <div className="rd-print-signature">
-                <span className="rd-print-signature-label">الاعتماد من المدير المالي</span>
-                <div className="rd-print-signature-box"></div>
-              </div>
+              {[
+                ['اعتماد المبيعات', ['المندوب', 'المشرف - المدير المباشر', 'مدير المنطقة'], 3],
+                ['اعتماد الحسابات', ['الحسابات', 'المدير المالي'], 2],
+              ].map(([title, roles, grow]) => (
+                <div key={title} className="rd-print-sig-group" style={{ flexGrow: grow }}>
+                  <div className="rd-print-sig-group-title">{title}</div>
+                  <div className="rd-print-sig-row">
+                    {roles.map(r => (
+                      <div key={r} className="rd-print-signature">
+                        <span className="rd-print-signature-label">{r}</span>
+                        <div className="rd-print-signature-box"></div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="rd-print-other-notes">
+              <span className="rd-print-signature-label">ملاحظات أخرى</span>
+              <div className="rd-print-other-notes-box"></div>
             </div>
           </div>
         </>

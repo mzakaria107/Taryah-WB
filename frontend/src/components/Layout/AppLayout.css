@@ -685,6 +685,7 @@
     padding-right: 0 !important;
     padding-left:  0 !important;
     min-height:    unset !important;
+    transition:    none !important;   /* the 250ms padding animation must not run in the print layout */
   }
 
   .app-main {

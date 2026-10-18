@@ -3305,6 +3305,16 @@ are built from the data, not hardcoded, so 2027 rolls over by itself.
   `page.pdf()` on 114 customers with mixed note lengths: 7 chunks = 7 PDF pages, every page total
   equals its rows' sum, Σ pages = grand total, screen layout unchanged. The invoices tab still prints
   with one repeating grand-total footer.
+  **Approvals block (18 Oct 2026)**: «اعتماد المبيعات» (المندوب · المشرف - المدير المباشر · مدير
+  المنطقة) and «اعتماد الحسابات» (الحسابات · المدير المالي) as two framed groups side by side, then a
+  full-width «ملاحظات أخرى» box. It is ~300px tall (`PRINT_FOOTER_H`), so when it doesn't fit under
+  the last page's rows, `measurePrintPages` moves rows onto a final page with room for them plus the
+  block — the signatures never print on a page without data.
+  **`html { zoom: 0.9 }` (index.css) applies in print too**: a 1046px-wide element prints at 941
+  physical px. The print table width is therefore set inline as 1046 ÷ the html zoom. Heights from
+  getBoundingClientRect are already zoomed, so they compare directly with the 703px page budget.
+  AppLayout's print rule also sets `transition: none` on `.app-shell` (its 250ms padding animation
+  would otherwise run in the print layout).
 - **Debt notes shared with the rep-debt page (18 Oct 2026)**: `RepDebtPage` ("صافي مديونية العملاء"
   tab) has a "ملاحظات" column backed by the SAME `debt_notes` / `debt_notes_history` — a note saved on
   either page shows on both, with one shared history. New `GET /api/aging/debt-notes?ids=a,b,c`

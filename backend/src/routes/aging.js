@@ -283,7 +283,7 @@ router.get('/by-period', verifyToken, applyRegionFilter, requirePagePermission('
     const { conditions, params } = buildAgingFilters(req);
     const where = conditions.join(' AND ');
 
-    const [{ rows: [now] }, { rows }, { rows: regions }, { rows: custInfo }, { rows: badDebt }, { rows: debtNotes }, { rows: matchRows }] = await Promise.all([
+    const [{ rows: [now] }, { rows }, { rows: regions }, { rows: custInfo }, { rows: badDebt }, { rows: debtNotes }, { rows: reconRows }] = await Promise.all([
       pool.query(`SELECT EXTRACT(YEAR FROM CURRENT_DATE)::int AS y, EXTRACT(MONTH FROM CURRENT_DATE)::int AS m`),
       pool.query(`
         SELECT
@@ -328,11 +328,12 @@ router.get('/by-period', verifyToken, applyRegionFilter, requirePagePermission('
       ensureDebtNotesTables()
         .then(() => pool.query(`SELECT customer_id, note_text, updated_at, updated_by_name FROM debt_notes WHERE note_text <> ''`))
         .catch(err => { console.error('[Aging/by-period] debt_notes:', err.message); return { rows: [] }; }),
-      ensureMatchStatusTables()
-        .then(() => pool.query(`SELECT customer_id, status, updated_at, updated_by_name FROM customer_match_status`))
-        .catch(err => { console.error('[Aging/by-period] customer_match_status:', err.message); return { rows: [] }; }),
+      // Reconciliation status = same rule as the customer page: ≥ 1 uploaded file → مطابق.
+      pool.query(`SELECT customer_id, COUNT(*)::int AS cnt, MAX(uploaded_at) AS last_at
+                  FROM customer_reconciliations GROUP BY customer_id`)
+        .catch(err => { console.error('[Aging/by-period] customer_reconciliations:', err.message); return { rows: [] }; }),
     ]);
-    const matchById = new Map(matchRows.map(r => [r.customer_id, r]));
+    const reconById = new Map(reconRows.map(r => [r.customer_id, r]));
     const noteById = new Map(debtNotes.map(r => [r.customer_id, r]));
     const infoById = new Map(custInfo.map(r => [r.customer_id, r]));
     const badDebtById = new Map(badDebt.map(r => [r.customer_id, r]));
@@ -379,9 +380,8 @@ router.get('/by-period', verifyToken, applyRegionFilter, requirePagePermission('
           bad_debt_marked_at: badDebtById.get(c.customer_id)?.marked_at ?? null,
           bad_debt_marked_by: badDebtById.get(c.customer_id)?.marked_by_name ?? null,
           note: noteById.get(c.customer_id)?.note_text ?? '',
-          match_status: matchById.get(c.customer_id)?.status ?? null,
-          match_updated_at: matchById.get(c.customer_id)?.updated_at ?? null,
-          match_updated_by: matchById.get(c.customer_id)?.updated_by_name ?? null,
+          reconciliation_count: reconById.get(c.customer_id)?.cnt ?? 0,
+          reconciliation_last_at: reconById.get(c.customer_id)?.last_at ?? null,
           note_updated_at: noteById.get(c.customer_id)?.updated_at ?? null,
           note_updated_by: noteById.get(c.customer_id)?.updated_by_name ?? null,
         };
@@ -476,77 +476,6 @@ router.put('/bad-debt/:customerId', verifyToken, requirePagePermission('aging_by
     res.json({ customer_id: customerId, bad_debt: false, bad_debt_marked_at: null, bad_debt_marked_by: null });
   } catch (err) {
     console.error('[Aging/bad-debt]', err.message);
-    res.status(500).json({ error: err.message });
-  }
-});
-
-/* ═══════════════════════════════════════════════════════════════
-   Customer balance match status (عمود «حالة المطابقة» on the debt-by-period page)
-   matched = رصيد العميل مطابق, unmatched = غير مطابق, no row = لم تُحدد.
-   customer_match_status = current state; customer_match_status_log = every change.
-   Created lazily — startup migrations can stall (see CLAUDE.md).
-═══════════════════════════════════════════════════════════════ */
-const MATCH_STATUSES = ['matched', 'unmatched'];
-let matchStatusReady = null;
-function ensureMatchStatusTables() {
-  if (!matchStatusReady) {
-    matchStatusReady = pool.query(`
-      CREATE TABLE IF NOT EXISTS customer_match_status (
-        customer_id     VARCHAR(100) PRIMARY KEY,
-        status          VARCHAR(12)  NOT NULL CHECK (status IN ('matched', 'unmatched')),
-        updated_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
-        updated_by      UUID,
-        updated_by_name VARCHAR(200)
-      );
-      CREATE TABLE IF NOT EXISTS customer_match_status_log (
-        id          SERIAL PRIMARY KEY,
-        customer_id VARCHAR(100) NOT NULL,
-        old_status  VARCHAR(12),
-        new_status  VARCHAR(12),
-        changed_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-        changed_by  UUID,
-        changed_by_name VARCHAR(200)
-      );
-    `).catch(err => { matchStatusReady = null; throw err; });
-  }
-  return matchStatusReady;
-}
-
-router.put('/match-status/:customerId', verifyToken, requirePagePermission('aging_by_period', 2), async (req, res) => {
-  const { customerId } = req.params;
-  const status = req.body?.status ?? null;
-  if (status !== null && !MATCH_STATUSES.includes(status)) {
-    return res.status(400).json({ error: 'الحالة يجب أن تكون matched أو unmatched أو null' });
-  }
-  try {
-    await ensureMatchStatusTables();
-    const { rows: [me] } = await pool.query('SELECT name FROM users WHERE id = $1', [req.user.id]);
-    const userName = me?.name || req.user.name || req.user.email || null;
-    const { rows: [cur] } = await pool.query('SELECT status FROM customer_match_status WHERE customer_id = $1', [customerId]);
-    const old = cur?.status ?? null;
-    if (old === status) return res.json({ customer_id: customerId, match_status: status, unchanged: true });
-    let row = null;
-    if (status) {
-      ({ rows: [row] } = await pool.query(
-        `INSERT INTO customer_match_status (customer_id, status, updated_at, updated_by, updated_by_name)
-         VALUES ($1, $2, NOW(), $3, $4)
-         ON CONFLICT (customer_id) DO UPDATE SET status = EXCLUDED.status, updated_at = NOW(),
-           updated_by = EXCLUDED.updated_by, updated_by_name = EXCLUDED.updated_by_name
-         RETURNING status, updated_at, updated_by_name`,
-        [customerId, status, req.user.id, userName]));
-    } else {
-      await pool.query('DELETE FROM customer_match_status WHERE customer_id = $1', [customerId]);
-    }
-    await pool.query(
-      `INSERT INTO customer_match_status_log (customer_id, old_status, new_status, changed_by, changed_by_name)
-       VALUES ($1, $2, $3, $4, $5)`,
-      [customerId, old, status, req.user.id, userName]);
-    res.json({
-      customer_id: customerId, match_status: row?.status ?? null,
-      match_updated_at: row?.updated_at ?? null, match_updated_by: row?.updated_by_name ?? null,
-    });
-  } catch (err) {
-    console.error('[Aging/match-status]', err.message);
     res.status(500).json({ error: err.message });
   }
 });

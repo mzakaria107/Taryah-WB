@@ -247,24 +247,18 @@
 .abp-note-del:hover { border-color: #fca5a5; background: #fef2f2; }
 .abp-note-del:disabled { opacity: 0.5; cursor: wait; }
 
-/* ── Balance match status column ───────────────────────────────── */
+/* ── Reconciliation status column (المطابقة) — same look as the customer page card ── */
 .abp-table td.abp-td--match { white-space: nowrap; }
-.abp-match { display: inline-flex; gap: 3px; align-items: center; }
-.abp-match-btn {
-  border: 1px solid var(--color-border, #cbd5e1); background: var(--color-surface, #fff);
-  color: var(--color-text-muted, #64748b); border-radius: 999px; padding: 1px 6px;
-  font-family: inherit; font-size: 0.62rem; font-weight: 600; cursor: pointer; white-space: nowrap;
+.abp-recon { display: inline-flex; align-items: center; gap: 4px; font-size: 0.66rem; font-weight: 700; white-space: nowrap; }
+.abp-recon-dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+.abp-recon--ok      { color: var(--color-brand-green, #15803d); }
+.abp-recon--ok .abp-recon-dot { background: #16a34a; box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.18); }
+.abp-recon--missing { color: var(--color-danger, #dc2626); }
+.abp-recon--missing .abp-recon-dot { background: #dc2626; box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.15); }
+.abp-recon-count {
+  font-size: 0.56rem; font-weight: 700; color: #15803d; background: #dcfce7;
+  border-radius: 999px; padding: 0 5px;
 }
-.abp-match-btn--matched:hover:not(:disabled)   { border-color: #16a34a; color: #15803d; }
-.abp-match-btn--unmatched:hover:not(:disabled) { border-color: #dc2626; color: #b91c1c; }
-.abp-match-btn--matched.abp-match-btn--on   { background: #16a34a; border-color: #16a34a; color: #fff; }
-.abp-match-btn--unmatched.abp-match-btn--on { background: #dc2626; border-color: #dc2626; color: #fff; }
-.abp-match-btn:disabled { cursor: default; opacity: 1; }
-.abp-match-none { color: var(--color-text-muted); }
 @media print {
-  .abp-match-btn:not(.abp-match-btn--on) { display: none; }
-  .abp-match-btn--on { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+  .abp-recon-dot, .abp-recon-count { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
 }
-.abp-match-btn--on, .abp-match-btn--on:hover:not(:disabled) { color: #fff; }
-.abp-match-btn--matched.abp-match-btn--on:hover:not(:disabled)   { background: #15803d; border-color: #15803d; }
-.abp-match-btn--unmatched.abp-match-btn--on:hover:not(:disabled) { background: #b91c1c; border-color: #b91c1c; }

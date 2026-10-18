@@ -29,8 +29,8 @@ function AgeBadge({ days }) {
   return <span className={`age-avg-badge ${cls}`}>{days} يوم</span>;
 }
 
-const TEXT_COLS = ['customer_name', 'customer_id', 'region_name', 'match_status'];
-const ROW_COLS  = [...TEXT_COLS, 'total', 'oldest_age_days', 'newest_age_days', 'bad_debt'];
+const TEXT_COLS = ['customer_name', 'customer_id', 'region_name'];
+const ROW_COLS  = [...TEXT_COLS, 'total', 'oldest_age_days', 'newest_age_days', 'bad_debt', 'reconciliation_count'];
 
 function SortIcon({ col, sortBy, sortDir }) {
   if (sortBy !== col) return <ChevronsUpDown size={12} style={{ opacity: 0.4 }} />;
@@ -52,7 +52,7 @@ export default function AgingByPeriodPage() {
   const [badDebtFilter,    setBadDebtFilter]    = useState('');
   const [selectedYears,    setSelectedYears]    = useState([]);
   const [noteCustomer,     setNoteCustomer]     = useState(null);
-  const [matchFilter,      setMatchFilter]      = useState(''); // '' | matched | unmatched | none
+  const [matchFilter,      setMatchFilter]      = useState(''); // '' | matched | unmatched (reconciliation file uploaded?)
   const [regionId,         setRegionId]         = useState('');
   const [routeId,          setRouteId]          = useState('');
   const [salesRep,         setSalesRep]         = useState('');
@@ -102,21 +102,6 @@ export default function AgingByPeriodPage() {
     onError: err => alert(err.response?.data?.error || 'تعذّر حفظ حالة المديونية'),
   });
 
-  // Balance match status (مطابق / غير مطابق); clicking the active state again clears it.
-  const matchMutation = useMutation({
-    mutationFn: ({ customerId, status }) =>
-      api.put(`/aging/match-status/${encodeURIComponent(customerId)}`, { status }).then(r => r.data),
-    onSuccess: res => {
-      if (res.unchanged) return;
-      queryClient.setQueriesData({ queryKey: ['aging-by-period'] }, old => old && ({
-        ...old,
-        customers: old.customers.map(c => c.customer_id === res.customer_id
-          ? { ...c, match_status: res.match_status, match_updated_at: res.match_updated_at, match_updated_by: res.match_updated_by }
-          : c),
-      }));
-    },
-    onError: err => alert(err.response?.data?.error || 'تعذّر حفظ حالة المطابقة'),
-  });
 
   const curYear   = data?.current_year;
 
@@ -155,8 +140,8 @@ export default function AgingByPeriodPage() {
     let list = customers;
     if (badDebtFilter === 'only')    list = list.filter(c => c.bad_debt);
     if (badDebtFilter === 'exclude') list = list.filter(c => !c.bad_debt);
-    if (matchFilter === 'none') list = list.filter(c => !c.match_status);
-    else if (matchFilter)       list = list.filter(c => c.match_status === matchFilter);
+    if (matchFilter === 'matched')   list = list.filter(c => (c.reconciliation_count || 0) > 0);
+    if (matchFilter === 'unmatched') list = list.filter(c => !(c.reconciliation_count > 0));
     list = [...list];
     const isText = TEXT_COLS.includes(sortBy);
     const val = c => ROW_COLS.includes(sortBy) ? c[sortBy] : (c.by_period[sortBy] || 0);
@@ -224,16 +209,16 @@ export default function AgingByPeriodPage() {
     excludeDirect && 'مديونية المندوب مستبعدة',
     excludeCarrefour && 'مديونية كارفور مستبعدة',
     badDebtFilter === 'only' && 'المديونية المعدومة فقط',
-    matchFilter && `حالة المطابقة: ${({ matched: 'مطابق', unmatched: 'غير مطابق', none: 'لم تُحدد' })[matchFilter]}`,
+    matchFilter && `المطابقة: ${matchFilter === 'matched' ? 'مطابق' : 'غير مطابق'}`,
     badDebtFilter === 'exclude' && 'المديونية المعدومة مستبعدة',
   ].filter(Boolean).join(' · ');
 
   const handleExport = () => {
-    const header = ['العميل', 'رقم العميل', 'المنطقة', ...periods.map(p => p.label), 'إجمالي الدين', 'عمر أقدم دين (يوم)', 'عمر أقرب دين (يوم)', 'حالة المطابقة', 'مديونية معدومة', 'سُجّلت بواسطة', 'تاريخ التسجيل', 'ملاحظات', 'آخر تعديل للملاحظة'];
+    const header = ['العميل', 'رقم العميل', 'المنطقة', ...periods.map(p => p.label), 'إجمالي الدين', 'عمر أقدم دين (يوم)', 'عمر أقرب دين (يوم)', 'المطابقة', 'مديونية معدومة', 'سُجّلت بواسطة', 'تاريخ التسجيل', 'ملاحظات', 'آخر تعديل للملاحظة'];
     const body = rows.map(c => [
       c.customer_name, c.customer_id, c.region_name || '',
       ...periods.map(p => Number(c.by_period[p.key] || 0)),
-      c.total, c.oldest_age_days ?? '', c.newest_age_days ?? '', c.match_status === 'matched' ? 'مطابق' : c.match_status === 'unmatched' ? 'غير مطابق' : '', c.bad_debt ? 'نعم' : '',
+      c.total, c.oldest_age_days ?? '', c.newest_age_days ?? '', c.reconciliation_count > 0 ? `مطابق (${c.reconciliation_count} ملف)` : 'غير مطابق', c.bad_debt ? 'نعم' : '',
       c.bad_debt ? (c.bad_debt_marked_by || '') : '', c.bad_debt ? fmtStamp(c.bad_debt_marked_at) : '',
       c.note || '', c.note ? `${c.note_updated_by || ''} ${fmtStamp(c.note_updated_at)}` : '',
     ]);
@@ -280,8 +265,8 @@ export default function AgingByPeriodPage() {
                       <SortIcon col={k} sortBy={sortBy} sortDir={sortDir} /> {l}
                     </th>
                   ))}
-                  <th onClick={() => onSort('match_status')} className={sortBy === 'match_status' ? 'age-th--sorted' : ''}>
-                    <SortIcon col="match_status" sortBy={sortBy} sortDir={sortDir} /> حالة المطابقة
+                  <th onClick={() => onSort('reconciliation_count')} className={sortBy === 'reconciliation_count' ? 'age-th--sorted' : ''}>
+                    <SortIcon col="reconciliation_count" sortBy={sortBy} sortDir={sortDir} /> المطابقة
                   </th>
                   <th onClick={() => onSort('bad_debt')} className={sortBy === 'bad_debt' ? 'age-th--sorted' : ''}>
                     <SortIcon col="bad_debt" sortBy={sortBy} sortDir={sortDir} /> مديونية معدومة
@@ -315,21 +300,17 @@ export default function AgingByPeriodPage() {
                     <td><AgeBadge days={c.oldest_age_days} /></td>
                     <td><AgeBadge days={c.newest_age_days} /></td>
                     <td className="abp-td--match">
-                      <div className="abp-match" title={c.match_status
-                        ? `${c.match_status === 'matched' ? 'مطابق' : 'غير مطابق'} — ${c.match_updated_by || '—'} · ${fmtStamp(c.match_updated_at)}`
-                        : 'لم تُحدد حالة المطابقة'}>
-                        {[['matched', '✓ مطابق'], ['unmatched', '✗ غير مطابق']].map(([st, label]) => (
-                          (canEditBadDebt || c.match_status === st) && (
-                            <button key={st} type="button"
-                              className={`abp-match-btn abp-match-btn--${st}${c.match_status === st ? ' abp-match-btn--on' : ''}`}
-                              disabled={!canEditBadDebt || matchMutation.isPending}
-                              onClick={() => matchMutation.mutate({ customerId: c.customer_id, status: c.match_status === st ? null : st })}>
-                              {label}
-                            </button>
-                          )
-                        ))}
-                        {!canEditBadDebt && !c.match_status && <span className="abp-match-none">—</span>}
-                      </div>
+                      {/* Same rule as the customer page: ≥ 1 uploaded reconciliation file → مطابق */}
+                      <span
+                        className={`abp-recon ${c.reconciliation_count > 0 ? 'abp-recon--ok' : 'abp-recon--missing'}`}
+                        title={c.reconciliation_count > 0
+                          ? `${c.reconciliation_count} ملف مطابقة — آخر رفع ${fmtStamp(c.reconciliation_last_at)}`
+                          : 'لم يتم رفع ملف مطابقة في ملف العميل'}
+                      >
+                        <span className="abp-recon-dot" />
+                        {c.reconciliation_count > 0 ? 'مطابق' : 'غير مطابق'}
+                        {c.reconciliation_count > 0 && <span className="abp-recon-count">{c.reconciliation_count} ملف</span>}
+                      </span>
                     </td>
                     <td className="abp-td--bad-debt">
                       <div className="abp-bd-cell">
@@ -481,12 +462,11 @@ export default function AgingByPeriodPage() {
           </div>
         </div>
         <div className="age-filter-group">
-          <span className="age-filter-label">حالة المطابقة</span>
+          <span className="age-filter-label">المطابقة</span>
           <select className="age-filter-select" value={matchFilter} onChange={e => setMatchFilter(e.target.value)}>
             <option value="">الكل</option>
             <option value="matched">مطابق</option>
             <option value="unmatched">غير مطابق</option>
-            <option value="none">لم تُحدد</option>
           </select>
         </div>
         <div className="age-filter-group">

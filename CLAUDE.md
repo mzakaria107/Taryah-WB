@@ -3348,6 +3348,12 @@ are built from the data, not hardcoded, so 2027 rolls over by itself.
   customer's note AND its open invoices' notes of the same kind (invoice / invoice_owner); customers
   with notes first (desc = newest first, asc = oldest first), customers without notes always last.
   Print and Excel follow the same order (they read `sortedCustomers`).
+  **Invoices tab gets the same two invoice notes (23 Oct 2026)**: «ملاحظة الفاتورة» (kind=invoice) and
+  «العميل صاحب الدين الفعلي» (kind=invoice_owner) columns on the «الفواتير» tab — the SAME notes as the
+  customers-tab drop-down (one cache key each, so an edit on either tab shows on both). Both headers
+  sort like the customer note columns (noted first, newest/oldest, un-noted last). Excel adds the two
+  columns. `.rd-table--inv` compacts the table so its 10 columns fit 1366px. The invoice-notes queries
+  and `openInvByCust` now sit ABOVE `sortedInvoices` (it needs them for note sorting).
 - **Debt notes shared with the rep-debt page (18 Oct 2026)**: `RepDebtPage` ("صافي مديونية العملاء"
   tab) has a "ملاحظات" column backed by the SAME `debt_notes` / `debt_notes_history` — a note saved on
   either page shows on both, with one shared history. New `GET /api/aging/debt-notes?ids=a,b,c`

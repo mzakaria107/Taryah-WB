@@ -180,8 +180,50 @@ export default function RepDebtPage() {
     return rows;
   }, [rawInvoices, excludeCarrefour, excludeZero]);
 
+  /* Per-invoice notes (kind=invoice, keyed by invoice_number). Each customer row expands into its
+     unpaid / partially-paid invoices, where a note can be written per invoice. Exports and print
+     list a customer's invoices ONLY when they carry a note — otherwise the customer row alone. */
+  const openInvByCust = useMemo(() => {
+    const m = new Map();
+    for (const inv of rawInvoices) {
+      if (inv.status !== 'unpaid' && inv.status !== 'partial') continue;
+      if (!m.has(inv.customer_id)) m.set(inv.customer_id, []);
+      m.get(inv.customer_id).push(inv);
+    }
+    for (const list of m.values()) list.sort((a, b) => String(a.invoice_date || '').localeCompare(String(b.invoice_date || '')));
+    return m;
+  }, [rawInvoices]);
+  // No ids filter: only noted invoices have rows, and a long id list could exceed IIS's query-string limit.
+  const { data: invNotesData } = useQuery({
+    queryKey: ['debt-invoice-notes'],
+    queryFn: () => client.get('/aging/debt-notes', { params: { kind: 'invoice' } }).then(r => r.data.notes || {}),
+    staleTime: 30_000,
+  });
+  const invNotes = invNotesData || {};
+  // «العميل صاحب الدين الفعلي» per invoice (kind=invoice_owner) — same rules as the invoice note
+  const { data: invOwnerNotesData } = useQuery({
+    queryKey: ['debt-invoice-owner-notes'],
+    queryFn: () => client.get('/aging/debt-notes', { params: { kind: 'invoice_owner' } }).then(r => r.data.notes || {}),
+    staleTime: 30_000,
+  });
+  const invOwnerNotes = invOwnerNotesData || {};
+  // An invoice counts as "noted" (listed in export/print) when either of its two notes is filled.
+  const invHasNote = useCallback(inv => !!(invNotes[inv.invoice_number]?.note || invOwnerNotes[inv.invoice_number]?.note),
+    [invNotes, invOwnerNotes]);
+  const notedInvoices = useCallback(c => (openInvByCust.get(c.customer_id) || []).filter(invHasNote),
+    [openInvByCust, invHasNote]);
   const sortedInvoices = useMemo(() => {
     if (!sortCol) return invoices;
+    // Note columns: noted invoices first (desc = newest update first, asc = oldest), un-noted last.
+    const noteMap = { inv_note: invNotes, inv_owner_note: invOwnerNotes }[sortCol];
+    if (noteMap) {
+      const stamp = inv => { const x = noteMap[inv.invoice_number]; return x?.note ? new Date(x.note_updated_at || 0).getTime() || 1 : 0; };
+      const dir = sortDir === 'asc' ? 1 : -1;
+      return invoices.map(inv => [inv, stamp(inv)]).sort(([, ka], [, kb]) => {
+        if (!ka !== !kb) return ka ? -1 : 1;
+        return (ka - kb) * dir;
+      }).map(([inv]) => inv);
+    }
     const col = INV_COLUMNS.find(c => c.key === sortCol);
     if (!col) return invoices;
     const dir = sortDir === 'asc' ? 1 : -1;
@@ -191,7 +233,7 @@ export default function RepDebtPage() {
       if (typeof av === 'number' && typeof bv === 'number') return (av - bv) * dir;
       return String(av).localeCompare(String(bv), 'ar') * dir;
     });
-  }, [invoices, sortCol, sortDir]);
+  }, [invoices, sortCol, sortDir, invNotes, invOwnerNotes]);
 
   // True net debt per customer — from the backend's unconditional
   // SUM(balance) grouped by customer (same rule as summary.total_balance),
@@ -233,38 +275,6 @@ export default function RepDebtPage() {
   });
   const ownerNotes = ownerNotesData || {};
 
-  /* Per-invoice notes (kind=invoice, keyed by invoice_number). Each customer row expands into its
-     unpaid / partially-paid invoices, where a note can be written per invoice. Exports and print
-     list a customer's invoices ONLY when they carry a note — otherwise the customer row alone. */
-  const openInvByCust = useMemo(() => {
-    const m = new Map();
-    for (const inv of rawInvoices) {
-      if (inv.status !== 'unpaid' && inv.status !== 'partial') continue;
-      if (!m.has(inv.customer_id)) m.set(inv.customer_id, []);
-      m.get(inv.customer_id).push(inv);
-    }
-    for (const list of m.values()) list.sort((a, b) => String(a.invoice_date || '').localeCompare(String(b.invoice_date || '')));
-    return m;
-  }, [rawInvoices]);
-  // No ids filter: only noted invoices have rows, and a long id list could exceed IIS's query-string limit.
-  const { data: invNotesData } = useQuery({
-    queryKey: ['debt-invoice-notes'],
-    queryFn: () => client.get('/aging/debt-notes', { params: { kind: 'invoice' } }).then(r => r.data.notes || {}),
-    staleTime: 30_000,
-  });
-  const invNotes = invNotesData || {};
-  // «العميل صاحب الدين الفعلي» per invoice (kind=invoice_owner) — same rules as the invoice note
-  const { data: invOwnerNotesData } = useQuery({
-    queryKey: ['debt-invoice-owner-notes'],
-    queryFn: () => client.get('/aging/debt-notes', { params: { kind: 'invoice_owner' } }).then(r => r.data.notes || {}),
-    staleTime: 30_000,
-  });
-  const invOwnerNotes = invOwnerNotesData || {};
-  // An invoice counts as "noted" (listed in export/print) when either of its two notes is filled.
-  const invHasNote = useCallback(inv => !!(invNotes[inv.invoice_number]?.note || invOwnerNotes[inv.invoice_number]?.note),
-    [invNotes, invOwnerNotes]);
-  const notedInvoices = useCallback(c => (openInvByCust.get(c.customer_id) || []).filter(invHasNote),
-    [openInvByCust, invHasNote]);
   const [expandedCust, setExpandedCust] = useState(() => new Set());
   const toggleCust = id => setExpandedCust(prev => {
     const next = new Set(prev);
@@ -418,7 +428,7 @@ export default function RepDebtPage() {
       sheetName = 'صافي مديونية العملاء';
       fileTag = 'صافي_مديونية_العملاء';
     } else {
-      header = ['رقم الفاتورة', 'العميل', 'المنطقة', 'التاريخ', 'المبلغ الأصلي', 'المدفوع', 'المتبقي', 'الحالة'];
+      header = ['رقم الفاتورة', 'العميل', 'المنطقة', 'التاريخ', 'المبلغ الأصلي', 'المدفوع', 'المتبقي', 'الحالة', 'ملاحظة الفاتورة', 'العميل صاحب الدين الفعلي'];
       rows = sortedInvoices.map(inv => [
         inv.invoice_number,
         inv.customer_name,
@@ -428,13 +438,15 @@ export default function RepDebtPage() {
         Number(inv.paid_amount || 0),
         Number(inv.balance || 0),
         (STATUS_MAP[inv.status]?.[0]) || inv.status || '—',
+        invNotes[inv.invoice_number]?.note || '',
+        invOwnerNotes[inv.invoice_number]?.note || '',
       ]);
       rows.push([
         `الإجمالي (${sortedInvoices.length} فاتورة)`, '', '', '',
         Number(invSummary.total_amount || 0),
         Number(invSummary.total_paid || 0),
         Number(invSummary.total_balance || 0),
-        '',
+        '', '', '',
       ]);
       sheetName = 'مديونية المندوب';
       fileTag = 'مديونية_المندوب';
@@ -591,7 +603,7 @@ export default function RepDebtPage() {
           {activeTab === 'invoices' ? (
             /* ── Invoice table ── */
             <div className="rd-table-wrap">
-              <table className="rd-table">
+              <table className="rd-table rd-table--inv">
                 <thead>
                   <tr>
                     {INV_COLUMNS.map(col => (
@@ -606,11 +618,25 @@ export default function RepDebtPage() {
                         </span>
                       </th>
                     ))}
+                    {/* Same per-invoice notes as the customers tab drop-down (kind=invoice / invoice_owner) */}
+                    {[['inv_note', 'ملاحظة الفاتورة', ' rd-th--note-main'], ['inv_owner_note', 'العميل صاحب الدين الفعلي', '']].map(([key, label, extra]) => (
+                      <th
+                        key={key}
+                        className={`rd-th rd-th--note rd-th--note-sort${extra}${sortCol === key ? ' rd-th--sorted' : ''}`}
+                        title="ترتيب: الفواتير التي عليها ملاحظات أولاً (الأحدث تعديلاً، أو الأقدم عند الضغط مرة أخرى)"
+                        onClick={() => handleSort(key)}
+                      >
+                        {label}
+                        <span className="rd-sort">
+                          {sortCol === key ? (sortDir === 'desc' ? ' ▼' : ' ▲') : ' ⇅'}
+                        </span>
+                      </th>
+                    ))}
                   </tr>
                 </thead>
                 <tbody>
                   {sortedInvoices.length === 0 ? (
-                    <tr><td colSpan={8} className="rd-empty">لا توجد فواتير غير مسددة لهذا المندوب</td></tr>
+                    <tr><td colSpan={10} className="rd-empty">لا توجد فواتير غير مسددة لهذا المندوب</td></tr>
                   ) : (
                     sortedInvoices.map(inv => (
                       <tr key={inv.id} className={rowClass(inv)}>
@@ -622,6 +648,21 @@ export default function RepDebtPage() {
                         <td className="rd-td-num">{fmt(inv.paid_amount)}</td>
                         <td className="rd-td-num rd-td-balance">{fmt(inv.balance)}</td>
                         <td><StatusBadge status={inv.status} /></td>
+                        {[['invoice', invNotes, 'ملاحظة', ' rd-td-note--main'], ['invoice_owner', invOwnerNotes, 'بيانات', '']].map(([kind, map, addLabel, extra]) => {
+                          const x = map[inv.invoice_number];
+                          return (
+                            <td key={kind} className={`rd-td-note${extra}`}>
+                              <DebtNoteCell
+                                note={x?.note}
+                                updatedAt={x?.note_updated_at}
+                                updatedBy={x?.note_updated_by}
+                                canEdit={canEditNotes}
+                                addLabel={addLabel}
+                                onOpen={() => setNoteCustomer({ kind, customer_id: inv.invoice_number, customer_name: inv.customer_name, note: x?.note || '' })}
+                              />
+                            </td>
+                          );
+                        })}
                       </tr>
                     ))
                   )}
@@ -633,6 +674,8 @@ export default function RepDebtPage() {
                       <td className="rd-td-num">{fmt(invSummary.total_amount)}</td>
                       <td className="rd-td-num">{fmt(invSummary.total_paid)}</td>
                       <td className="rd-td-num rd-td-balance">{fmt(invSummary.total_balance)}</td>
+                      <td></td>
+                      <td></td>
                       <td></td>
                     </tr>
                   </tfoot>

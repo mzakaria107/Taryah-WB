@@ -449,3 +449,14 @@
 .rd-ptable tr.rd-p-inv td:first-child { box-shadow: inset -3px 0 0 #f59e0b; }
 @media print { .rd-ptable tr.rd-p-inv td { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
 .rd-th.rd-th--note-sort { cursor: pointer; }
+
+/* Invoices tab: compact columns so the two note columns fit beside the eight data columns */
+.rd-table--inv thead th { padding: 8px 6px; white-space: normal; line-height: 1.25; }
+.rd-table--inv tbody td, .rd-table--inv tfoot td { padding: 7px 6px; }
+.rd-table--inv .rd-td-name { min-width: 130px; max-width: 200px; line-height: 1.3; }
+.rd-table--inv .rd-th--note { min-width: 170px; }
+.rd-table--inv .rd-td-note { max-width: 200px; }
+.rd-table--inv .rd-td-note .abp-note-cell, .rd-table--inv .rd-td-note .abp-note-cell-text { max-width: 188px; }
+.rd-table--inv .rd-th--note-main { min-width: 250px; }
+.rd-table--inv .rd-td-note--main { max-width: 300px; }
+.rd-table--inv .rd-td-note--main .abp-note-cell, .rd-table--inv .rd-td-note--main .abp-note-cell-text { max-width: 288px; }

@@ -3323,6 +3323,20 @@ are built from the data, not hardcoded, so 2027 rolls over by itself.
   continues on the next page if needed — the "move rows to the signature page" step was removed;
   (4) KPI cards stay 4-in-a-row in print. Screen and print-media measurements now agree (30 rows:
   11/18/1 both ways). The Firefox fix itself is untested here (no Firefox in the sandbox).
+  **Invoice drop-down + per-invoice notes (23 Oct 2026)**: the كود العميل cell is a toggle
+  ("◂ 11050111", "N فاتورة", 📝 count of noted invoices) that expands a nested table of that customer's
+  **unpaid / partial** invoices (from the page's own `invoices` payload — no new endpoint): number, date,
+  age, original, paid, balance, status, «ملاحظة الفاتورة». Invoice notes are a third note kind,
+  `?kind=invoice`, in `debt_invoice_notes` / `debt_invoice_notes_history` keyed by **`invoice_number`**
+  (unique, and stable across the truncate-and-reload balance upload — invoice ids are not). `NOTE_TABLES`
+  entries now carry a `key` column (default `customer_id`); the API field stays `customer_id` and holds
+  the invoice number for this kind. Same save/history/admin-delete/permission rules as the other notes.
+  The page fetches ALL invoice notes (no `ids` — the list is small and a long id list could exceed
+  IIS's 2 KB query-string limit). **Export/print rule**: a customer's invoices appear ONLY when they carry
+  a note — as "↳" rows right after the customer (Excel: extra invoice columns, customer balance blank so
+  the column still foots; print: amber sub-rows, counted in the page measurement but not in the page
+  total). With no invoice notes the export is customer-level only (no invoice columns). Also fixed: the
+  Excel callback's dependency list lacked `ownerNotes` (stale «صاحب الدين» values could be exported).
 - **Debt notes shared with the rep-debt page (18 Oct 2026)**: `RepDebtPage` ("صافي مديونية العملاء"
   tab) has a "ملاحظات" column backed by the SAME `debt_notes` / `debt_notes_history` — a note saved on
   either page shows on both, with one shared history. New `GET /api/aging/debt-notes?ids=a,b,c`

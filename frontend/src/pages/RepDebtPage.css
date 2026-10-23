@@ -420,3 +420,29 @@
   .rd-ptable--break { break-after: page; }
   .rd-ptable th, .rd-ptable tfoot td, .rd-ptable .rd-age { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }
+
+/* ── Customers tab: per-customer invoice drop-down with per-invoice notes ── */
+.rd-inv-toggle {
+  display: inline-flex; align-items: center; gap: 4px; padding: 2px 6px; border-radius: 6px;
+  border: 1px solid var(--color-border, #e2e8f0); background: var(--color-surface, #fff);
+  color: var(--color-text, #1e293b); font: inherit; font-variant-numeric: tabular-nums; cursor: pointer;
+}
+.rd-inv-toggle:hover { border-color: #2e7d32; color: #2e7d32; }
+.rd-inv-toggle--open { background: #ecfdf5; border-color: #2e7d32; color: #1b5e20; }
+.rd-inv-caret { font-size: 10px; }
+.rd-inv-meta { font-size: 10.5px; color: var(--color-text-muted, #64748b); margin-top: 2px; white-space: nowrap; }
+.rd-inv-noted-chip { margin-inline-start: 5px; background: #fef3c7; color: #92400e; border-radius: 10px; padding: 0 6px; font-weight: 700; }
+.rd-row-open > td { background: #f0fdf4; }
+.rd-table tbody tr.rd-inv-detail:hover { background: transparent; }
+.rd-inv-detail > td { padding: 4px 10px 12px 10px !important; background: #f8fafc; }
+.rd-inv-table { width: 100%; border-collapse: collapse; font-size: 12px; background: var(--color-surface, #fff); border: 1px solid var(--color-border, #e2e8f0); border-radius: 8px; overflow: hidden; }
+.rd-inv-table th { background: #eef2f7; padding: 6px 8px; font-weight: 700; color: #475569; text-align: right; white-space: nowrap; }
+.rd-inv-table td { padding: 5px 8px; border-top: 1px solid var(--color-border, #e2e8f0); }
+.rd-inv-table tr.rd-inv-row--noted td { background: #fffbeb; }
+.rd-inv-table tr.rd-inv-row--noted td:first-child { box-shadow: inset -3px 0 0 #f59e0b; }
+.rd-inv-table .rd-inv-note { min-width: 260px; max-width: 360px; }
+.rd-inv-table .rd-inv-note .abp-note-cell, .rd-inv-table .rd-inv-note .abp-note-cell-text { max-width: 340px; }
+/* Printed noted-invoice sub-rows (under their customer) */
+.rd-ptable tr.rd-p-inv td { background: #fffbeb; font-size: 10.5px; color: #78350f; }
+.rd-ptable tr.rd-p-inv td:first-child { box-shadow: inset -3px 0 0 #f59e0b; }
+@media print { .rd-ptable tr.rd-p-inv td { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }

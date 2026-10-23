@@ -17,6 +17,7 @@ const fmt = (n) =>
   : Number(n).toLocaleString('en-SA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const fmtInt  = (n) => Math.round(Number(n || 0)).toLocaleString('en-SA');
 const fmtDate = (d) => d ? String(d).split('T')[0] : '—';
+const ageDays = d => (d ? Math.max(0, Math.floor((Date.now() - new Date(String(d).split('T')[0])) / 86400000)) : null);
 const fmtNoteStamp = iso => iso
   ? new Date(iso).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }).replace(',', '')
   : '';
@@ -232,6 +233,35 @@ export default function RepDebtPage() {
   });
   const ownerNotes = ownerNotesData || {};
 
+  /* Per-invoice notes (kind=invoice, keyed by invoice_number). Each customer row expands into its
+     unpaid / partially-paid invoices, where a note can be written per invoice. Exports and print
+     list a customer's invoices ONLY when they carry a note — otherwise the customer row alone. */
+  const openInvByCust = useMemo(() => {
+    const m = new Map();
+    for (const inv of rawInvoices) {
+      if (inv.status !== 'unpaid' && inv.status !== 'partial') continue;
+      if (!m.has(inv.customer_id)) m.set(inv.customer_id, []);
+      m.get(inv.customer_id).push(inv);
+    }
+    for (const list of m.values()) list.sort((a, b) => String(a.invoice_date || '').localeCompare(String(b.invoice_date || '')));
+    return m;
+  }, [rawInvoices]);
+  // No ids filter: only noted invoices have rows, and a long id list could exceed IIS's query-string limit.
+  const { data: invNotesData } = useQuery({
+    queryKey: ['debt-invoice-notes'],
+    queryFn: () => client.get('/aging/debt-notes', { params: { kind: 'invoice' } }).then(r => r.data.notes || {}),
+    staleTime: 30_000,
+  });
+  const invNotes = invNotesData || {};
+  const notedInvoices = useCallback(c => (openInvByCust.get(c.customer_id) || []).filter(inv => invNotes[inv.invoice_number]?.note),
+    [openInvByCust, invNotes]);
+  const [expandedCust, setExpandedCust] = useState(() => new Set());
+  const toggleCust = id => setExpandedCust(prev => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
+
   const printPagesRef = useRef(null);
   const [printPageSizes, setPrintPageSizes] = useState(null);
 
@@ -248,21 +278,26 @@ export default function RepDebtPage() {
     });
   }, [customerRows, custSortCol, custSortDir]);
 
+  // Printed rows: each customer, followed by its noted invoices (highlighted sub-rows).
+  const printItems = useMemo(() => sortedCustomers.flatMap(c => [
+    { t: 'c', c },
+    ...notedInvoices(c).map(inv => ({ t: 'i', c, inv })),
+  ]), [sortedCustomers, notedInvoices]);
   // Rows grouped into printed pages (one chunk = one A4 page). Until measured — or when the row
   // count changed since — everything sits in a single chunk, which is what gets measured.
   const printChunks = useMemo(() => {
     const sizes = printPageSizes;
-    if (!sizes || sizes.reduce((a, b) => a + b, 0) !== sortedCustomers.length) return [sortedCustomers];
+    if (!sizes || sizes.reduce((a, b) => a + b, 0) !== printItems.length) return [printItems];
     const out = []; let i = 0;
-    for (const n of sizes) { out.push(sortedCustomers.slice(i, i + n)); i += n; }
+    for (const n of sizes) { out.push(printItems.slice(i, i + n)); i += n; }
     return out;
-  }, [printPageSizes, sortedCustomers]);
+  }, [printPageSizes, printItems]);
   const remeasurePrint = useCallback(() => {
     const sizes = measurePrintPages(printPagesRef.current);
     if (sizes) setPrintPageSizes(prev => (prev && prev.join() === sizes.join() ? prev : sizes));
   }, []);
   useLayoutEffect(() => { if (activeTab === 'customers') remeasurePrint(); },
-    [activeTab, sortedCustomers, notes, ownerNotes, remeasurePrint]);
+    [activeTab, printItems, notes, ownerNotes, remeasurePrint]);
   useEffect(() => {
     // Ctrl+P / the print button: re-measure synchronously (fonts may have loaded since).
     const onBefore = () => flushSync(remeasurePrint);
@@ -322,21 +357,35 @@ export default function RepDebtPage() {
     let header, rows, sheetName, fileTag;
 
     if (activeTab === 'customers') {
-      header = ['كود العميل', 'العميل', 'المنطقة', 'صافي المديونية', 'عمر أقدم مديونية (يوم)', 'عمر أقرب مديونية (يوم)', 'ملاحظات', 'العميل صاحب الدين الفعلي'];
-      rows = sortedCustomers.map(c => [
-        c.customer_id || '',
-        c.customer_name,
-        c.region_name_ar || '—',
-        Number(c.total_balance || 0),
-        c.oldest_age_days ?? '',
-        c.newest_age_days ?? '',
-        notes[c.customer_id]?.note || '',
-        ownerNotes[c.customer_id]?.note || '',
+      // Invoice columns appear only when some invoice carries a note; such invoices follow their
+      // customer as "↳" rows (balance column left blank there so the column still foots).
+      const withInv = sortedCustomers.some(c => notedInvoices(c).length);
+      const invHead = withInv ? ['رقم الفاتورة', 'تاريخ الفاتورة', 'عمر الفاتورة (يوم)', 'متبقي الفاتورة', 'حالة الفاتورة', 'ملاحظة الفاتورة'] : [];
+      const blankInv = invHead.map(() => '');
+      header = ['كود العميل', 'العميل', 'المنطقة', 'صافي المديونية', 'عمر أقدم مديونية (يوم)', 'عمر أقرب مديونية (يوم)', 'ملاحظات', 'العميل صاحب الدين الفعلي', ...invHead];
+      rows = sortedCustomers.flatMap(c => [
+        [
+          c.customer_id || '',
+          c.customer_name,
+          c.region_name_ar || '—',
+          Number(c.total_balance || 0),
+          c.oldest_age_days ?? '',
+          c.newest_age_days ?? '',
+          notes[c.customer_id]?.note || '',
+          ownerNotes[c.customer_id]?.note || '',
+          ...blankInv,
+        ],
+        ...notedInvoices(c).map(inv => [
+          c.customer_id || '', `↳ ${c.customer_name}`, '', '', '', '', '', '',
+          inv.invoice_number, fmtDate(inv.invoice_date), ageDays(inv.invoice_date) ?? '',
+          Number(inv.balance || 0), (STATUS_MAP[inv.status]?.[0]) || inv.status || '—',
+          invNotes[inv.invoice_number]?.note || '',
+        ]),
       ]);
       rows.push([
         `الإجمالي (${sortedCustomers.length} عميل)`, '', '',
         Number(custSummary.total_balance || 0),
-        '', '', '', '',
+        '', '', '', '', ...blankInv,
       ]);
       sheetName = 'صافي مديونية العملاء';
       fileTag = 'صافي_مديونية_العملاء';
@@ -368,7 +417,7 @@ export default function RepDebtPage() {
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, sheetName);
     XLSX.writeFile(wb, `${fileTag}_${decodedName}_${dateSuffix}.xlsx`);
-  }, [activeTab, sortedInvoices, sortedCustomers, custSummary, invSummary, decodedName, notes]);
+  }, [activeTab, sortedInvoices, sortedCustomers, custSummary, invSummary, decodedName, notes, ownerNotes, notedInvoices, invNotes]);
 
   return (
     <div className="rd-page">
@@ -589,9 +638,27 @@ export default function RepDebtPage() {
                   {sortedCustomers.length === 0 ? (
                     <tr><td colSpan={8} className="rd-empty">لا توجد فواتير غير مسددة لهذا المندوب</td></tr>
                   ) : (
-                    sortedCustomers.map(c => (
-                      <tr key={c.customer_id || c.customer_name}>
-                        <td className="rd-td-code">{c.customer_id || '—'}</td>
+                    sortedCustomers.map(c => {
+                      const openInv = openInvByCust.get(c.customer_id) || [];
+                      const notedCount = notedInvoices(c).length;
+                      const open = expandedCust.has(c.customer_id);
+                      return (
+                      <React.Fragment key={c.customer_id || c.customer_name}>
+                      <tr className={open ? 'rd-row-open' : ''}>
+                        <td className="rd-td-code">
+                          {openInv.length > 0 ? (
+                            <button type="button" className={`rd-inv-toggle${open ? ' rd-inv-toggle--open' : ''}`}
+                              title={open ? 'إخفاء الفواتير' : 'عرض الفواتير غير المسددة / المسددة جزئياً'}
+                              onClick={() => toggleCust(c.customer_id)}>
+                              <span className="rd-inv-caret">{open ? '▾' : '◂'}</span>{c.customer_id}
+                            </button>
+                          ) : (c.customer_id || '—')}
+                          {openInv.length > 0 && (
+                            <div className="rd-inv-meta">
+                              {openInv.length} فاتورة{notedCount > 0 && <span className="rd-inv-noted-chip" title="فواتير عليها ملاحظات">📝 {notedCount}</span>}
+                            </div>
+                          )}
+                        </td>
                         <td className="rd-td-name">{c.customer_name}</td>
                         <td>{c.region_name_ar || '—'}</td>
                         <td className="rd-td-num rd-td-balance">{fmt(c.total_balance)}</td>
@@ -621,7 +688,48 @@ export default function RepDebtPage() {
                           )}
                         </td>
                       </tr>
-                    ))
+                      {open && (
+                        <tr className="rd-inv-detail">
+                          <td colSpan={8}>
+                            <table className="rd-inv-table">
+                              <thead>
+                                <tr>
+                                  <th>رقم الفاتورة</th><th>التاريخ</th><th>العمر</th><th>المبلغ الأصلي</th>
+                                  <th>المدفوع</th><th>المتبقي</th><th>الحالة</th><th>ملاحظة الفاتورة</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {openInv.map(inv => {
+                                  const n = invNotes[inv.invoice_number];
+                                  return (
+                                    <tr key={inv.invoice_number} className={n?.note ? 'rd-inv-row--noted' : ''}>
+                                      <td className="rd-td-code">{inv.invoice_number}</td>
+                                      <td>{fmtDate(inv.invoice_date)}</td>
+                                      <td className="rd-td-age"><AgeBadge days={ageDays(inv.invoice_date)} /></td>
+                                      <td className="rd-td-num">{fmt(inv.original_amount)}</td>
+                                      <td className="rd-td-num">{fmt(inv.paid_amount)}</td>
+                                      <td className="rd-td-num rd-td-balance">{fmt(inv.balance)}</td>
+                                      <td><StatusBadge status={inv.status} /></td>
+                                      <td className="rd-td-note rd-inv-note">
+                                        <DebtNoteCell
+                                          note={n?.note}
+                                          updatedAt={n?.note_updated_at}
+                                          updatedBy={n?.note_updated_by}
+                                          canEdit={canEditNotes}
+                                          onOpen={() => setNoteCustomer({ kind: 'invoice', customer_id: inv.invoice_number, customer_name: c.customer_name, note: n?.note || '' })}
+                                        />
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          </td>
+                        </tr>
+                      )}
+                      </React.Fragment>
+                      );
+                    })
                   )}
                 </tbody>
                 {customerRows.length > 0 && (
@@ -644,7 +752,8 @@ export default function RepDebtPage() {
               <div className="rd-print-pages-inner" ref={printPagesRef}>
                 {printChunks.map((chunk, pi) => {
                   const last = pi === printChunks.length - 1;
-                  const pageTotal = chunk.reduce((s, c) => s + Number(c.total_balance || 0), 0);
+                  const custs = chunk.filter(x => x.t === 'c');
+                  const pageTotal = custs.reduce((s, x) => s + Number(x.c.total_balance || 0), 0);
                   return (
                     <table key={pi} className={`rd-ptable${last ? '' : ' rd-ptable--break'}`}>
                       <colgroup>
@@ -660,7 +769,25 @@ export default function RepDebtPage() {
                         </tr>
                       </thead>
                       <tbody>
-                        {chunk.map(c => {
+                        {chunk.map(item => {
+                          const c = item.c;
+                          if (item.t === 'i') {
+                            const inv = item.inv, x = invNotes[inv.invoice_number];
+                            return (
+                              <tr key={`i-${inv.invoice_number}`} data-prow="" className="rd-p-inv">
+                                <td />
+                                <td colSpan={5}>
+                                  ↳ فاتورة <b>{inv.invoice_number}</b> · {fmtDate(inv.invoice_date)} · {ageDays(inv.invoice_date) ?? '—'} يوم
+                                  {' '}· المتبقي <b className="rd-p-bal">{fmt(inv.balance)}</b>
+                                  {' '}· {(STATUS_MAP[inv.status]?.[0]) || inv.status}
+                                </td>
+                                <td colSpan={2} className="rd-p-note">
+                                  <div className="rd-p-note-text">{x?.note}</div>
+                                  <div className="rd-p-note-meta">{x?.note_updated_by || '—'} · {fmtNoteStamp(x?.note_updated_at)}</div>
+                                </td>
+                              </tr>
+                            );
+                          }
                           const n = notes[c.customer_id], o = ownerNotes[c.customer_id];
                           return (
                             <tr key={c.customer_id || c.customer_name} data-prow="">
@@ -685,7 +812,7 @@ export default function RepDebtPage() {
                       <tfoot>
                         {printChunks.length > 1 && (
                           <tr className="rd-p-pagetotal">
-                            <td colSpan={3}>إجمالي الصفحة {pi + 1} من {printChunks.length} ({chunk.length} عميل)</td>
+                            <td colSpan={3}>إجمالي الصفحة {pi + 1} من {printChunks.length} ({custs.length} عميل)</td>
                             <td className="rd-p-num rd-p-bal">{fmt(pageTotal)}</td>
                             <td colSpan={4} />
                           </tr>
@@ -750,14 +877,16 @@ export default function RepDebtPage() {
           isAdmin={!!user && ['super_admin', 'it_admin'].includes(user.role)}
           onClose={() => setNoteCustomer(null)}
           onSaved={res => {
-            const isOwner = noteCustomer.kind === 'owner';
-            queryClient.setQueryData([isOwner ? 'debt-owner-notes' : 'debt-notes', noteIds], old => {
+            const kind = noteCustomer.kind;
+            const cacheKey = kind === 'invoice' ? ['debt-invoice-notes']
+              : [kind === 'owner' ? 'debt-owner-notes' : 'debt-notes', noteIds];
+            queryClient.setQueryData(cacheKey, old => {
               const next = { ...(old || {}) };
               if (res.note) next[res.customer_id] = { note: res.note, note_updated_at: res.note_updated_at, note_updated_by: res.note_updated_by };
               else delete next[res.customer_id];
               return next;
             });
-            if (!isOwner) queryClient.invalidateQueries({ queryKey: ['aging-by-period'] });   // same notes on that page
+            if (kind === 'debt') queryClient.invalidateQueries({ queryKey: ['aging-by-period'] });   // same notes on that page
             setNoteCustomer(cur => cur && ({ ...cur, note: res.note || '' }));
           }}
         />

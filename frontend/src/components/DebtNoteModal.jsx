@@ -12,6 +12,8 @@ import './DebtNotes.css';
 const KIND_TEXT = {
   debt:  { title: 'ملاحظات المديونية', placeholder: 'اكتب ملاحظة عن المديونية (موعد سداد، تواصل، إجراء…)', empty: 'لا توجد ملاحظة' },
   owner: { title: 'العميل صاحب الدين الفعلي', placeholder: 'بيانات العميل الفعلي صاحب المديونية (الاسم، الجوال، السجل التجاري، العنوان…)', empty: 'لا توجد بيانات' },
+  // kind=invoice: `customer.customer_id` carries the invoice number (see aging.js NOTE_TABLES)
+  invoice: { title: 'ملاحظة الفاتورة', placeholder: 'ملاحظة على هذه الفاتورة (سبب التأخير، موعد السداد، اعتراض…)', empty: 'لا توجد ملاحظة', idLabel: 'رقم الفاتورة' },
 };
 const fmtStamp = iso => iso
   ? new Date(iso).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
@@ -19,7 +21,7 @@ const fmtStamp = iso => iso
 
 export default function DebtNoteModal({ customer, kind = 'debt', canEdit, isAdmin, onClose, onSaved }) {
   const txt = KIND_TEXT[kind] || KIND_TEXT.debt;
-  const kindParams = kind === 'owner' ? { params: { kind } } : undefined;
+  const kindParams = kind !== 'debt' ? { params: { kind } } : undefined;
   const [text, setText] = useState(customer.note || '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
@@ -70,7 +72,7 @@ export default function DebtNoteModal({ customer, kind = 'debt', canEdit, isAdmi
           <MessageSquareText size={18} color="#b45309" />
           <div className="age-modal-customer">
             <div className="age-modal-customer-name">{txt.title} — {customer.customer_name}</div>
-            <div className="abp-note-sub">رقم العميل {customer.customer_id}</div>
+            <div className="abp-note-sub">{txt.idLabel || 'رقم العميل'} {customer.customer_id}</div>
           </div>
           <button className="age-modal-close" onClick={onClose}><X size={18} /></button>
         </div>

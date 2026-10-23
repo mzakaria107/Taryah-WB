@@ -3343,6 +3343,11 @@ are built from the data, not hardcoded, so 2027 rolls over by itself.
   export/print and highlighted — when EITHER of its two notes is filled (`invHasNote`). Excel adds the
   column «العميل صاحب الدين الفعلي (الفاتورة)»; print puts the invoice note under ملاحظات and the
   invoice owner under «العميل صاحب الدين الفعلي», aligned with the customer columns.
+  **Sort by the note columns (23 Oct 2026)**: «ملاحظات» (`custSortCol = 'note'`) and «العميل صاحب
+  الدين الفعلي» (`'owner_note'`) headers are sortable. Key = latest `note_updated_at` among the
+  customer's note AND its open invoices' notes of the same kind (invoice / invoice_owner); customers
+  with notes first (desc = newest first, asc = oldest first), customers without notes always last.
+  Print and Excel follow the same order (they read `sortedCustomers`).
 - **Debt notes shared with the rep-debt page (18 Oct 2026)**: `RepDebtPage` ("صافي مديونية العملاء"
   tab) has a "ملاحظات" column backed by the SAME `debt_notes` / `debt_notes_history` — a note saved on
   either page shows on both, with one shared history. New `GET /api/aging/debt-notes?ids=a,b,c`

@@ -448,3 +448,4 @@
 .rd-ptable tr.rd-p-inv td { background: #fffbeb; font-size: 10.5px; color: #78350f; }
 .rd-ptable tr.rd-p-inv td:first-child { box-shadow: inset -3px 0 0 #f59e0b; }
 @media print { .rd-ptable tr.rd-p-inv td { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+.rd-th.rd-th--note-sort { cursor: pointer; }

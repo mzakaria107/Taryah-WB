@@ -277,6 +277,23 @@ export default function RepDebtPage() {
 
   const sortedCustomers = useMemo(() => {
     if (!custSortCol) return customerRows;
+    // Note columns sort by the latest update among the customer's note AND its invoices' notes of
+    // the same kind: noted customers first (desc = newest first, asc = oldest first), un-noted always last.
+    const NOTE_SORT = {
+      note:       [notes,      invNotes],
+      owner_note: [ownerNotes, invOwnerNotes],
+    }[custSortCol];
+    if (NOTE_SORT) {
+      const [custMap, invMap] = NOTE_SORT;
+      const stamp = x => (x?.note ? new Date(x.note_updated_at || 0).getTime() || 1 : 0);
+      const key = c => Math.max(stamp(custMap[c.customer_id]),
+        ...(openInvByCust.get(c.customer_id) || []).map(inv => stamp(invMap[inv.invoice_number])));
+      const dir = custSortDir === 'asc' ? 1 : -1;
+      return customerRows.map(c => [c, key(c)]).sort(([, ka], [, kb]) => {
+        if (!ka !== !kb) return ka ? -1 : 1;
+        return (ka - kb) * dir;
+      }).map(([c]) => c);
+    }
     const col = CUST_COLUMNS.find(c => c.key === custSortCol);
     if (!col) return customerRows;
     const dir = custSortDir === 'asc' ? 1 : -1;
@@ -286,7 +303,7 @@ export default function RepDebtPage() {
       if (typeof av === 'number' && typeof bv === 'number') return (av - bv) * dir;
       return String(av).localeCompare(String(bv), 'ar') * dir;
     });
-  }, [customerRows, custSortCol, custSortDir]);
+  }, [customerRows, custSortCol, custSortDir, notes, ownerNotes, invNotes, invOwnerNotes, openInvByCust]);
 
   // Printed rows: each customer, followed by its noted invoices (highlighted sub-rows).
   const printItems = useMemo(() => sortedCustomers.flatMap(c => [
@@ -641,8 +658,19 @@ export default function RepDebtPage() {
                         </span>
                       </th>
                     ))}
-                    <th className="rd-th rd-th--note rd-th--note-main">ملاحظات</th>
-                    <th className="rd-th rd-th--note">العميل صاحب الدين الفعلي</th>
+                    {[['note', 'ملاحظات', ' rd-th--note-main'], ['owner_note', 'العميل صاحب الدين الفعلي', '']].map(([key, label, extra]) => (
+                      <th
+                        key={key}
+                        className={`rd-th rd-th--note rd-th--note-sort${extra}${custSortCol === key ? ' rd-th--sorted' : ''}`}
+                        title="ترتيب: العملاء الذين لديهم ملاحظات أولاً (الأحدث تعديلاً، أو الأقدم عند الضغط مرة أخرى)"
+                        onClick={() => handleCustSort(key)}
+                      >
+                        {label}
+                        <span className="rd-sort">
+                          {custSortCol === key ? (custSortDir === 'desc' ? ' ▼' : ' ▲') : ' ⇅'}
+                        </span>
+                      </th>
+                    ))}
                   </tr>
                 </thead>
                 <tbody>

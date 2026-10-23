@@ -12,7 +12,8 @@ import './DebtNotes.css';
 const KIND_TEXT = {
   debt:  { title: 'ملاحظات المديونية', placeholder: 'اكتب ملاحظة عن المديونية (موعد سداد، تواصل، إجراء…)', empty: 'لا توجد ملاحظة' },
   owner: { title: 'العميل صاحب الدين الفعلي', placeholder: 'بيانات العميل الفعلي صاحب المديونية (الاسم، الجوال، السجل التجاري، العنوان…)', empty: 'لا توجد بيانات' },
-  // kind=invoice: `customer.customer_id` carries the invoice number (see aging.js NOTE_TABLES)
+  // kind=invoice / invoice_owner: `customer.customer_id` carries the invoice number (see aging.js NOTE_TABLES)
+  invoice_owner: { title: 'العميل صاحب الدين الفعلي (فاتورة)', placeholder: 'بيانات العميل الفعلي صاحب مديونية هذه الفاتورة (الاسم، الجوال، السجل التجاري، العنوان…)', empty: 'لا توجد بيانات', idLabel: 'رقم الفاتورة' },
   invoice: { title: 'ملاحظة الفاتورة', placeholder: 'ملاحظة على هذه الفاتورة (سبب التأخير، موعد السداد، اعتراض…)', empty: 'لا توجد ملاحظة', idLabel: 'رقم الفاتورة' },
 };
 const fmtStamp = iso => iso

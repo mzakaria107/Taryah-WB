@@ -440,8 +440,10 @@
 .rd-inv-table td { padding: 5px 8px; border-top: 1px solid var(--color-border, #e2e8f0); }
 .rd-inv-table tr.rd-inv-row--noted td { background: #fffbeb; }
 .rd-inv-table tr.rd-inv-row--noted td:first-child { box-shadow: inset -3px 0 0 #f59e0b; }
-.rd-inv-table .rd-inv-note { min-width: 260px; max-width: 360px; }
-.rd-inv-table .rd-inv-note .abp-note-cell, .rd-inv-table .rd-inv-note .abp-note-cell-text { max-width: 340px; }
+.rd-inv-table .rd-inv-note { min-width: 230px; max-width: 320px; }
+.rd-inv-table .rd-inv-note .abp-note-cell, .rd-inv-table .rd-inv-note .abp-note-cell-text { max-width: 300px; }
+.rd-inv-table .rd-inv-note--owner { min-width: 190px; max-width: 240px; }
+.rd-inv-table .rd-inv-note--owner .abp-note-cell, .rd-inv-table .rd-inv-note--owner .abp-note-cell-text { max-width: 220px; }
 /* Printed noted-invoice sub-rows (under their customer) */
 .rd-ptable tr.rd-p-inv td { background: #fffbeb; font-size: 10.5px; color: #78350f; }
 .rd-ptable tr.rd-p-inv td:first-child { box-shadow: inset -3px 0 0 #f59e0b; }

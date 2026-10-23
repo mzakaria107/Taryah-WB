@@ -253,8 +253,18 @@ export default function RepDebtPage() {
     staleTime: 30_000,
   });
   const invNotes = invNotesData || {};
-  const notedInvoices = useCallback(c => (openInvByCust.get(c.customer_id) || []).filter(inv => invNotes[inv.invoice_number]?.note),
-    [openInvByCust, invNotes]);
+  // «العميل صاحب الدين الفعلي» per invoice (kind=invoice_owner) — same rules as the invoice note
+  const { data: invOwnerNotesData } = useQuery({
+    queryKey: ['debt-invoice-owner-notes'],
+    queryFn: () => client.get('/aging/debt-notes', { params: { kind: 'invoice_owner' } }).then(r => r.data.notes || {}),
+    staleTime: 30_000,
+  });
+  const invOwnerNotes = invOwnerNotesData || {};
+  // An invoice counts as "noted" (listed in export/print) when either of its two notes is filled.
+  const invHasNote = useCallback(inv => !!(invNotes[inv.invoice_number]?.note || invOwnerNotes[inv.invoice_number]?.note),
+    [invNotes, invOwnerNotes]);
+  const notedInvoices = useCallback(c => (openInvByCust.get(c.customer_id) || []).filter(invHasNote),
+    [openInvByCust, invHasNote]);
   const [expandedCust, setExpandedCust] = useState(() => new Set());
   const toggleCust = id => setExpandedCust(prev => {
     const next = new Set(prev);
@@ -297,7 +307,7 @@ export default function RepDebtPage() {
     if (sizes) setPrintPageSizes(prev => (prev && prev.join() === sizes.join() ? prev : sizes));
   }, []);
   useLayoutEffect(() => { if (activeTab === 'customers') remeasurePrint(); },
-    [activeTab, printItems, notes, ownerNotes, remeasurePrint]);
+    [activeTab, printItems, notes, ownerNotes, invNotes, invOwnerNotes, remeasurePrint]);
   useEffect(() => {
     // Ctrl+P / the print button: re-measure synchronously (fonts may have loaded since).
     const onBefore = () => flushSync(remeasurePrint);
@@ -360,7 +370,7 @@ export default function RepDebtPage() {
       // Invoice columns appear only when some invoice carries a note; such invoices follow their
       // customer as "↳" rows (balance column left blank there so the column still foots).
       const withInv = sortedCustomers.some(c => notedInvoices(c).length);
-      const invHead = withInv ? ['رقم الفاتورة', 'تاريخ الفاتورة', 'عمر الفاتورة (يوم)', 'متبقي الفاتورة', 'حالة الفاتورة', 'ملاحظة الفاتورة'] : [];
+      const invHead = withInv ? ['رقم الفاتورة', 'تاريخ الفاتورة', 'عمر الفاتورة (يوم)', 'متبقي الفاتورة', 'حالة الفاتورة', 'ملاحظة الفاتورة', 'العميل صاحب الدين الفعلي (الفاتورة)'] : [];
       const blankInv = invHead.map(() => '');
       header = ['كود العميل', 'العميل', 'المنطقة', 'صافي المديونية', 'عمر أقدم مديونية (يوم)', 'عمر أقرب مديونية (يوم)', 'ملاحظات', 'العميل صاحب الدين الفعلي', ...invHead];
       rows = sortedCustomers.flatMap(c => [
@@ -380,6 +390,7 @@ export default function RepDebtPage() {
           inv.invoice_number, fmtDate(inv.invoice_date), ageDays(inv.invoice_date) ?? '',
           Number(inv.balance || 0), (STATUS_MAP[inv.status]?.[0]) || inv.status || '—',
           invNotes[inv.invoice_number]?.note || '',
+          invOwnerNotes[inv.invoice_number]?.note || '',
         ]),
       ]);
       rows.push([
@@ -417,7 +428,7 @@ export default function RepDebtPage() {
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, sheetName);
     XLSX.writeFile(wb, `${fileTag}_${decodedName}_${dateSuffix}.xlsx`);
-  }, [activeTab, sortedInvoices, sortedCustomers, custSummary, invSummary, decodedName, notes, ownerNotes, notedInvoices, invNotes]);
+  }, [activeTab, sortedInvoices, sortedCustomers, custSummary, invSummary, decodedName, notes, ownerNotes, notedInvoices, invNotes, invOwnerNotes]);
 
   return (
     <div className="rd-page">
@@ -695,14 +706,14 @@ export default function RepDebtPage() {
                               <thead>
                                 <tr>
                                   <th>رقم الفاتورة</th><th>التاريخ</th><th>العمر</th><th>المبلغ الأصلي</th>
-                                  <th>المدفوع</th><th>المتبقي</th><th>الحالة</th><th>ملاحظة الفاتورة</th>
+                                  <th>المدفوع</th><th>المتبقي</th><th>الحالة</th><th>ملاحظة الفاتورة</th><th>العميل صاحب الدين الفعلي</th>
                                 </tr>
                               </thead>
                               <tbody>
                                 {openInv.map(inv => {
-                                  const n = invNotes[inv.invoice_number];
+                                  const n = invNotes[inv.invoice_number], o = invOwnerNotes[inv.invoice_number];
                                   return (
-                                    <tr key={inv.invoice_number} className={n?.note ? 'rd-inv-row--noted' : ''}>
+                                    <tr key={inv.invoice_number} className={invHasNote(inv) ? 'rd-inv-row--noted' : ''}>
                                       <td className="rd-td-code">{inv.invoice_number}</td>
                                       <td>{fmtDate(inv.invoice_date)}</td>
                                       <td className="rd-td-age"><AgeBadge days={ageDays(inv.invoice_date)} /></td>
@@ -717,6 +728,16 @@ export default function RepDebtPage() {
                                           updatedBy={n?.note_updated_by}
                                           canEdit={canEditNotes}
                                           onOpen={() => setNoteCustomer({ kind: 'invoice', customer_id: inv.invoice_number, customer_name: c.customer_name, note: n?.note || '' })}
+                                        />
+                                      </td>
+                                      <td className="rd-td-note rd-inv-note rd-inv-note--owner">
+                                        <DebtNoteCell
+                                          note={o?.note}
+                                          updatedAt={o?.note_updated_at}
+                                          updatedBy={o?.note_updated_by}
+                                          canEdit={canEditNotes}
+                                          addLabel="بيانات"
+                                          onOpen={() => setNoteCustomer({ kind: 'invoice_owner', customer_id: inv.invoice_number, customer_name: c.customer_name, note: o?.note || '' })}
                                         />
                                       </td>
                                     </tr>
@@ -772,7 +793,7 @@ export default function RepDebtPage() {
                         {chunk.map(item => {
                           const c = item.c;
                           if (item.t === 'i') {
-                            const inv = item.inv, x = invNotes[inv.invoice_number];
+                            const inv = item.inv;
                             return (
                               <tr key={`i-${inv.invoice_number}`} data-prow="" className="rd-p-inv">
                                 <td />
@@ -781,10 +802,15 @@ export default function RepDebtPage() {
                                   {' '}· المتبقي <b className="rd-p-bal">{fmt(inv.balance)}</b>
                                   {' '}· {(STATUS_MAP[inv.status]?.[0]) || inv.status}
                                 </td>
-                                <td colSpan={2} className="rd-p-note">
-                                  <div className="rd-p-note-text">{x?.note}</div>
-                                  <div className="rd-p-note-meta">{x?.note_updated_by || '—'} · {fmtNoteStamp(x?.note_updated_at)}</div>
-                                </td>
+                                {/* invoice note under «ملاحظات», invoice owner under «العميل صاحب الدين الفعلي» */}
+                                {[invNotes[inv.invoice_number], invOwnerNotes[inv.invoice_number]].map((x, k) => (
+                                  <td key={k} className="rd-p-note">
+                                    {x?.note && <>
+                                      <div className="rd-p-note-text">{x.note}</div>
+                                      <div className="rd-p-note-meta">{x.note_updated_by || '—'} · {fmtNoteStamp(x.note_updated_at)}</div>
+                                    </>}
+                                  </td>
+                                ))}
                               </tr>
                             );
                           }
@@ -879,6 +905,7 @@ export default function RepDebtPage() {
           onSaved={res => {
             const kind = noteCustomer.kind;
             const cacheKey = kind === 'invoice' ? ['debt-invoice-notes']
+              : kind === 'invoice_owner' ? ['debt-invoice-owner-notes']
               : [kind === 'owner' ? 'debt-owner-notes' : 'debt-notes', noteIds];
             queryClient.setQueryData(cacheKey, old => {
               const next = { ...(old || {}) };

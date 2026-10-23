@@ -3337,6 +3337,12 @@ are built from the data, not hardcoded, so 2027 rolls over by itself.
   the column still foots; print: amber sub-rows, counted in the page measurement but not in the page
   total). With no invoice notes the export is customer-level only (no invoice columns). Also fixed: the
   Excel callback's dependency list lacked `ownerNotes` (stale «صاحب الدين» values could be exported).
+  **Per-invoice «العميل صاحب الدين الفعلي» (23 Oct 2026)**: fourth note kind `?kind=invoice_owner`
+  (`debt_invoice_owner_notes` / `_history`, keyed by `invoice_number`), shown as the last column of
+  the invoice drop-down (`DebtNoteCell` with `addLabel="بيانات"`). An invoice is "noted" — listed in
+  export/print and highlighted — when EITHER of its two notes is filled (`invHasNote`). Excel adds the
+  column «العميل صاحب الدين الفعلي (الفاتورة)»; print puts the invoice note under ملاحظات and the
+  invoice owner under «العميل صاحب الدين الفعلي», aligned with the customer columns.
 - **Debt notes shared with the rep-debt page (18 Oct 2026)**: `RepDebtPage` ("صافي مديونية العملاء"
   tab) has a "ملاحظات" column backed by the SAME `debt_notes` / `debt_notes_history` — a note saved on
   either page shows on both, with one shared history. New `GET /api/aging/debt-notes?ids=a,b,c`

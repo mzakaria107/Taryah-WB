@@ -495,6 +495,8 @@ const NOTE_TABLES = {
   // invoice = notes on one open invoice (rep-debt customer drill-down); keyed by invoice_number,
   // which is unique and survives the truncate-and-reload balance upload (invoice ids do not).
   invoice: { cur: 'debt_invoice_notes', hist: 'debt_invoice_notes_history', key: 'invoice_number' },
+  // invoice_owner = «العميل صاحب الدين الفعلي» for one invoice (same idea as `owner`, per invoice)
+  invoice_owner: { cur: 'debt_invoice_owner_notes', hist: 'debt_invoice_owner_notes_history', key: 'invoice_number' },
 };
 for (const t of Object.values(NOTE_TABLES)) t.key = t.key || 'customer_id';
 // The URL/response field stays "customer_id" for every kind; for kind=invoice it carries the invoice number.

@@ -1189,3 +1189,22 @@
   align-self: flex-end;
 }
 .srp-range-toggle input { cursor: pointer; }
+
+/* ── Item × region matrix (ItemMatrixSection) ─────────────────── */
+.srp-im-hdr-actions { display: inline-flex; align-items: center; gap: 10px; }
+.srp-im-expand-all {
+  font: inherit; font-size: 0.75rem; font-weight: 600; padding: 4px 10px; border-radius: 8px; cursor: pointer;
+  border: 1px solid var(--color-border, #e2e8f0); background: #fff; color: #1d4ed8;
+}
+.srp-im-expand-all:hover { border-color: #1d4ed8; }
+.srp-im-table .srp-im-name { min-width: 220px; }
+.srp-im-table .srp-im-region { white-space: nowrap; min-width: 92px; }
+.srp-im-table .srp-im-cell { line-height: 1.25; }
+.srp-im-table .srp-im-val { font-size: 0.72rem; color: var(--color-text-muted, #64748b); font-weight: 400; }
+.srp-im-table .srp-im-item-row { cursor: pointer; }
+.srp-im-table .srp-im-rep-row .srp-td-rep { padding-inline-start: 34px; }
+@media print {
+  .srp-im-wrap { break-inside: auto; }
+  .srp-im-table tr { break-inside: avoid; }
+  .srp-im-table thead { display: table-header-group; }
+}

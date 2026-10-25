@@ -3434,6 +3434,19 @@ Verified: the endpoint run against a mocked DB (year/month split, net-zero custo
 net-credit kept, footer foots, filter params bind correctly); `npm run build` clean. Not run
 against production data — no DB access or login from the cloud session.
 
+## Sales report (`/sales-report`) — item × region matrix (25 Oct 2026)
+
+«تفاصيل المبيعات بالأصناف — المناديب تحت كل صنف» (`ItemMatrixSection` in `SalesReportPage.jsx`,
+classes `srp-im-*`), on the «المبيعات اليوم» and «المبيعات الشهرية» tabs between the main
+region → rep → item table and the performance section. Built client-side by `buildItemMatrix()` from
+the SAME filtered `regions` array the main table renders (warehouse toggle, saved region/type filters,
+region/day/month/year/date-range filters), so it always foots to the KPI cards. Rows = items (sorted by
+net qty), click to expand the reps who sold that item (rep sub-row fills only its own region column);
+columns = one per region (net qty + value below) + total qty / value / avg price (|value ÷ qty|);
+returns stay negative (net). "توسيع الكل / طي الكل" button; collapsible like the perf section. The
+Excel export gains a second sheet «الأصناف × المناطق» (qty + value per region, rep rows marked "↳").
+Verified in Playwright on mocked NetSuite data: footer 930 / 12,890 = KPI totals, Excel sheet matches.
+
 ## Ongoing Rules
 - Always update this CLAUDE.md when adding new pages, routes, migrations, or significant business logic changes.
 - After any local code change: `docker compose build && docker compose up -d`

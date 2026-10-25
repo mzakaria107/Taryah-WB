@@ -274,6 +274,144 @@ function PerfSection({ regions }) {
   );
 }
 
+/* ── Item × region matrix (items, reps under each item) ──────────
+   Built from the SAME filtered `regions` the main table renders, so it follows every filter and
+   foots to the KPIs. Rows = items (sorted by net qty), expandable to the reps who sold them;
+   columns = one per region (net qty, value below) + total qty / value / avg price. */
+function buildItemMatrix(regions) {
+  const regionNames = regions.map(r => r.regionName);
+  const items = new Map();
+  regions.forEach(region => region.reps.forEach(rep => rep.items.forEach(it => {
+    const key = it.itemName || '—';
+    if (!items.has(key)) items.set(key, { itemName: key, itemType: it.itemType, qty: 0, total: 0, byRegion: {}, reps: new Map() });
+    const row = items.get(key);
+    row.qty += it.qty; row.total += it.total;
+    const cell = row.byRegion[region.regionName] || (row.byRegion[region.regionName] = { qty: 0, total: 0 });
+    cell.qty += it.qty; cell.total += it.total;
+    const rk = `${region.regionName}|${rep.repName}`;
+    if (!row.reps.has(rk)) row.reps.set(rk, { repName: rep.repName, regionName: region.regionName, qty: 0, total: 0 });
+    const r = row.reps.get(rk);
+    r.qty += it.qty; r.total += it.total;
+  })));
+  const rows = [...items.values()]
+    .map(r => ({ ...r, reps: [...r.reps.values()].sort((a, b) => b.qty - a.qty) }))
+    .sort((a, b) => b.qty - a.qty);
+  const totals = { qty: 0, total: 0, byRegion: {} };
+  rows.forEach(r => {
+    totals.qty += r.qty; totals.total += r.total;
+    Object.entries(r.byRegion).forEach(([k, c]) => {
+      const t = totals.byRegion[k] || (totals.byRegion[k] = { qty: 0, total: 0 });
+      t.qty += c.qty; t.total += c.total;
+    });
+  });
+  return { regionNames, rows, totals };
+}
+const avgOf = (qty, total) => (qty !== 0 ? fmtC(Math.abs(total / qty)) : '—');
+
+function MatrixCell({ c, bold = false }) {
+  if (!c || (c.qty === 0 && c.total === 0)) return <td className="srp-td srp-td-num srp-im-cell srp-muted">—</td>;
+  return (
+    <td className="srp-td srp-td-num srp-im-cell">
+      <div><NetVal n={c.qty} isQty bold={bold} /></div>
+      <div className="srp-im-val"><NetVal n={c.total} /></div>
+    </td>
+  );
+}
+
+function ItemMatrixSection({ regions }) {
+  const [open, setOpen] = useState(true);
+  const [expanded, setExpanded] = useState(() => new Set());
+  const { regionNames, rows, totals } = useMemo(() => buildItemMatrix(regions), [regions]);
+  if (!rows.length) return null;
+  const allOpen = expanded.size === rows.length;
+  const toggle = name => setExpanded(prev => {
+    const next = new Set(prev);
+    if (next.has(name)) next.delete(name); else next.add(name);
+    return next;
+  });
+  return (
+    <div className="srp-perf-wrap srp-im-wrap">
+      <div className="srp-perf-hdr" onClick={() => setOpen(v => !v)}>
+        <span className="srp-perf-hdr-title"><Package size={16}/> تفاصيل المبيعات بالأصناف — المناديب تحت كل صنف</span>
+        <span className="srp-im-hdr-actions">
+          {open && (
+            <button type="button" className="srp-im-expand-all srp-no-print"
+              onClick={e => { e.stopPropagation(); setExpanded(allOpen ? new Set() : new Set(rows.map(r => r.itemName))); }}>
+              {allOpen ? 'طي الكل' : 'توسيع الكل'}
+            </button>
+          )}
+          <span className="srp-perf-hdr-toggle">{open ? <ChevronDown size={15}/> : <ChevronLeft size={15}/>}</span>
+        </span>
+      </div>
+      {open && (
+        <div className="srp-perf-table-wrap">
+          <table className="srp-table srp-im-table">
+            <thead>
+              <tr className="srp-thead-row">
+                <th className="srp-th srp-th-name srp-im-name">الصنف / المندوب</th>
+                <th className="srp-th srp-th-type">النوع</th>
+                {regionNames.map(n => <th key={n} className="srp-th srp-th-num srp-im-region">📍 {n}</th>)}
+                <th className="srp-th srp-th-num">الكمية</th>
+                <th className="srp-th srp-th-num srp-th-total">الإجمالي (ر.س)</th>
+                <th className="srp-th srp-th-num srp-th-avg">متوسط السعر</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map(row => {
+                const isOpen = expanded.has(row.itemName);
+                return (
+                  <React.Fragment key={row.itemName}>
+                    <tr className="srp-region-row srp-im-item-row" onClick={() => toggle(row.itemName)}>
+                      <td className="srp-td srp-region-name srp-im-name">
+                        <span className="srp-toggle-btn">{isOpen ? <ChevronDown size={13}/> : <ChevronLeft size={13}/>}</span>
+                        <span className="srp-item-dot" style={{ background: typeColor(row.itemType) }} />
+                        {row.itemName}
+                        <span className="srp-region-meta">{row.reps.length} مندوب</span>
+                      </td>
+                      <td className="srp-td srp-td-type">
+                        <span className="srp-type-badge" style={{ background: typeColor(row.itemType) + '22', color: typeColor(row.itemType) }}>
+                          {row.itemType || '—'}
+                        </span>
+                      </td>
+                      {regionNames.map(n => <MatrixCell key={n} c={row.byRegion[n]} bold />)}
+                      <td className="srp-td srp-td-num srp-region-num"><NetVal n={row.qty} isQty bold /></td>
+                      <td className="srp-td srp-td-num srp-region-num srp-td-total"><NetVal n={row.total} bold /></td>
+                      <td className="srp-td srp-td-num srp-td-avg srp-region-num"><strong>{avgOf(row.qty, row.total)}</strong></td>
+                    </tr>
+                    {isOpen && row.reps.map(rep => (
+                      <tr key={`${rep.regionName}|${rep.repName}`} className={`srp-rep-row srp-im-rep-row${rep.qty < 0 ? ' srp-return' : ''}`}>
+                        <td className="srp-td srp-td-rep srp-im-name">
+                          <span className="srp-rep-avatar">{rep.repName.charAt(0)}</span>
+                          {rep.repName}
+                          <span className="srp-rep-items-count">📍 {rep.regionName}</span>
+                        </td>
+                        <td className="srp-td" />
+                        {regionNames.map(n => <MatrixCell key={n} c={n === rep.regionName ? rep : null} />)}
+                        <td className="srp-td srp-td-num srp-rep-num"><NetVal n={rep.qty} isQty /></td>
+                        <td className="srp-td srp-td-num srp-rep-num srp-td-total"><NetVal n={rep.total} /></td>
+                        <td className="srp-td srp-td-num srp-td-avg srp-rep-num">{avgOf(rep.qty, rep.total)}</td>
+                      </tr>
+                    ))}
+                  </React.Fragment>
+                );
+              })}
+            </tbody>
+            <tfoot>
+              <tr className="srp-tfoot-row">
+                <td className="srp-td" colSpan={2}><strong>الإجمالي الكلي (صافي) — {rows.length} صنف</strong></td>
+                {regionNames.map(n => <MatrixCell key={n} c={totals.byRegion[n]} bold />)}
+                <td className="srp-td srp-td-num"><NetVal n={totals.qty} isQty bold /></td>
+                <td className="srp-td srp-td-num srp-td-total"><NetVal n={totals.total} bold /></td>
+                <td className="srp-td srp-td-num srp-td-avg"><strong>{avgOf(totals.qty, totals.total)}</strong></td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ── Sales Content (shared between tabs) ─────────────────────── */
 function SalesContent({ period }) {
   const isMonthly  = period === 'monthly';
@@ -457,6 +595,19 @@ function SalesContent({ period }) {
       const ws = XLSX.utils.json_to_sheet(rows);
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, 'تقرير المبيعات');
+      // Second sheet: the item × region matrix (item rows, their reps underneath)
+      const { regionNames, rows: mRows, totals } = buildItemMatrix(regions);
+      const head = ['الصنف', 'المندوب', 'النوع', ...regionNames.flatMap(n => [`${n} - كمية`, `${n} - قيمة`]), 'الكمية', 'الإجمالي (ر.س)', 'متوسط السعر'];
+      const avgNum = (q, t) => (q !== 0 ? +Math.abs(t / q).toFixed(2) : '');
+      const aoa = [head];
+      mRows.forEach(r => {
+        aoa.push([r.itemName, '', r.itemType || '', ...regionNames.flatMap(n => [r.byRegion[n]?.qty ?? '', r.byRegion[n]?.total ?? '']), r.qty, r.total, avgNum(r.qty, r.total)]);
+        r.reps.forEach(p => aoa.push([`↳ ${r.itemName}`, `${p.repName} (${p.regionName})`, '',
+          ...regionNames.flatMap(n => (n === p.regionName ? [p.qty, p.total] : ['', ''])), p.qty, p.total, avgNum(p.qty, p.total)]));
+      });
+      aoa.push(['الإجمالي الكلي (صافي)', '', '', ...regionNames.flatMap(n => [totals.byRegion[n]?.qty ?? '', totals.byRegion[n]?.total ?? '']), totals.qty, totals.total, avgNum(totals.qty, totals.total)]);
+      const ws2 = XLSX.utils.aoa_to_sheet(aoa);
+      XLSX.utils.book_append_sheet(wb, ws2, 'الأصناف × المناطق');
       const label = isMonthly ? 'الشهرية' : 'اليوم';
       const date  = new Date().toISOString().slice(0, 10);
       XLSX.writeFile(wb, `تقرير_المبيعات_${label}_${date}.xlsx`);
@@ -1008,6 +1159,9 @@ function SalesContent({ period }) {
           </table>
         )}
       </div>
+
+      {/* Item × region matrix — items, with their reps underneath */}
+      {!isLoading && regions.length > 0 && <ItemMatrixSection regions={regions} />}
 
       {/* Performance Section */}
       {!isLoading && regions.length > 0 && <PerfSection regions={regions} />}

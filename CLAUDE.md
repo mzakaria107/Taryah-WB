@@ -3446,6 +3446,12 @@ columns = one per region (net qty + value below) + total qty / value / avg price
 returns stay negative (net). "توسيع الكل / طي الكل" button; collapsible like the perf section. The
 Excel export gains a second sheet «الأصناف × المناطق» (qty + value per region, rep rows marked "↳").
 Verified in Playwright on mocked NetSuite data: footer 930 / 12,890 = KPI totals, Excel sheet matches.
+**Category level (25 Oct 2026)**: items are grouped under their category (`itemType`, "بدون فئة" if
+blank) — category → item → rep. `buildItemMatrix()` also returns `categories` (sorted by net qty, each
+with per-region subtotals summed from its item rows). Categories start OPEN (`closedCats` state) so
+the items are visible; reps stay folded per item (`expanded`). "توسيع الكل" opens every category and
+item; "طي الكل" closes them all. Category rows are tinted with the type colour (`--cat-color`). Excel
+sheet: a "إجمالي <الفئة>" row before each category's items, and a «الفئة» column on every row.
 
 ## Ongoing Rules
 - Always update this CLAUDE.md when adding new pages, routes, migrations, or significant business logic changes.

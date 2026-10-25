@@ -296,15 +296,25 @@ function buildItemMatrix(regions) {
   const rows = [...items.values()]
     .map(r => ({ ...r, reps: [...r.reps.values()].sort((a, b) => b.qty - a.qty) }))
     .sort((a, b) => b.qty - a.qty);
-  const totals = { qty: 0, total: 0, byRegion: {} };
-  rows.forEach(r => {
-    totals.qty += r.qty; totals.total += r.total;
+  const sumInto = (acc, r) => {
+    acc.qty += r.qty; acc.total += r.total;
     Object.entries(r.byRegion).forEach(([k, c]) => {
-      const t = totals.byRegion[k] || (totals.byRegion[k] = { qty: 0, total: 0 });
+      const t = acc.byRegion[k] || (acc.byRegion[k] = { qty: 0, total: 0 });
       t.qty += c.qty; t.total += c.total;
     });
+    return acc;
+  };
+  const totals = rows.reduce(sumInto, { qty: 0, total: 0, byRegion: {} });
+  // Category (item type) level above the items, each with its own subtotals
+  const catMap = new Map();
+  rows.forEach(r => {
+    const k = r.itemType || 'بدون فئة';
+    if (!catMap.has(k)) catMap.set(k, { category: k, itemType: r.itemType, qty: 0, total: 0, byRegion: {}, items: [] });
+    const c = catMap.get(k);
+    c.items.push(r); sumInto(c, r);
   });
-  return { regionNames, rows, totals };
+  const categories = [...catMap.values()].sort((a, b) => b.qty - a.qty);
+  return { regionNames, rows, categories, totals };
 }
 const avgOf = (qty, total) => (qty !== 0 ? fmtC(Math.abs(total / qty)) : '—');
 
@@ -320,15 +330,18 @@ function MatrixCell({ c, bold = false }) {
 
 function ItemMatrixSection({ regions }) {
   const [open, setOpen] = useState(true);
-  const [expanded, setExpanded] = useState(() => new Set());
-  const { regionNames, rows, totals } = useMemo(() => buildItemMatrix(regions), [regions]);
+  const [expanded, setExpanded] = useState(() => new Set());        // items showing their reps
+  const [closedCats, setClosedCats] = useState(() => new Set());    // categories start open
+  const { regionNames, rows, categories, totals } = useMemo(() => buildItemMatrix(regions), [regions]);
   if (!rows.length) return null;
-  const allOpen = expanded.size === rows.length;
-  const toggle = name => setExpanded(prev => {
+  const allOpen = expanded.size === rows.length && closedCats.size === 0;
+  const toggleIn = setter => key => setter(prev => {
     const next = new Set(prev);
-    if (next.has(name)) next.delete(name); else next.add(name);
+    if (next.has(key)) next.delete(key); else next.add(key);
     return next;
   });
+  const toggle = toggleIn(setExpanded);
+  const toggleCat = toggleIn(setClosedCats);
   return (
     <div className="srp-perf-wrap srp-im-wrap">
       <div className="srp-perf-hdr" onClick={() => setOpen(v => !v)}>
@@ -336,7 +349,11 @@ function ItemMatrixSection({ regions }) {
         <span className="srp-im-hdr-actions">
           {open && (
             <button type="button" className="srp-im-expand-all srp-no-print"
-              onClick={e => { e.stopPropagation(); setExpanded(allOpen ? new Set() : new Set(rows.map(r => r.itemName))); }}>
+              onClick={e => {
+                e.stopPropagation();
+                if (allOpen) { setExpanded(new Set()); setClosedCats(new Set(categories.map(c => c.category))); }
+                else { setExpanded(new Set(rows.map(r => r.itemName))); setClosedCats(new Set()); }
+              }}>
               {allOpen ? 'طي الكل' : 'توسيع الكل'}
             </button>
           )}
@@ -348,7 +365,7 @@ function ItemMatrixSection({ regions }) {
           <table className="srp-table srp-im-table">
             <thead>
               <tr className="srp-thead-row">
-                <th className="srp-th srp-th-name srp-im-name">الصنف / المندوب</th>
+                <th className="srp-th srp-th-name srp-im-name">الفئة / الصنف / المندوب</th>
                 <th className="srp-th srp-th-type">النوع</th>
                 {regionNames.map(n => <th key={n} className="srp-th srp-th-num srp-im-region">📍 {n}</th>)}
                 <th className="srp-th srp-th-num">الكمية</th>
@@ -357,12 +374,30 @@ function ItemMatrixSection({ regions }) {
               </tr>
             </thead>
             <tbody>
-              {rows.map(row => {
+              {categories.map(cat => {
+                const catOpen = !closedCats.has(cat.category);
+                const color = typeColor(cat.itemType || '');
+                return (
+                <React.Fragment key={cat.category}>
+                <tr className="srp-im-cat-row" style={{ '--cat-color': color }} onClick={() => toggleCat(cat.category)}>
+                  <td className="srp-td srp-im-name srp-im-cat-name">
+                    <span className="srp-toggle-btn srp-toggle-btn--region">{catOpen ? <ChevronDown size={15}/> : <ChevronLeft size={15}/>}</span>
+                    <span className="srp-item-dot" style={{ background: color }} />
+                    {cat.category}
+                    <span className="srp-region-meta">{cat.items.length} صنف</span>
+                  </td>
+                  <td className="srp-td" />
+                  {regionNames.map(n => <MatrixCell key={n} c={cat.byRegion[n]} bold />)}
+                  <td className="srp-td srp-td-num"><NetVal n={cat.qty} isQty bold /></td>
+                  <td className="srp-td srp-td-num srp-td-total"><NetVal n={cat.total} bold /></td>
+                  <td className="srp-td srp-td-num srp-td-avg"><strong>{avgOf(cat.qty, cat.total)}</strong></td>
+                </tr>
+                {catOpen && cat.items.map(row => {
                 const isOpen = expanded.has(row.itemName);
                 return (
                   <React.Fragment key={row.itemName}>
                     <tr className="srp-region-row srp-im-item-row" onClick={() => toggle(row.itemName)}>
-                      <td className="srp-td srp-region-name srp-im-name">
+                      <td className="srp-td srp-region-name srp-im-name srp-im-item-name">
                         <span className="srp-toggle-btn">{isOpen ? <ChevronDown size={13}/> : <ChevronLeft size={13}/>}</span>
                         <span className="srp-item-dot" style={{ background: typeColor(row.itemType) }} />
                         {row.itemName}
@@ -394,11 +429,14 @@ function ItemMatrixSection({ regions }) {
                     ))}
                   </React.Fragment>
                 );
+                })}
+                </React.Fragment>
+                );
               })}
             </tbody>
             <tfoot>
               <tr className="srp-tfoot-row">
-                <td className="srp-td" colSpan={2}><strong>الإجمالي الكلي (صافي) — {rows.length} صنف</strong></td>
+                <td className="srp-td" colSpan={2}><strong>الإجمالي الكلي (صافي) — {categories.length} فئة · {rows.length} صنف</strong></td>
                 {regionNames.map(n => <MatrixCell key={n} c={totals.byRegion[n]} bold />)}
                 <td className="srp-td srp-td-num"><NetVal n={totals.qty} isQty bold /></td>
                 <td className="srp-td srp-td-num srp-td-total"><NetVal n={totals.total} bold /></td>
@@ -596,14 +634,18 @@ function SalesContent({ period }) {
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, 'تقرير المبيعات');
       // Second sheet: the item × region matrix (item rows, their reps underneath)
-      const { regionNames, rows: mRows, totals } = buildItemMatrix(regions);
-      const head = ['الصنف', 'المندوب', 'النوع', ...regionNames.flatMap(n => [`${n} - كمية`, `${n} - قيمة`]), 'الكمية', 'الإجمالي (ر.س)', 'متوسط السعر'];
+      const { regionNames, categories: mCats, totals } = buildItemMatrix(regions);
+      const head = ['الفئة', 'الصنف', 'المندوب', ...regionNames.flatMap(n => [`${n} - كمية`, `${n} - قيمة`]), 'الكمية', 'الإجمالي (ر.س)', 'متوسط السعر'];
       const avgNum = (q, t) => (q !== 0 ? +Math.abs(t / q).toFixed(2) : '');
       const aoa = [head];
-      mRows.forEach(r => {
-        aoa.push([r.itemName, '', r.itemType || '', ...regionNames.flatMap(n => [r.byRegion[n]?.qty ?? '', r.byRegion[n]?.total ?? '']), r.qty, r.total, avgNum(r.qty, r.total)]);
-        r.reps.forEach(p => aoa.push([`↳ ${r.itemName}`, `${p.repName} (${p.regionName})`, '',
-          ...regionNames.flatMap(n => (n === p.regionName ? [p.qty, p.total] : ['', ''])), p.qty, p.total, avgNum(p.qty, p.total)]));
+      const cells = x => regionNames.flatMap(n => [x.byRegion[n]?.qty ?? '', x.byRegion[n]?.total ?? '']);
+      mCats.forEach(c => {
+        aoa.push([`إجمالي ${c.category}`, '', '', ...cells(c), c.qty, c.total, avgNum(c.qty, c.total)]);
+        c.items.forEach(r => {
+          aoa.push([c.category, r.itemName, '', ...cells(r), r.qty, r.total, avgNum(r.qty, r.total)]);
+          r.reps.forEach(p => aoa.push([c.category, `↳ ${r.itemName}`, `${p.repName} (${p.regionName})`,
+            ...regionNames.flatMap(n => (n === p.regionName ? [p.qty, p.total] : ['', ''])), p.qty, p.total, avgNum(p.qty, p.total)]));
+        });
       });
       aoa.push(['الإجمالي الكلي (صافي)', '', '', ...regionNames.flatMap(n => [totals.byRegion[n]?.qty ?? '', totals.byRegion[n]?.total ?? '']), totals.qty, totals.total, avgNum(totals.qty, totals.total)]);
       const ws2 = XLSX.utils.aoa_to_sheet(aoa);

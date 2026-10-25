@@ -1208,3 +1208,10 @@
   .srp-im-table tr { break-inside: avoid; }
   .srp-im-table thead { display: table-header-group; }
 }
+/* Category level of the item matrix */
+.srp-im-table .srp-im-cat-row { cursor: pointer; background: color-mix(in srgb, var(--cat-color, #64748b) 10%, #fff); }
+.srp-im-table .srp-im-cat-row > td { border-top: 2px solid color-mix(in srgb, var(--cat-color, #64748b) 45%, #fff); font-weight: 700; }
+.srp-im-table .srp-im-cat-name { font-size: 0.92rem; color: #0f172a; }
+.srp-im-table .srp-im-item-name { padding-inline-start: 30px; }
+.srp-im-table .srp-im-rep-row .srp-td-rep { padding-inline-start: 58px; }
+@media print { .srp-im-table .srp-im-cat-row > td { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }

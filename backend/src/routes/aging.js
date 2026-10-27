@@ -296,7 +296,9 @@ router.get('/by-period', verifyToken, applyRegionFilter, requirePagePermission('
               THEN 'y' || EXTRACT(YEAR FROM i.invoice_date)::int
             ELSE 'm' || EXTRACT(MONTH FROM i.invoice_date)::int
           END AS period,
-          ROUND(SUM(i.balance)::numeric, 2) AS amount
+          ROUND(SUM(i.balance)::numeric, 2) AS amount,
+          -- open = still owed (unpaid or partially paid); credit notes / settled rows don't count
+          COUNT(*) FILTER (WHERE i.balance > 0)::int AS open_count
         FROM invoices i
         WHERE ${where}
         GROUP BY i.customer_id, period
@@ -351,12 +353,14 @@ router.get('/by-period', verifyToken, applyRegionFilter, requirePagePermission('
 
       let c = customers.get(r.customer_id);
       if (!c) {
-        c = { customer_id: r.customer_id, customer_name: r.customer_name, region_id: r.region_id, by_period: {}, total: 0 };
+        c = { customer_id: r.customer_id, customer_name: r.customer_name, region_id: r.region_id, by_period: {}, open_by_period: {}, total: 0, open_count: 0 };
         customers.set(r.customer_id, c);
       }
       if (r.region_id && !c.region_id) c.region_id = r.region_id;
       c.by_period[r.period] = (c.by_period[r.period] || 0) + amount;
       c.total += amount;
+      c.open_by_period[r.period] = (c.open_by_period[r.period] || 0) + r.open_count;
+      c.open_count += r.open_count;
     }
 
     const periods = [

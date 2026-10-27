@@ -31,7 +31,7 @@ function AgeBadge({ days }) {
 }
 
 const TEXT_COLS = ['customer_name', 'customer_id', 'region_name'];
-const ROW_COLS  = [...TEXT_COLS, 'total', 'oldest_age_days', 'newest_age_days', 'bad_debt', 'reconciliation_count'];
+const ROW_COLS  = [...TEXT_COLS, 'total', 'oldest_age_days', 'newest_age_days', 'bad_debt', 'reconciliation_count', 'open_count'];
 
 function SortIcon({ col, sortBy, sortDir }) {
   if (sortBy !== col) return <ChevronsUpDown size={12} style={{ opacity: 0.4 }} />;
@@ -136,7 +136,9 @@ export default function AgingByPeriodPage() {
     return all.map(c => {
       const by_period = Object.fromEntries(keys.filter(k => c.by_period[k] != null).map(k => [k, c.by_period[k]]));
       const total = Math.round(Object.values(by_period).reduce((s, v) => s + Number(v || 0), 0) * 100) / 100;
-      return { ...c, by_period, total };
+      // open invoices (balance > 0) in the selected years only — follows the year filter like `total`
+      const open_count = keys.reduce((s, k) => s + Number(c.open_by_period?.[k] || 0), 0);
+      return { ...c, by_period, total, open_count };
     }).filter(c => c.total !== 0);
   }, [data, filteredPeriods, selectedYears]);
 
@@ -190,9 +192,10 @@ export default function AgingByPeriodPage() {
 
   // Footer/KPIs summed from the visible rows so they follow the bad-debt filter.
   const totals = useMemo(() => {
-    const t = { total: 0 };
+    const t = { total: 0, open_count: 0 };
     for (const c of rows) {
       t.total += Number(c.total || 0);
+      t.open_count += Number(c.open_count || 0);
       for (const [k, v] of Object.entries(c.by_period)) t[k] = (t[k] || 0) + Number(v || 0);
     }
     return t;
@@ -248,17 +251,17 @@ export default function AgingByPeriodPage() {
   ].filter(Boolean).join(' · ');
 
   const handleExport = () => {
-    const header = ['العميل', 'رقم العميل', 'المنطقة', ...periods.map(p => p.label), 'إجمالي الدين', 'عمر أقدم دين (يوم)', 'عمر أقرب دين (يوم)', 'المطابقة', 'مديونية معدومة', 'سُجّلت بواسطة', 'تاريخ التسجيل', 'ملاحظات', 'آخر تعديل للملاحظة'];
+    const header = ['العميل', 'رقم العميل', 'المنطقة', ...periods.map(p => p.label), 'إجمالي الدين', 'عدد الفواتير غير المسددة', 'عمر أقدم دين (يوم)', 'عمر أقرب دين (يوم)', 'المطابقة', 'مديونية معدومة', 'سُجّلت بواسطة', 'تاريخ التسجيل', 'ملاحظات', 'آخر تعديل للملاحظة'];
     const body = rows.map(c => [
       c.customer_name, c.customer_id, c.region_name || '',
       ...periods.map(p => Number(c.by_period[p.key] || 0)),
-      c.total, c.oldest_age_days ?? '', c.newest_age_days ?? '', c.reconciliation_count > 0 ? `مطابق (${c.reconciliation_count} ملف)` : 'غير مطابق', c.bad_debt ? 'نعم' : '',
+      c.total, c.open_count || 0, c.oldest_age_days ?? '', c.newest_age_days ?? '', c.reconciliation_count > 0 ? `مطابق (${c.reconciliation_count} ملف)` : 'غير مطابق', c.bad_debt ? 'نعم' : '',
       c.bad_debt ? (c.bad_debt_marked_by || '') : '', c.bad_debt ? fmtStamp(c.bad_debt_marked_at) : '',
       c.note || '', c.note ? `${c.note_updated_by || ''} ${fmtStamp(c.note_updated_at)}` : '',
     ]);
-    const foot = ['الإجمالي', '', '', ...periods.map(p => Number(totals[p.key] || 0)), Number(totals.total || 0), '', '', '', '', '', '', '', ''];
+    const foot = ['الإجمالي', '', '', ...periods.map(p => Number(totals[p.key] || 0)), Number(totals.total || 0), totals.open_count || 0, '', '', '', '', '', '', '', ''];
     const ws = XLSX.utils.aoa_to_sheet([header, ...body, foot]);
-    ws['!cols'] = [{ wch: 32 }, { wch: 12 }, { wch: 14 }, ...periods.map(() => ({ wch: 13 })), { wch: 14 }, { wch: 16 }, { wch: 16 }, { wch: 14 }, { wch: 14 }, { wch: 22 }, { wch: 22 }, { wch: 40 }, { wch: 26 }];
+    ws['!cols'] = [{ wch: 32 }, { wch: 12 }, { wch: 14 }, ...periods.map(() => ({ wch: 13 })), { wch: 14 }, { wch: 12 }, { wch: 16 }, { wch: 16 }, { wch: 14 }, { wch: 14 }, { wch: 22 }, { wch: 22 }, { wch: 40 }, { wch: 26 }];
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'المديونية حسب الفترة');
     XLSX.writeFile(wb, `المديونية_حسب_الفترة_${new Date().toLocaleDateString('en-CA')}.xlsx`);
@@ -293,6 +296,10 @@ export default function AgingByPeriodPage() {
                   ))}
                   <th onClick={() => onSort('total')} className={sortBy === 'total' ? 'age-th--sorted' : ''}>
                     <SortIcon col="total" sortBy={sortBy} sortDir={sortDir} /> إجمالي الدين
+                  </th>
+                  <th onClick={() => onSort('open_count')} className={`abp-th--open${sortBy === 'open_count' ? ' age-th--sorted' : ''}`}
+                    title="عدد الفواتير التي ما زال عليها رصيد (غير مسددة أو مسددة جزئياً)">
+                    <SortIcon col="open_count" sortBy={sortBy} sortDir={sortDir} /> فواتير غير مسددة
                   </th>
                   {[['oldest_age_days', 'عمر أقدم دين'], ['newest_age_days', 'عمر أقرب دين']].map(([k, l]) => (
                     <th key={k} onClick={() => onSort(k)} className={sortBy === k ? 'age-th--sorted' : ''}>
@@ -331,6 +338,7 @@ export default function AgingByPeriodPage() {
                       );
                     })}
                     <td style={{ fontWeight: 700 }}>{fmt(c.total)}</td>
+                    <td className={`abp-td--open${c.open_count ? '' : ' age-cell--zero'}`}>{c.open_count || 0}</td>
                     <td><AgeBadge days={c.oldest_age_days} /></td>
                     <td><AgeBadge days={c.newest_age_days} /></td>
                     <td className="abp-td--match">
@@ -375,9 +383,10 @@ export default function AgingByPeriodPage() {
                   </tr>
   );
   const sumRows = list => {
-    const t = { total: 0 };
+    const t = { total: 0, open_count: 0 };
     for (const c of list) {
       t.total += Number(c.total || 0);
+      t.open_count += Number(c.open_count || 0);
       for (const [k, v] of Object.entries(c.by_period)) t[k] = (t[k] || 0) + Number(v || 0);
     }
     return t;
@@ -389,6 +398,7 @@ export default function AgingByPeriodPage() {
       <td />
       {periods.map(p => <td key={p.key}>{fmt(tot[p.key])}</td>)}
       <td style={{ fontWeight: 800 }}>{fmt(tot.total)}</td>
+      <td style={{ fontWeight: 800 }}>{(tot.open_count || 0).toLocaleString('en-US')}</td>
       <td />
       <td />
       <td />
@@ -568,7 +578,7 @@ export default function AgingByPeriodPage() {
               <tbody>
                 {rows.map(renderRow)}
                 {!rows.length && (
-                  <tr><td colSpan={periods.length + 10} className="age-loading">لا توجد مديونيات مطابقة</td></tr>
+                  <tr><td colSpan={periods.length + 11} className="age-loading">لا توجد مديونيات مطابقة</td></tr>
                 )}
               </tbody>
               {rows.length > 0 && (

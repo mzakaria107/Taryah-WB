@@ -261,3 +261,6 @@
 @media print {
   .abp-table th.abp-th--curyear, .abp-table td.abp-td--curyear { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
 }
+/* «فواتير غير مسددة» count column */
+.abp-table th.abp-th--open { min-width: 58px; }
+.abp-table td.abp-td--open { text-align: center; font-weight: 700; color: #1e3a8a; font-variant-numeric: tabular-nums; }

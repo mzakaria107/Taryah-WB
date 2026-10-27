@@ -3385,6 +3385,13 @@ are built from the data, not hardcoded, so 2027 rolls over by itself.
   A first version with manual مطابق/غير مطابق buttons (`PUT /aging/match-status`) was replaced the
   same day at management's request — the endpoint is removed; its lazily-created tables
   (`customer_match_status`, `customer_match_status_log`) may exist on production but are unused.
+- **«فواتير غير مسددة» column (27 Oct 2026)**: count of the customer's invoices still owing
+  (`balance > 0` — unpaid or partially paid; credit notes / settled rows not counted), right after
+  إجمالي الدين. `GET /by-period` adds `open_count` per period row (`COUNT(*) FILTER (WHERE balance > 0)`)
+  → each customer gets `open_by_period` + `open_count`. With a year filter the page re-sums
+  `open_by_period` over the visible periods (like `total`); the yearly tab doesn't change it. Sortable,
+  in the footer / every print page total row, and in Excel. Verified on Postgres (3 open of 4 non-zero
+  rows for a customer with a credit note) and in Playwright (all / 2025-only / yearly / sort / Excel).
 - **Rep column in the invoice-detail modal (16 Oct 2026)**: `GET /api/aging/invoices/:customerId`
   returns `sales_rep_name` (blank → NULL → "—"); `AgingInvoiceModal` shows "المندوب" after the
   invoice date (footer colSpan 3 → 4). Shared modal, so the aging page gets it too. Modal widened

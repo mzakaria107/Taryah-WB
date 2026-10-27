@@ -264,3 +264,8 @@
 /* «فواتير غير مسددة» count column */
 .abp-table th.abp-th--open { min-width: 58px; }
 .abp-table td.abp-td--open { text-align: center; font-weight: 700; color: #1e3a8a; font-variant-numeric: tabular-nums; }
+/* Last collection columns */
+.abp-table th.abp-th--pay { min-width: 70px; }
+.abp-table td.abp-td--pay-date { text-align: center; white-space: nowrap; line-height: 1.15; font-variant-numeric: tabular-nums; }
+.abp-table .abp-pay-ago { font-size: 0.6rem; color: var(--color-text-muted, #64748b); }
+.abp-table td.abp-td--pay-amount { text-align: center; color: #15803d; font-weight: 700; font-variant-numeric: tabular-nums; }

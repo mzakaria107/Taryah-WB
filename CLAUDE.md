@@ -3392,6 +3392,16 @@ are built from the data, not hardcoded, so 2027 rolls over by itself.
   `open_by_period` over the visible periods (like `total`); the yearly tab doesn't change it. Sortable,
   in the footer / every print page total row, and in Excel. Verified on Postgres (3 open of 4 non-zero
   rows for a customer with a credit note) and in Playwright (all / 2025-only / yearly / sort / Excel).
+- **«آخر تحصيل» + «قيمة آخر تحصيل» columns (27 Oct 2026)**: after «فواتير غير مسددة». From `payments`
+  (`customer_code` = `invoices.customer_id`): last date = latest `tran_date` with `total_paid > 0`
+  (refunds ignored); amount = SUM of every positive payment on that date. One extra query in
+  `GET /by-period` limited to the returned customer ids (`= ANY($1)`), errors swallowed so the page
+  never breaks on it; fields `last_pay_date` (text, YYYY-MM-DD) / `last_pay_amount` (null = never paid →
+  «لا يوجد» / —). The date cell also shows «منذ N يوم» (whole days, local midnight). Both sortable
+  (date sorts as text — ISO), in Excel; totals rows leave them blank (a sum of last payments means
+  nothing). NOT affected by the year filter — it is the customer's last collection, whatever year.
+  Verified on Postgres (two same-day payments summed, later refund ignored, no-payment customer) and
+  in Playwright.
 - **Rep column in the invoice-detail modal (16 Oct 2026)**: `GET /api/aging/invoices/:customerId`
   returns `sales_rep_name` (blank → NULL → "—"); `AgingInvoiceModal` shows "المندوب" after the
   invoice date (footer colSpan 3 → 4). Shared modal, so the aging page gets it too. Modal widened

@@ -335,6 +335,24 @@ router.get('/by-period', verifyToken, applyRegionFilter, requirePagePermission('
                   FROM customer_reconciliations GROUP BY customer_id`)
         .catch(err => { console.error('[Aging/by-period] customer_reconciliations:', err.message); return { rows: [] }; }),
     ]);
+    // Last collection per customer (payments.customer_code = invoices.customer_id): the latest
+    // tran_date with a positive payment, and the sum of every positive payment on that date.
+    const ids = [...new Set(rows.map(r => r.customer_id))];
+    const { rows: lastPay } = ids.length ? await pool.query(`
+        WITH last AS (
+          SELECT customer_code, MAX(tran_date) AS d
+          FROM payments
+          WHERE customer_code = ANY($1::text[]) AND total_paid > 0 AND tran_date IS NOT NULL
+          GROUP BY customer_code
+        )
+        SELECT l.customer_code AS customer_id, l.d::text AS last_pay_date,
+               ROUND(SUM(p.total_paid)::numeric, 2) AS last_pay_amount
+        FROM last l
+        JOIN payments p ON p.customer_code = l.customer_code AND p.tran_date = l.d AND p.total_paid > 0
+        GROUP BY l.customer_code, l.d`, [ids])
+      .catch(err => { console.error('[Aging/by-period] payments:', err.message); return { rows: [] }; })
+      : { rows: [] };
+    const lastPayById = new Map(lastPay.map(r => [r.customer_id, r]));
     const reconById = new Map(reconRows.map(r => [r.customer_id, r]));
     const noteById = new Map(debtNotes.map(r => [r.customer_id, r]));
     const infoById = new Map(custInfo.map(r => [r.customer_id, r]));
@@ -384,6 +402,8 @@ router.get('/by-period', verifyToken, applyRegionFilter, requirePagePermission('
           bad_debt_marked_at: badDebtById.get(c.customer_id)?.marked_at ?? null,
           bad_debt_marked_by: badDebtById.get(c.customer_id)?.marked_by_name ?? null,
           note: noteById.get(c.customer_id)?.note_text ?? '',
+          last_pay_date:   lastPayById.get(c.customer_id)?.last_pay_date ?? null,
+          last_pay_amount: lastPayById.has(c.customer_id) ? Number(lastPayById.get(c.customer_id).last_pay_amount) : null,
           reconciliation_count: reconById.get(c.customer_id)?.cnt ?? 0,
           reconciliation_last_at: reconById.get(c.customer_id)?.last_at ?? null,
           note_updated_at: noteById.get(c.customer_id)?.updated_at ?? null,

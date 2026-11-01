@@ -96,9 +96,25 @@ function ItemRow({ item }) {
   );
 }
 
+/* ── Merge a rep's item lines into one row per item ─────────────
+   The monthly feed carries one line per item PER DAY, so the same item repeated under a rep with
+   different quantities. Filters (day/month/range/type) run on the daily lines first; this only
+   merges what survives them — qty and value summed (net of returns), average price recomputed. */
+function mergeItems(items) {
+  const map = new Map();
+  for (const it of items) {
+    const key = `${it.itemName}|${it.itemType || ''}`;
+    const m = map.get(key);
+    if (m) { m.qty += it.qty; m.total += it.total; }
+    else map.set(key, { itemName: it.itemName, itemType: it.itemType, qty: it.qty, total: it.total, avgPrice: null });
+  }
+  return [...map.values()].sort((a, b) => b.qty - a.qty);
+}
+
 /* ── Rep block ───────────────────────────────────────────────── */
 function RepBlock({ rep, defaultOpen = false }) {
   const [open, setOpen] = useState(defaultOpen);
+  const items = useMemo(() => mergeItems(rep.items), [rep.items]);
   return (
     <>
       <tr className="srp-rep-row" onClick={() => setOpen(v => !v)}>
@@ -106,7 +122,7 @@ function RepBlock({ rep, defaultOpen = false }) {
           <span className="srp-toggle-btn">{open ? <ChevronDown size={13}/> : <ChevronLeft size={13}/>}</span>
           <span className="srp-rep-avatar">{rep.repName.charAt(0)}</span>
           {rep.repName}
-          <span className="srp-rep-items-count">{rep.items.length} صنف</span>
+          <span className="srp-rep-items-count">{items.length} صنف</span>
         </td>
         <td className="srp-td srp-td-num srp-rep-num"><NetVal n={rep.qty} isQty /></td>
         <td className="srp-td srp-td-num srp-rep-num srp-td-total"><NetVal n={rep.total} /></td>
@@ -114,7 +130,7 @@ function RepBlock({ rep, defaultOpen = false }) {
           {rep.qty !== 0 ? fmtC(Math.abs(rep.avgPrice ?? 0)) : '—'}
         </td>
       </tr>
-      {open && rep.items.map((item, i) => <ItemRow key={i} item={item} />)}
+      {open && items.map(item => <ItemRow key={`${item.itemName}|${item.itemType || ''}`} item={item} />)}
     </>
   );
 }
@@ -614,7 +630,7 @@ function SalesContent({ period }) {
       const rows = [];
       regions.forEach(region => {
         region.reps.forEach(rep => {
-          rep.items.forEach(item => {
+          mergeItems(rep.items).forEach(item => {
             const avg = item.qty !== 0
               ? Math.abs(item.avgPrice != null ? item.avgPrice : item.total / item.qty)
               : null;

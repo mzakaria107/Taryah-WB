@@ -3451,6 +3451,17 @@ Verified: the endpoint run against a mocked DB (year/month split, net-zero custo
 net-credit kept, footer foots, filter params bind correctly); `npm run build` clean. Not run
 against production data — no DB access or login from the cloud session.
 
+## Sales report — one row per item under each rep (1 Nov 2026)
+
+The monthly NetSuite feed carries one line per item **per day**, so «المبيعات الشهرية» listed the same
+item several times under a rep with different quantities. `mergeItems()` in `SalesReportPage.jsx`
+merges a rep's lines by `itemName|itemType` (qty and value summed, net of returns; average price
+recomputed as |value ÷ qty|; sorted by qty) — used by `RepBlock` (rows + "N صنف" count) and by the
+Excel export's first sheet. Day / month / date-range / type filters still run on the daily lines
+first, so the merged row always covers exactly the selected period. A merged row whose net is
+negative still shows the "↩ مرتجع" badge. Verified in Playwright: 5 daily lines → 2 rows
+(100 + 120 − 10 = 210; 50 + 30 = 80); day filter = 1 → 100 / 50.
+
 ## Sales report (`/sales-report`) — item × region matrix (25 Oct 2026)
 
 «تفاصيل المبيعات بالأصناف — المناديب تحت كل صنف» (`ItemMatrixSection` in `SalesReportPage.jsx`,

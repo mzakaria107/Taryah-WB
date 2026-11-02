@@ -61,6 +61,29 @@ router.use((req, res, next) => {
   });
 });
 
+/* ── Arabic customer names ───────────────────────────────────
+   Display names are always Arabic when one exists: the customers master's customer_name_ar first,
+   then the row's own (sales_activity) name — whichever actually contains Arabic letters (a few
+   master rows hold the English text in the Arabic column). The original name is kept as
+   customer_name_en. Rows without any Arabic name keep what they had. */
+const HAS_ARABIC = /[\u0600-\u06FF]/;
+async function preferArabicNames(rows) {
+  const codes = [...new Set(rows.map(r => r.customer_code).filter(Boolean))];
+  if (!codes.length) return rows;
+  const { rows: m } = await pool.query(
+    'SELECT customer_code, customer_name_ar FROM customers WHERE customer_code = ANY($1::text[])', [codes]
+  ).catch(() => ({ rows: [] }));
+  const ar = new Map(m.map(r => [r.customer_code, r.customer_name_ar]));
+  for (const r of rows) {
+    const name = [ar.get(r.customer_code), r.customer_name].find(n => n && HAS_ARABIC.test(n));
+    if (name && name.trim() !== r.customer_name) {
+      if (!r.customer_name_en) r.customer_name_en = r.customer_name;
+      r.customer_name = name.trim();
+    }
+  }
+  return rows;
+}
+
 /* ── Constants ────────────────────────────────────────────── */
 // The customer_code segment now lives in the special_customers table
 // (see migration 087) instead of a hardcoded JS array, so it can be
@@ -563,9 +586,10 @@ router.get('/summary', verifyToken, applyRegionFilter, async (req, res) => {
           : 0,
       })),
 
-      customers: customers.map(c => ({
+      customers: (await preferArabicNames(customers.map(c => ({ customer_code: c.customer_code, customer_name: c.customer_name })))).map((n, i) => ({ c: customers[i], n })).map(({ c, n }) => ({
         customer_code:   c.customer_code,
-        customer_name:   c.customer_name,
+        customer_name:   n.customer_name,
+        customer_name_en: n.customer_name_en || null,
         branch_name:     c.branch_name,
         salesrep_name:   c.salesrep_name,
         total_qty:       Number(c.total_qty),
@@ -653,9 +677,9 @@ router.get('/customer-matrix', verifyToken, applyRegionFilter, async (req, res) 
       entry.annual_revenue += rev;
     }
 
-    const items = Object.values(byCust)
+    const items = await preferArabicNames(Object.values(byCust)
       .sort((a, b2) => b2.annual_qty - a.annual_qty)
-      .slice(0, limit);
+      .slice(0, limit));
 
     const maxQty = items.reduce((m, it) => Math.max(m, ...it.months.map(mo => mo.qty)), 1);
 
@@ -1192,7 +1216,7 @@ router.get('/chilled-chicken-baseline', verifyToken, applyRegionFilter, async (r
     `, params);
     const custRevMap = Object.fromEntries(custRevRes.rows.map(r => [r.customer_code, Number(r.total_revenue)]));
 
-    const customers = custRes.rows.map(r => {
+    const customers = await preferArabicNames(custRes.rows.map(r => {
       const qty = Number(r.total_qty);
       const activeMonths = Number(r.active_months);
       return {
@@ -1203,7 +1227,7 @@ router.get('/chilled-chicken-baseline', verifyToken, applyRegionFilter, async (r
         total_revenue: custRevMap[r.customer_code] || 0,
         avg_monthly_qty: activeMonths > 0 ? +(qty / activeMonths).toFixed(4) : 0,
       };
-    });
+    }));
 
     const ov = overallRes.rows[0] || {};
     const overallQty = Number(ov.total_qty || 0);
@@ -1303,6 +1327,7 @@ router.get('/incentive-baseline', verifyToken, applyRegionFilter, async (req, re
           -- value is only a last-resort fallback for a customer_code that
           -- somehow isn't in the master at all.
           COALESCE(MAX(c.customer_name), MAX(cm.customer_name)) AS customer_name,
+          MAX(cm.customer_name)                            AS sa_customer_name,
           -- Arabic name for the contract print, resolved from the customers
           -- master (customer_name_ar, 081_customers_name_ar.sql) — left NULL
           -- (never fabricated from sales_activity) when the master doesn't
@@ -1376,7 +1401,8 @@ router.get('/incentive-baseline', verifyToken, applyRegionFilter, async (req, re
       return {
         customer_code: r.customer_code,
         customer_name: r.customer_name,
-        customer_name_ar: r.customer_name_ar || null,
+        // Arabic name: the master's, unless it isn't actually Arabic text — then the sales name if that is
+        customer_name_ar: [r.customer_name_ar, r.sa_customer_name].find(n => n && HAS_ARABIC.test(n)) || r.customer_name_ar || null,
         region_name: r.region_name || null,
         active_months: activeMonths,
         total_qty: qty,
@@ -1492,6 +1518,7 @@ router.get('/customer-list', verifyToken, async (req, res) => {
       const t = row.uploaded_at ? new Date(row.uploaded_at).getTime() : 0;
       return t > max ? t : max;
     }, 0);
+    await preferArabicNames(r.rows);
     res.json({
       customers: r.rows,
       count: r.rows.length,

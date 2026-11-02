@@ -3476,6 +3476,20 @@ non-segment customer excluded from both, every GET endpoint 200, a contract save
 gets contract_no 1 and does not appear in the Discount Shops log; Playwright: all 9 tabs open with no
 errors or failed requests.
 
+### Arabic customer names everywhere on both segment pages (2 Nov 2026)
+
+Some segment customers showed their English name (sales_activity.customer_name is English for them).
+Both `discountShops.js` and `specialCustomers.js` now run `preferArabicNames(rows)`: name =
+`customers.customer_name_ar`, else the row's own name — whichever actually contains Arabic letters
+(`HAS_ARABIC = /[\u0600-\u06FF]/`; a few master rows hold English text in the Arabic column); the
+original goes to `customer_name_en`. Applied to `/summary` customers, `/customer-matrix`,
+`/chilled-chicken-baseline` customers and `/customer-list`. `/incentive-baseline` deliberately keeps
+`customer_name` = the master's ENGLISH name (the contract prints both) but its `customer_name_ar` now
+gets the same Arabic-script check (falls back to the sales name); the pages show it via `arName(c)` in
+the incentive and monthly tables, their search boxes and their Excel exports. Verified on Postgres
+(English sales name + Arabic master → Arabic; English text in the master's Arabic column → Arabic
+sales name) and in Playwright (customers / incentive / monthly tabs show only Arabic names).
+
 ## Customers report (`/sales-activity`, «تقرير العملاء العام») — month filter (2 Nov 2026)
 
 A «الشهر» dropdown (default «آخر شهر (…)» = latest month with data) next to region / rep. The picked

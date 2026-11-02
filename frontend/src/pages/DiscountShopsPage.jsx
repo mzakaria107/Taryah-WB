@@ -5,6 +5,9 @@ import client from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import './DiscountShopsPage.css';
 
+// Arabic display name for incentive / monthly rows (customer_name stays English there for the contract)
+const arName = c => c.customer_name_ar || c.customer_name;
+
 /* ── Constants ─────────────────────────────────────────────── */
 const ADMIN_ROLES = ['super_admin', 'it_admin'];
 const MONTHS = [
@@ -1118,7 +1121,7 @@ export default function DiscountShopsPage() {
     let rows = incentiveScenario.perCustomer;
     if (incentiveCustSearch.trim()) {
       const q = incentiveCustSearch.trim().toLowerCase();
-      rows = rows.filter(c => (c.customer_name || '').toLowerCase().includes(q) || (c.customer_code || '').includes(q));
+      rows = rows.filter(c => (c.customer_name || '').toLowerCase().includes(q) || (c.customer_name_ar || '').includes(q) || (c.customer_code || '').includes(q));
     }
     const dir = incentiveCustSort.dir === 'desc' ? -1 : 1;
     return [...rows].sort((a, b) => (Number(b[incentiveCustSort.col]) - Number(a[incentiveCustSort.col])) * dir);
@@ -1142,7 +1145,7 @@ export default function DiscountShopsPage() {
     let rows = incentiveBaseline.customers;
     if (monthlyCustSearch.trim()) {
       const q = monthlyCustSearch.trim().toLowerCase();
-      rows = rows.filter(c => (c.customer_name || '').toLowerCase().includes(q) || (c.customer_code || '').includes(q));
+      rows = rows.filter(c => (c.customer_name || '').toLowerCase().includes(q) || (c.customer_name_ar || '').includes(q) || (c.customer_code || '').includes(q));
     }
     return [...rows].sort((a, b) => Number(b[monthlySortCol]) - Number(a[monthlySortCol]));
   }, [incentiveBaseline, monthlyCustSearch, monthlySortCol]);
@@ -1155,7 +1158,7 @@ export default function DiscountShopsPage() {
       ...monthlyMonths.flatMap(m => [`${MONTH_AR[m.month]} ${m.year} — كمية`, `${MONTH_AR[m.month]} ${m.year} — قيمة`]),
       'إجمالي الكمية', 'إجمالي القيمة', 'متوسط الفترة — كمية', 'متوسط الفترة — قيمة'];
     const rows = monthlyCustomers.map(c => [
-      c.customer_code, c.customer_name,
+      c.customer_code, arName(c),
       ...monthlyMonths.flatMap(m => {
         const cell = c.by_month?.[m.key];
         return [cell ? cell.qty : 0, cell ? +cell.revenue.toFixed(2) : 0];
@@ -1196,7 +1199,7 @@ export default function DiscountShopsPage() {
 
     const custHeader = ['كود العميل', 'اسم العميل', 'أشهر النشاط', 'صافي الكمية المباعة', 'الكمية المستهدفة', 'متوسط المبيعات الشهري', 'الهدف المطلوب لاستحقاق الحافز', 'نسبة الحافز عند الهدف %', 'قيمة الحافز عند الهدف', 'مبيعات عند تحقيق 125%', 'قيمة الحافز عند 125%'];
     const custRows = [...incentiveScenario.perCustomer].sort((a, b) => b.target_revenue - a.target_revenue).map(c => [
-      c.customer_code, c.customer_name, c.active_months, c.total_qty, +c.target_qty.toFixed(1),
+      c.customer_code, arName(c), c.active_months, c.total_qty, +c.target_qty.toFixed(1),
       +c.avg_monthly_revenue.toFixed(2), +c.target_revenue.toFixed(2), c.rate_at_target, +c.incentive_at_target.toFixed(2),
       +c.stretch_revenue.toFixed(2), +c.incentive_at_stretch.toFixed(2),
     ]);
@@ -3320,7 +3323,7 @@ export default function DiscountShopsPage() {
                         <tbody>
                           {sortedIncentiveCusts.map(c => (
                             <tr key={c.customer_code}>
-                              <td>{c.customer_name}</td>
+                              <td>{arName(c)}</td>
                               <td className="ds-td-num">{fmt(c.active_months)}</td>
                               <td className="ds-td-num">{fmt(c.total_qty)}</td>
                               <td className="ds-td-num">{fmt(c.target_qty, 1)}</td>
@@ -3409,7 +3412,7 @@ export default function DiscountShopsPage() {
                             {monthlyCustomers.map(c => (
                               <tr key={c.customer_code}>
                                 <td>
-                                  <div className="ds-td-bold">{c.customer_name}</div>
+                                  <div className="ds-td-bold">{arName(c)}</div>
                                   <div className="ds-monthly-code">{c.customer_code}</div>
                                 </td>
                                 {monthlyMonths.map(m => {

@@ -35,6 +35,7 @@ const PerformanceDashboardPage     = lazy(() => import('./pages/PerformanceDashb
 const RepDebtPage                  = lazy(() => import('./pages/RepDebtPage'));
 const ProfitabilityPage            = lazy(() => import('./pages/ProfitabilityPage'));
 const DiscountShopsPage            = lazy(() => import('./pages/DiscountShopsPage'));
+const SpecialCustomersPage         = lazy(() => import('./pages/SpecialCustomersPage'));
 const CarrefourDamageEntryPage     = lazy(() => import('./pages/CarrefourDamageEntryPage'));
 const CarrefourDamageReportPage    = lazy(() => import('./pages/CarrefourDamageReportPage'));
 const QualityReturnsEntryPage      = lazy(() => import('./pages/QualityReturnsEntryPage'));
@@ -311,6 +312,14 @@ export default function App() {
         <RoleRoute pageKey="discount_shops">
           <AppLayout>
             <PageSuspense><DiscountShopsPage /></PageSuspense>
+          </AppLayout>
+        </RoleRoute>
+      } />
+
+      <Route path="/special-customers" element={
+        <RoleRoute pageKey="special_customers">
+          <AppLayout>
+            <PageSuspense><SpecialCustomersPage /></PageSuspense>
           </AppLayout>
         </RoleRoute>
       } />

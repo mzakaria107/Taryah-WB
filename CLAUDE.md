@@ -3451,6 +3451,31 @@ Verified: the endpoint run against a mocked DB (year/month split, net-zero custo
 net-credit kept, footer foots, filter params bind correctly); `npm run build` clean. Not run
 against production data — no DB access or login from the cloud session.
 
+## Special customers (`/special-customers`, «أداء عملاء الاسبيشيال») — copy of Discount Shops (2 Nov 2026)
+
+A full copy of the Discount Shops page — all 9 tabs (نظرة عامة، المناطق، المناديب، العملاء، أداء الأصناف،
+سيناريو مجانيات 10+1، سيناريو حافز %، صافي المبيعات الشهري، طباعة عقد عميل) — for a SECOND, independently
+maintained customer segment. Copied, not shared (same convention as Hypermarkets → Discount Shops), so a
+change to one page can never alter the other; fix bugs in BOTH.
+- Backend `routes/specialCustomers.js` (`/api/special-customers/*`) = `discountShops.js` with
+  `discount_shop_customers` → **`special_customers`** and `discount_shop_contracts` →
+  **`special_customer_contracts`** (own contract numbering). Both tables are created lazily by a
+  router-level `ensureTables()` (final column set of migrations 087/101–103/114/115) because
+  production migrations stall at 058. The segment starts EMPTY — admins add customers from the page's
+  «قائمة عملاء الاسبيشيال» panel (add one / upload Excel), exactly like Discount Shops.
+- Frontend `SpecialCustomersPage.jsx` = `DiscountShopsPage.jsx` with API paths, titles and Excel names
+  changed, React Query keys renamed `ds-*` → `sc-*` (so the two pages never share cached data), and its
+  own settings keys `special_customers_incentive_settings` / `special_customers_insight_note`. CSS:
+  imports `DiscountShopsPage.css` unchanged (same `ds-` classes).
+- Page key `special_customers`: admin-only like `discount_shops` — `DEFAULT_PERMS` + `PAGES`
+  (frontend), `VALID_PAGES` (backend), migration 122 page_permissions rows; nav entry after
+  «أداء محلات التخفيضات»; route in `App.jsx`.
+Verified on a Postgres built from all 122 migrations: the special list and the Discount Shops list are
+independent (2 vs 40 customers), October summary 150 (special) vs 300 (discount) units with a
+non-segment customer excluded from both, every GET endpoint 200, a contract saved on the special page
+gets contract_no 1 and does not appear in the Discount Shops log; Playwright: all 9 tabs open with no
+errors or failed requests.
+
 ## Customers report (`/sales-activity`, «تقرير العملاء العام») — month filter (2 Nov 2026)
 
 A «الشهر» dropdown (default «آخر شهر (…)» = latest month with data) next to region / rep. The picked

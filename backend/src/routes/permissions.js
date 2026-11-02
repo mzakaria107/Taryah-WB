@@ -9,7 +9,7 @@ const VALID_PAGES = ['dashboard','invoices','reports','customer_detail','sales_a
                      'fridges','stock','current_stock','upload','users','permissions','profitability','settings','sales_report','coverage',
                      'summary','hypermarkets','category_performance','region_performance',
                      'collections_performance','aging','aging_by_period','sales_plan',
-                     'rep_management','performance_dashboard','commissions','quality_issues','discount_shops'];
+                     'rep_management','performance_dashboard','commissions','quality_issues','discount_shops','special_customers'];
 
 // GET /api/permissions — returns { pageKey: { role: level } }
 router.get('/', verifyToken, async (_req, res) => {

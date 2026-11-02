@@ -1308,6 +1308,7 @@ router.get('/incentive-baseline', verifyToken, applyRegionFilter, async (req, re
           SELECT
             sa.customer_code,
             MAX(sa.customer_name)                          AS customer_name,
+            MAX(sa.branch_name)                            AS branch_name,
             sa.report_year, sa.month_num,
             SUM(sa.qty)                                     AS month_qty,
             SUM(sa.net_revenue)                              AS month_revenue
@@ -1335,7 +1336,8 @@ router.get('/incentive-baseline', verifyToken, applyRegionFilter, async (req, re
           MAX(c.customer_name_ar)                          AS customer_name_ar,
           -- Region for the contract's "المنطقة" column, resolved the same
           -- way as everywhere else in the app (customers.region_id → regions.name_ar).
-          MAX(r.name_ar)                                   AS region_name,
+          -- falls back to the sales branch for a customer absent from the master
+          COALESCE(MAX(r.name_ar), MAX(cm.branch_name))     AS region_name,
           COUNT(*) FILTER (WHERE cm.month_qty > 0)::int      AS active_months,
           COALESCE(SUM(cm.month_qty),0)::bigint              AS total_qty,
           COALESCE(SUM(cm.month_revenue),0)::numeric         AS total_revenue

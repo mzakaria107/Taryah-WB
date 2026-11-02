@@ -1441,3 +1441,5 @@
   font-size: 0.78rem;
   min-width: 200px;
 }
+/* «المنطقة» column of the monthly net-sales table */
+.ds-table--monthly td.ds-monthly-region { white-space: nowrap; color: var(--color-text-secondary, #475569); font-weight: 600; }

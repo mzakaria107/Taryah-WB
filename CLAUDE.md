@@ -3490,6 +3490,15 @@ the incentive and monthly tables, their search boxes and their Excel exports. Ve
 (English sales name + Arabic master → Arabic; English text in the master's Arabic column → Arabic
 sales name) and in Playwright (customers / incentive / monthly tabs show only Arabic names).
 
+### «المنطقة» column on «صافي المبيعات الشهري للعملاء» (both segment pages, 2 Nov 2026)
+
+After «العميل». `region_name` from `/incentive-baseline` (customers.region_id → regions.name_ar), which
+now falls back to the customer's sales branch (`MAX(sa.branch_name)` in `cust_months`) when the
+customer is missing from the master / has no region. Sortable alphabetically (the table's sort was
+numeric-only, so «العميل» sorting never worked — text columns now use localeCompare), searchable, and
+in the Excel export; footer gets a blank cell to stay aligned. Same English region identifiers as the
+rest of the app (see "Region name storage gotcha").
+
 ## Customers report (`/sales-activity`, «تقرير العملاء العام») — month filter (2 Nov 2026)
 
 A «الشهر» dropdown (default «آخر شهر (…)» = latest month with data) next to region / rep. The picked

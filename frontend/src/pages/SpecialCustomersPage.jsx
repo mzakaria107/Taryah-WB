@@ -1149,7 +1149,12 @@ export default function SpecialCustomersPage() {
     let rows = incentiveBaseline.customers;
     if (monthlyCustSearch.trim()) {
       const q = monthlyCustSearch.trim().toLowerCase();
-      rows = rows.filter(c => (c.customer_name || '').toLowerCase().includes(q) || (c.customer_name_ar || '').includes(q) || (c.customer_code || '').includes(q));
+      rows = rows.filter(c => (c.customer_name || '').toLowerCase().includes(q) || (c.customer_name_ar || '').includes(q) || (c.customer_code || '').includes(q) || (c.region_name || '').toLowerCase().includes(q));
+    }
+    // Text columns (customer / region) sort alphabetically, numbers high → low
+    if (monthlySortCol === 'customer_name' || monthlySortCol === 'region_name') {
+      const key = monthlySortCol === 'customer_name' ? arName : c => c.region_name || '';
+      return [...rows].sort((a, b) => String(key(a) || '').localeCompare(String(key(b) || ''), 'ar'));
     }
     return [...rows].sort((a, b) => Number(b[monthlySortCol]) - Number(a[monthlySortCol]));
   }, [incentiveBaseline, monthlyCustSearch, monthlySortCol]);
@@ -1158,11 +1163,11 @@ export default function SpecialCustomersPage() {
 
   const handleMonthlyExport = useCallback(() => {
     if (!incentiveBaseline) return;
-    const header = ['كود العميل', 'اسم العميل',
+    const header = ['كود العميل', 'اسم العميل', 'المنطقة',
       ...monthlyMonths.flatMap(m => [`${MONTH_AR[m.month]} ${m.year} — كمية`, `${MONTH_AR[m.month]} ${m.year} — قيمة`]),
       'إجمالي الكمية', 'إجمالي القيمة', 'متوسط الفترة — كمية', 'متوسط الفترة — قيمة'];
     const rows = monthlyCustomers.map(c => [
-      c.customer_code, arName(c),
+      c.customer_code, arName(c), c.region_name || '',
       ...monthlyMonths.flatMap(m => {
         const cell = c.by_month?.[m.key];
         return [cell ? cell.qty : 0, cell ? +cell.revenue.toFixed(2) : 0];
@@ -3404,6 +3409,7 @@ export default function SpecialCustomersPage() {
                           <thead>
                             <tr>
                               <th onClick={() => handleMonthlySort('customer_name')}>العميل</th>
+                              <th onClick={() => handleMonthlySort('region_name')}>المنطقة</th>
                               {monthlyMonths.map(m => (
                                 <th key={m.key}>{MONTH_AR[m.month]}{monthlyMonths.some(x => x.year !== m.year) ? ` ${m.year}` : ''}</th>
                               ))}
@@ -3419,6 +3425,7 @@ export default function SpecialCustomersPage() {
                                   <div className="ds-td-bold">{arName(c)}</div>
                                   <div className="ds-monthly-code">{c.customer_code}</div>
                                 </td>
+                                <td className="ds-monthly-region">{c.region_name || '—'}</td>
                                 {monthlyMonths.map(m => {
                                   const cell = c.by_month?.[m.key];
                                   return (
@@ -3446,6 +3453,7 @@ export default function SpecialCustomersPage() {
                           <tfoot>
                             <tr>
                               <td className="ds-td-bold">الإجمالي</td>
+                              <td></td>
                               {monthlyMonths.map(m => {
                                 const q = monthlyCustomers.reduce((s, c) => s + (c.by_month?.[m.key]?.qty || 0), 0);
                                 const v = monthlyCustomers.reduce((s, c) => s + (c.by_month?.[m.key]?.revenue || 0), 0);

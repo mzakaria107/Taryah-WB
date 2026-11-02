@@ -624,6 +624,9 @@ export default function SalesActivityPage() {
   const [rep,        setRep]        = useState('');
   const [dateFrom,   setDateFrom]   = useState('');
   const [dateTo,     setDateTo]     = useState('');
+  // Month filter: '' = latest month with data (backend default). Picked month = the "current" month
+  // for every card, chart and table, compared with the month before it.
+  const [month,      setMonth]      = useState('');
   const [exporting,  setExporting]  = useState(false);
   // catFilter: { [catName]: 'include' | 'exclude' }
   const [catFilter, setCatFilter]   = useState({});
@@ -642,6 +645,7 @@ export default function SalesActivityPage() {
   const catParams   = {
     ...(includeCats ? { include_cats: includeCats } : {}),
     ...(excludeCats ? { exclude_cats: excludeCats } : {}),
+    ...(month ? { month } : {}),
   };
 
   // Meta (branches + reps filtered by selected branch)
@@ -653,21 +657,21 @@ export default function SalesActivityPage() {
 
   // New customers data (needed for badge count on tab label)
   const { data: newData } = useQuery({
-    queryKey:  ['sales-new-customers', { branch, rep, year, includeCats, excludeCats }],
+    queryKey:  ['sales-new-customers', { branch, rep, year, includeCats, excludeCats, month }],
     queryFn:   () => fetchNewCustomers({ branch, rep, year, ...catParams }),
     staleTime: 60_000,
   });
 
   // Stopped customers (needed for badge count on tab label)
   const { data: stoppedData } = useQuery({
-    queryKey:  ['sales-stopped-customers', { branch, rep, year, includeCats, excludeCats }],
+    queryKey:  ['sales-stopped-customers', { branch, rep, year, includeCats, excludeCats, month }],
     queryFn:   () => fetchStoppedCustomers({ branch: branch || undefined, rep: rep || undefined, year, ...catParams }),
     staleTime: 60_000,
   });
 
   // KPI summary — keep previous data visible while refetching (no flicker)
   const { data: kpiData, isLoading: kpiLoading, isFetching: kpiFetching } = useQuery({
-    queryKey:     ['sales-kpi', { branch, rep, year, includeCats, excludeCats }],
+    queryKey:     ['sales-kpi', { branch, rep, year, includeCats, excludeCats, month }],
     queryFn:      () => fetchKPI({ branch: branch || undefined, rep: rep || undefined, year, ...catParams }),
     staleTime:    60_000,
     placeholderData: keepPreviousData,
@@ -675,7 +679,7 @@ export default function SalesActivityPage() {
 
   // Region stats (for pie charts) — same treatment
   const { data: regionStats, isLoading: regionLoading, isFetching: regionFetching } = useQuery({
-    queryKey:     ['sales-region-stats', { branch, rep, year, includeCats, excludeCats }],
+    queryKey:     ['sales-region-stats', { branch, rep, year, includeCats, excludeCats, month }],
     queryFn:      () => fetchRegionStats({ branch: branch || undefined, rep: rep || undefined, year, ...catParams }),
     staleTime:    60_000,
     placeholderData: keepPreviousData,
@@ -683,11 +687,14 @@ export default function SalesActivityPage() {
 
   // Category stats (for category KPI strip below pies)
   const { data: categoryStats, isLoading: categoryLoading, isFetching: categoryFetching } = useQuery({
-    queryKey:     ['sales-category-stats', { branch, rep, year, includeCats, excludeCats }],
+    queryKey:     ['sales-category-stats', { branch, rep, year, includeCats, excludeCats, month }],
     queryFn:      () => fetchCategoryStats({ branch: branch || undefined, rep: rep || undefined, year, ...catParams }),
     staleTime:    60_000,
     placeholderData: keepPreviousData,
   });
+
+  // Months with data this year (invoicesByMonth is year-wide, unaffected by the month filter)
+  const monthOptions = Object.keys(kpiData?.invoicesByMonth || {}).map(Number).filter(Boolean).sort((a, b) => a - b);
 
   // All hooks above — no conditional returns before this line
   const filters = {
@@ -827,6 +834,18 @@ export default function SalesActivityPage() {
           ))}
         </select>
 
+        <select
+          className="sap-select"
+          value={month}
+          onChange={e => setMonth(e.target.value)}
+          title="الشهر المعروض في الكروت والجداول — يُقارن بالشهر السابق له"
+        >
+          <option value="">{kpiData?.invoicesByMonth && !month
+            ? `آخر شهر (${MONTH_AR[Math.max(0, ...Object.keys(kpiData.invoicesByMonth).map(Number))] || '—'})`
+            : 'آخر شهر'}</option>
+          {monthOptions.map(m => <option key={m} value={m}>{MONTH_AR[m] || m}</option>)}
+        </select>
+
         <span className="sap-filter-label" style={{ marginInlineStart: 8 }}>من</span>
         <input
           type="date"
@@ -846,10 +865,10 @@ export default function SalesActivityPage() {
           title="أحدث تاريخ فاتورة يُحتسب في التقرير الشهري"
         />
 
-        {(branch || rep || dateFrom || dateTo || Object.keys(catFilter).length > 0) && (
+        {(branch || rep || month || dateFrom || dateTo || Object.keys(catFilter).length > 0) && (
           <button
             style={{ fontSize: 12, color: 'var(--color-danger)', background: 'none', border: 'none', cursor: 'pointer', padding: '4px 8px' }}
-            onClick={() => { setBranch(''); setRep(''); setCatFilter({}); setDateFrom(''); setDateTo(''); }}
+            onClick={() => { setBranch(''); setRep(''); setMonth(''); setCatFilter({}); setDateFrom(''); setDateTo(''); }}
           >
             × مسح الفلاتر
           </button>

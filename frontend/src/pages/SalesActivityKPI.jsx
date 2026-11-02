@@ -101,9 +101,9 @@ export default function SalesActivityKPI({
   const curLabel  = maxMonth  ? MONTH_AR[maxMonth]  : '—';
   const prevLabel = prevMonth ? MONTH_AR[prevMonth]  : null;
 
-  const months = Object.keys(invoicesByMonth).map(Number).sort((a, b) => a - b);
-  const lastTwo = months.slice(-2);
-  const invSubParts = lastTwo.map(m => `${MONTH_AR[m] || m}: ${fmt(invoicesByMonth[m])}`);
+  // Previous → current month of the comparison (follows the page's month filter)
+  const lastTwo = [prevMonth, maxMonth].filter(Boolean);
+  const invSubParts = lastTwo.map(m => `${MONTH_AR[m] || m}: ${fmt(invoicesByMonth[m] || 0)}`);
   const invSub = invSubParts.join(' | ');
 
   const stoppedPct = prevMonth && activeCurrentMonth + stoppedCurrentMonth > 0

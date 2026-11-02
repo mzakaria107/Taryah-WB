@@ -3451,6 +3451,26 @@ Verified: the endpoint run against a mocked DB (year/month split, net-zero custo
 net-credit kept, footer foots, filter params bind correctly); `npm run build` clean. Not run
 against production data — no DB access or login from the cloud session.
 
+## Customers report (`/sales-activity`, «تقرير العملاء العام») — month filter (2 Nov 2026)
+
+A «الشهر» dropdown (default «آخر شهر (…)» = latest month with data) next to region / rep. The picked
+month becomes the report's "current" month everywhere, compared with the month before it:
+- Backend: every endpoint used to run its own `MAX(month_num)`; all 7 (`/kpi`, `/region-stats`,
+  `/stopped-customers`, `/report`, `/new-customers`, `/category-stats`, `/export`) now call
+  `resolveCurrentMonth(req, year)` — `?month=N` (1–12) when given, else the latest month. "Previous"
+  stays current − 1. Without `month` every response is unchanged.
+- `/kpi`: with a month picked, `totalInvoices` / `totalCustomers` cover that month only
+  (`invoicesByMonth` stays year-wide — it feeds the dropdown's options).
+- `/report` and the export's report tab: with a month (and no date range) the attendance table runs
+  from January up to the picked month (`month_num <= N`), and «نشط / غير نشط» is judged on that month.
+- Frontend: `month` is part of `catParams`, so it reaches every query and query key, the tab
+  components (`filters`) and the export; «مسح الفلاتر» clears it. The invoices KPI card subtitle now
+  shows previous → current month (it used to show the last two months with data, which ignored the
+  filter).
+Verified on Postgres with Aug–Nov data (Oct → Sep comparison: stopped = the Sep-only customer, new =
+the Oct-first customer, totals 4 invoices / 3 customers, table Aug–Oct) and in Playwright (all 6 page
+requests carry `month=10`, every card label switches to أكتوبر).
+
 ## Sales report — one row per item under each rep (1 Nov 2026)
 
 The monthly NetSuite feed carries one line per item **per day**, so «المبيعات الشهرية» listed the same

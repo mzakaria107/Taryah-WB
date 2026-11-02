@@ -429,6 +429,20 @@ function buildFilter(branch, rep, includeCats, excludeCats, startAt, alias = '')
   return { sql: conds.length ? ' AND ' + conds.join(' AND ') : '', vals };
 }
 
+
+/* The month the report treats as "current": `?month=N` (1–12) from the page's month filter, else
+   the latest month with data in that year. "Previous" is always current − 1 (same year). Every
+   endpoint below goes through this, so cards, charts and tables follow one selected month. */
+async function resolveCurrentMonth(req, year) {
+  const m = parseInt(req.query.month, 10);
+  if (m >= 1 && m <= 12) return m;
+  const r = await pool.query(
+    `SELECT COALESCE(MAX(month_num), 0) AS max_month FROM sales_activity WHERE report_year = $1`,
+    [year]
+  );
+  return parseInt(r.rows[0].max_month, 10);
+}
+
 // ── GET /kpi ─────────────────────────────────────────────────
 router.get('/kpi', verifyToken, applyRegionFilter, async (req, res) => {
   const year        = parseInt(req.query.year || '2026', 10);
@@ -440,12 +454,11 @@ router.get('/kpi', verifyToken, applyRegionFilter, async (req, res) => {
 
   try {
     // Max month & prev month (no filter needed here)
-    const maxRes = await pool.query(
-      `SELECT COALESCE(MAX(month_num),0) AS max_month FROM sales_activity WHERE report_year=$1`,
-      [year]
-    );
-    const maxMonth  = parseInt(maxRes.rows[0].max_month, 10);
+    const maxMonth  = await resolveCurrentMonth(req, year);
     const prevMonth = maxMonth > 1 ? maxMonth - 1 : null;
+    // With a month picked, the year-wide totals (invoices / customers) cover that month only.
+    // maxMonth is a validated integer here, so it is safe to inline.
+    const totalsMonth = req.query.month && maxMonth ? ` AND month_num = ${maxMonth}` : '';
 
     // Each query gets its own filter clause with correct parameter positions
     // Queries with only $1=year: filter starts at $2
@@ -459,12 +472,12 @@ router.get('/kpi', verifyToken, applyRegionFilter, async (req, res) => {
       // Total invoices — DISTINCT invoice_number: sales_activity holds one row
       // per invoice LINE (~2.3 per invoice), so COUNT(*) counts lines.
       pool.query(
-        `SELECT COUNT(DISTINCT invoice_number) AS cnt FROM sales_activity WHERE report_year=$1${f1.sql}`,
+        `SELECT COUNT(DISTINCT invoice_number) AS cnt FROM sales_activity WHERE report_year=$1${totalsMonth}${f1.sql}`,
         [year, ...f1.vals]
       ),
       // Total distinct customers
       pool.query(
-        `SELECT COUNT(DISTINCT customer_code) AS cnt FROM sales_activity WHERE report_year=$1${f1.sql}`,
+        `SELECT COUNT(DISTINCT customer_code) AS cnt FROM sales_activity WHERE report_year=$1${totalsMonth}${f1.sql}`,
         [year, ...f1.vals]
       ),
       // Invoices by month. Safe to sum against the yearly total: no invoice
@@ -540,11 +553,7 @@ router.get('/region-stats', verifyToken, applyRegionFilter, async (req, res) => 
   if (req.regionFilter && req.regionFilter.length) branch = await resolveRegionBranch(req.regionFilter);
 
   try {
-    const maxRes = await pool.query(
-      `SELECT COALESCE(MAX(month_num),0) AS max_month FROM sales_activity WHERE report_year=$1`,
-      [year]
-    );
-    const maxMonth  = parseInt(maxRes.rows[0].max_month, 10);
+    const maxMonth  = await resolveCurrentMonth(req, year);
     const prevMonth = maxMonth > 1 ? maxMonth - 1 : null;
 
     if (!maxMonth) return res.json({ maxMonth: 0, prevMonth: null, regions: [] });
@@ -657,11 +666,7 @@ router.get('/stopped-customers', verifyToken, applyRegionFilter, async (req, res
   if (req.regionFilter && req.regionFilter.length) branch = await resolveRegionBranch(req.regionFilter);
 
   try {
-    const maxRes = await pool.query(
-      `SELECT COALESCE(MAX(month_num),0) AS max_month FROM sales_activity WHERE report_year=$1`,
-      [year]
-    );
-    const currentMonth = parseInt(maxRes.rows[0].max_month, 10);
+    const currentMonth = await resolveCurrentMonth(req, year);
     const prevMonth    = currentMonth > 1 ? currentMonth - 1 : null;
 
     if (!currentMonth || !prevMonth)
@@ -739,6 +744,16 @@ router.get('/report', verifyToken, applyRegionFilter, async (req, res) => {
 
     if (!useDateRange) { conditions.push(`sa.report_year = $${p++}`); params.push(year); }
 
+    // Month filter: the year up to and including the picked month (it is the "current" one)
+
+    const pickedMonth = parseInt(req.query.month, 10);
+
+    if (!useDateRange && pickedMonth >= 1 && pickedMonth <= 12) {
+
+      conditions.push(`sa.month_num <= $${p++}`); params.push(pickedMonth);
+
+    }
+
     if (branch) {
       if (Array.isArray(branch)) {
         conditions.push(`sa.branch_name = ANY($${p++}::text[])`); params.push(branch);
@@ -761,11 +776,7 @@ router.get('/report', verifyToken, applyRegionFilter, async (req, res) => {
     const where = conditions.length ? conditions.join(' AND ') : 'TRUE';
 
     // Get max month (current month in the data)
-    const maxMonthRes = await pool.query(
-      `SELECT COALESCE(MAX(month_num), 0) AS max_month FROM sales_activity WHERE report_year = $1`,
-      [year]
-    );
-    const maxMonth = parseInt(maxMonthRes.rows[0].max_month, 10);
+    const maxMonth = await resolveCurrentMonth(req, year);
 
     /* Month columns come from the SAME filtered set as the data, so a date
        range of Mar–Apr renders two columns rather than twelve mostly-empty
@@ -893,11 +904,7 @@ router.get('/new-customers', verifyToken, applyRegionFilter, async (req, res) =>
 
   try {
     // Max month
-    const maxMonthRes = await pool.query(
-      `SELECT COALESCE(MAX(month_num), 0) AS max_month FROM sales_activity WHERE report_year = $1`,
-      [year]
-    );
-    const currentMonth = parseInt(maxMonthRes.rows[0].max_month, 10);
+    const currentMonth = await resolveCurrentMonth(req, year);
     if (!currentMonth) return res.json({ currentMonth: 0, customers: [] });
 
     // Build filter clause
@@ -1052,11 +1059,7 @@ router.get('/category-stats', verifyToken, applyRegionFilter, async (req, res) =
 
   try {
     // Resolve max and prev months
-    const maxRes = await pool.query(
-      `SELECT COALESCE(MAX(month_num), 0) AS max_month FROM sales_activity WHERE report_year = $1`,
-      [year]
-    );
-    const maxMonth  = parseInt(maxRes.rows[0].max_month, 10);
+    const maxMonth  = await resolveCurrentMonth(req, year);
     const prevMonth = maxMonth > 1 ? maxMonth - 1 : null;
 
     // filter clause starts at $3 (after $1=year, $2=month)
@@ -1189,11 +1192,7 @@ router.get('/export', verifyToken, applyRegionFilter, async (req, res) => {
 
   try {
     /* ── Get max month (shared by all tabs) ── */
-    const maxMonthRes = await pool.query(
-      `SELECT COALESCE(MAX(month_num), 0) AS max_month FROM sales_activity WHERE report_year = $1`,
-      [year]
-    );
-    const maxMonth  = parseInt(maxMonthRes.rows[0].max_month, 10);
+    const maxMonth  = await resolveCurrentMonth(req, year);
     const prevMonth = maxMonth > 1 ? maxMonth - 1 : null;
 
     let sheetRows = [];
@@ -1325,6 +1324,11 @@ router.get('/export', verifyToken, applyRegionFilter, async (req, res) => {
       const params     = [];
       let   p          = 1;
       if (!useDateRange) { conditions.push(`sa.report_year = $${p++}`); params.push(year); }
+      // Month filter: the year up to and including the picked month (it is the "current" one)
+      const pickedMonth = parseInt(req.query.month, 10);
+      if (!useDateRange && pickedMonth >= 1 && pickedMonth <= 12) {
+        conditions.push(`sa.month_num <= $${p++}`); params.push(pickedMonth);
+      }
       if (branch) { const bc = branchCondition(branch, p++, 'sa.'); conditions.push(bc.sql.replace(/^ AND /, '')); params.push(bc.val); }
       if (rep)    { conditions.push(`sa.salesrep_name = $${p++}`); params.push(rep); }
       if (dateFrom) { conditions.push(`${ROW_DATE} >= $${p++}::date`); params.push(dateFrom); }

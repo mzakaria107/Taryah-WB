@@ -1442,4 +1442,12 @@
   min-width: 200px;
 }
 /* «المنطقة» column of the monthly net-sales table */
+/* Compact monthly matrix: don't stretch to 100% — columns size to their content */
+.ds-table--monthly { width: auto; min-width: 0; }
+.ds-table--monthly thead th { padding: 8px 7px; }
+.ds-table--monthly td,
+.ds-table--monthly .ds-tfoot-row td,
+.ds-table--monthly tfoot td { padding: 6px 7px; }
+.ds-table--monthly th:first-child,
+.ds-table--monthly td:first-child { width: 165px; min-width: 165px; max-width: 165px; }
 .ds-table--monthly td.ds-monthly-region { white-space: nowrap; color: var(--color-text-secondary, #475569); font-weight: 600; }

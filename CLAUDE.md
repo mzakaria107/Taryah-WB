@@ -3504,6 +3504,10 @@ value) — i.e. the expected monthly volume of the whole (filtered) list. It is 
 `Σtotal ÷ months`: each customer's average is over its own active months, so the two differ when
 customers skipped months. The Excel export gained the same «الإجمالي» row (months, totals, averages).
 
+**Compact columns**: `.ds-table--monthly` is `width:auto` (not the shared 100%), so columns hug their
+content instead of stretching across the card; cell padding 6–8px × 7px; the sticky customer column is
+165px. Shared by both segment pages (SpecialCustomersPage imports DiscountShopsPage.css).
+
 ## Customers report (`/sales-activity`, «تقرير العملاء العام») — month filter (2 Nov 2026)
 
 A «الشهر» dropdown (default «آخر شهر (…)» = latest month with data) next to region / rep. The picked

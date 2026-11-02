@@ -3499,6 +3499,11 @@ numeric-only, so «العميل» sorting never worked — text columns now use 
 in the Excel export; footer gets a blank cell to stay aligned. Same English region identifiers as the
 rest of the app (see "Region name storage gotcha").
 
+**«متوسط الفترة» footer total**: the sum of every listed customer's own monthly average (qty and
+value) — i.e. the expected monthly volume of the whole (filtered) list. It is NOT
+`Σtotal ÷ months`: each customer's average is over its own active months, so the two differ when
+customers skipped months. The Excel export gained the same «الإجمالي» row (months, totals, averages).
+
 ## Customers report (`/sales-activity`, «تقرير العملاء العام») — month filter (2 Nov 2026)
 
 A «الشهر» dropdown (default «آخر شهر (…)» = latest month with data) next to region / rep. The picked

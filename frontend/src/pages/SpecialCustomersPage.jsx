@@ -1175,6 +1175,13 @@ export default function SpecialCustomersPage() {
       c.total_qty, +c.total_revenue.toFixed(2),
       +c.avg_monthly_qty.toFixed(1), +c.avg_monthly_revenue.toFixed(2),
     ]);
+    const sum = fn => monthlyCustomers.reduce((s, c) => s + (fn(c) || 0), 0);
+    rows.push([
+      'الإجمالي', `${monthlyCustomers.length} عميل`, '',
+      ...monthlyMonths.flatMap(m => [sum(c => c.by_month?.[m.key]?.qty), +sum(c => c.by_month?.[m.key]?.revenue).toFixed(2)]),
+      sum(c => c.total_qty), +sum(c => c.total_revenue).toFixed(2),
+      +sum(c => c.avg_monthly_qty).toFixed(1), +sum(c => c.avg_monthly_revenue).toFixed(2),
+    ]);
     const ws = XLSX.utils.aoa_to_sheet([header, ...rows]);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'صافي المبيعات الشهري');
@@ -3468,7 +3475,13 @@ export default function SpecialCustomersPage() {
                               })}
                               <td className="ds-td-num ds-td-bold">{fmt(monthlyCustomers.reduce((s, c) => s + c.total_qty, 0))}</td>
                               <td className="ds-td-num ds-td-bold">{fmt(monthlyCustomers.reduce((s, c) => s + c.total_revenue, 0), 2)} ر.س</td>
-                              <td></td>
+                              {/* Sum of the customers' monthly averages = expected monthly volume for the list */}
+                              <td className="ds-td-num ds-td-bold" title="مجموع متوسطات العملاء الشهرية">
+                                <div className="ds-monthly-cell">
+                                  <span className="ds-monthly-qty">{fmt(monthlyCustomers.reduce((s, c) => s + (c.avg_monthly_qty || 0), 0), 1)}</span>
+                                  <span className="ds-monthly-rev">{fmt(monthlyCustomers.reduce((s, c) => s + (c.avg_monthly_revenue || 0), 0), 2)} ر.س</span>
+                                </div>
+                              </td>
                             </tr>
                           </tfoot>
                         </table>

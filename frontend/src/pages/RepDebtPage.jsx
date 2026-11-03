@@ -74,6 +74,7 @@ function rowClass(inv) {
 /* ── Sortable columns ──────────────────────────────── */
 const INV_COLUMNS = [
   { key: 'invoice_number',  label: 'رقم الفاتورة',   type: 'string' },
+  { key: 'customer_id',     label: 'كود العميل',     type: 'string' },
   { key: 'customer_name',   label: 'العميل',         type: 'string' },
   { key: 'region_name_ar',  label: 'المنطقة',        type: 'string' },
   { key: 'invoice_date',    label: 'التاريخ',        type: 'date'   },
@@ -428,9 +429,10 @@ export default function RepDebtPage() {
       sheetName = 'صافي مديونية العملاء';
       fileTag = 'صافي_مديونية_العملاء';
     } else {
-      header = ['رقم الفاتورة', 'العميل', 'المنطقة', 'التاريخ', 'المبلغ الأصلي', 'المدفوع', 'المتبقي', 'الحالة', 'ملاحظة الفاتورة', 'العميل صاحب الدين الفعلي'];
+      header = ['رقم الفاتورة', 'كود العميل', 'العميل', 'المنطقة', 'التاريخ', 'المبلغ الأصلي', 'المدفوع', 'المتبقي', 'الحالة', 'ملاحظة الفاتورة', 'العميل صاحب الدين الفعلي'];
       rows = sortedInvoices.map(inv => [
         inv.invoice_number,
+        inv.customer_id || '',
         inv.customer_name,
         inv.region_name_ar || '—',
         fmtDate(inv.invoice_date),
@@ -442,7 +444,7 @@ export default function RepDebtPage() {
         invOwnerNotes[inv.invoice_number]?.note || '',
       ]);
       rows.push([
-        `الإجمالي (${sortedInvoices.length} فاتورة)`, '', '', '',
+        `الإجمالي (${sortedInvoices.length} فاتورة)`, '', '', '', '',
         Number(invSummary.total_amount || 0),
         Number(invSummary.total_paid || 0),
         Number(invSummary.total_balance || 0),
@@ -636,11 +638,12 @@ export default function RepDebtPage() {
                 </thead>
                 <tbody>
                   {sortedInvoices.length === 0 ? (
-                    <tr><td colSpan={10} className="rd-empty">لا توجد فواتير غير مسددة لهذا المندوب</td></tr>
+                    <tr><td colSpan={11} className="rd-empty">لا توجد فواتير غير مسددة لهذا المندوب</td></tr>
                   ) : (
                     sortedInvoices.map(inv => (
                       <tr key={inv.id} className={rowClass(inv)}>
                         <td className="rd-td-num">{inv.invoice_number}</td>
+                        <td className="rd-td-num">{inv.customer_id || '—'}</td>
                         <td className="rd-td-name">{inv.customer_name}</td>
                         <td>{inv.region_name_ar || '—'}</td>
                         <td className="rd-td-num">{fmtDate(inv.invoice_date)}</td>
@@ -670,7 +673,7 @@ export default function RepDebtPage() {
                 {invoices.length > 0 && (
                   <tfoot>
                     <tr>
-                      <td colSpan={4} className="rd-tf-lbl">الإجمالي ({invoices.length} فاتورة)</td>
+                      <td colSpan={5} className="rd-tf-lbl">الإجمالي ({invoices.length} فاتورة)</td>
                       <td className="rd-td-num">{fmt(invSummary.total_amount)}</td>
                       <td className="rd-td-num">{fmt(invSummary.total_paid)}</td>
                       <td className="rd-td-num rd-td-balance">{fmt(invSummary.total_balance)}</td>

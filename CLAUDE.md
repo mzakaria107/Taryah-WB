@@ -3517,6 +3517,12 @@ two halves always add up to the full list. Footer totals and the Excel export fo
 header again reverses (▲/▼ marker, ⇅ on inactive headers). Month headers are sortable too
 (`m:<key>` → that month's qty, no sales = 0).
 
+## Rep debt page — «كود العميل» column on the invoices tab (3 Nov 2026)
+
+`INV_COLUMNS` gained `customer_id` (sortable, after «رقم الفاتورة»); row cell, empty-state colSpan
+(11), footer label colSpan (5) and the invoices Excel sheet (header + totals row) moved with it.
+The invoices tab prints the on-screen table, so print picks it up too.
+
 ## Debt aging page (`/aging`) — «1-15 يوم» split into 0 / 1-7 / 8-15 (3 Nov 2026)
 
 `aging.js` returns three new buckets in all three queries (customers, KPI totals, regions):

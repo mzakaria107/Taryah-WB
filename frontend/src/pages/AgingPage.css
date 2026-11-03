@@ -121,6 +121,8 @@
 
 /* Bucket severity colors (border-top) */
 .age-kpi-card--b1  { border-top: 3px solid #22c55e; }
+.age-kpi-card--b0  { border-top: 3px solid #0ea5e9; }
+.age-kpi-card--b1b { border-top: 3px solid #4ade80; }
 .age-kpi-card--b2  { border-top: 3px solid #84cc16; }
 .age-kpi-card--b3  { border-top: 3px solid #f59e0b; }
 .age-kpi-card--b4  { border-top: 3px solid #f97316; }
@@ -157,6 +159,9 @@
 
 /* per-bucket accent when active */
 .age-bucket-btn--b_1_15.age-bucket-btn--active    { background: #16a34a !important; border-color: #15803d !important; }
+.age-bucket-btn--b_0.age-bucket-btn--active       { background: #0284c7 !important; border-color: #0369a1 !important; }
+.age-bucket-btn--b_1_7.age-bucket-btn--active     { background: #16a34a !important; border-color: #15803d !important; }
+.age-bucket-btn--b_8_15.age-bucket-btn--active    { background: #22c55e !important; border-color: #16a34a !important; }
 .age-bucket-btn--b_16_30.age-bucket-btn--active   { background: #65a30d !important; border-color: #4d7c0f !important; }
 .age-bucket-btn--b_31_60.age-bucket-btn--active   { background: #d97706 !important; border-color: #b45309 !important; }
 .age-bucket-btn--b_61_90.age-bucket-btn--active   { background: #ea580c !important; border-color: #c2410c !important; }
@@ -165,6 +170,9 @@
 
 /* subtle hover accent per bucket (not active) */
 .age-bucket-btn--b_1_15:hover    { border-color: #22c55e; color: #15803d; }
+.age-bucket-btn--b_0:hover       { border-color: #0ea5e9; color: #0369a1; }
+.age-bucket-btn--b_1_7:hover     { border-color: #22c55e; color: #15803d; }
+.age-bucket-btn--b_8_15:hover    { border-color: #4ade80; color: #16a34a; }
 .age-bucket-btn--b_16_30:hover   { border-color: #84cc16; color: #4d7c0f; }
 .age-bucket-btn--b_31_60:hover   { border-color: #f59e0b; color: #b45309; }
 .age-bucket-btn--b_61_90:hover   { border-color: #f97316; color: #c2410c; }
@@ -286,6 +294,8 @@
 /* ── Bucket cell colors ──────────────────────────────────────── */
 .age-cell--zero { color: var(--color-text-muted); opacity: 0.35; }
 .age-cell--b1   { color: #15803d; }
+.age-cell--b0   { color: #0369a1; }
+.age-cell--b1b  { color: #16a34a; }
 .age-cell--b2   { color: #4d7c0f; }
 .age-cell--b3   { color: #b45309; font-weight: 600; }
 .age-cell--b4   { color: #c2410c; font-weight: 600; }
@@ -406,6 +416,8 @@
   padding: 2px 8px; font-size: 0.75rem; font-weight: 700;
 }
 .age-badge--b1 { background: #dcfce7; color: #15803d; }
+.age-badge--b0 { background: #e0f2fe; color: #0369a1; }
+.age-badge--b1b { background: #f0fdf4; color: #16a34a; }
 .age-badge--b2 { background: #ecfccb; color: #4d7c0f; }
 .age-badge--b3 { background: #fef9c3; color: #854d0e; }
 .age-badge--b4 { background: #ffedd5; color: #c2410c; }
@@ -439,7 +451,7 @@
   .age-print-header { display: flex !important; }
 
   .age-page { padding: 0; max-width: none; }
-  .age-kpis { grid-template-columns: repeat(9, 1fr); gap: 6px; }
+  .age-kpis { grid-template-columns: repeat(10, 1fr); gap: 5px; }
   .age-kpi-card { padding: 6px 8px; }
   .age-table th, .age-table td { font-size: 0.7rem !important; padding: 4px 6px !important; }
   .age-table th:first-child, .age-table td:first-child { position: static !important; }

@@ -20,19 +20,22 @@ const fmtNsDate = s => {
   return fmtDate(`${m[3]}-${String(m[2]).padStart(2, '0')}-${String(m[1]).padStart(2, '0')}`);
 };
 
+// «1-15 يوم» was split into 0 / 1-7 / 8-15. 0 days = invoiced today (it used to fall in no bucket).
 const BUCKETS = [
-  { key: 'b_1_15',    label: '1-15 يوم',      cls: 'age-cell--b1', badge: 'age-badge--b1' },
-  { key: 'b_16_30',   label: '16-30 يوم',     cls: 'age-cell--b2', badge: 'age-badge--b2' },
-  { key: 'b_31_60',   label: '31-60 يوم',     cls: 'age-cell--b3', badge: 'age-badge--b3' },
-  { key: 'b_61_90',   label: '61-90 يوم',     cls: 'age-cell--b4', badge: 'age-badge--b4' },
-  { key: 'b_91_120',  label: '91-120 يوم',    cls: 'age-cell--b5', badge: 'age-badge--b5' },
-  { key: 'b_120_plus',label: 'أكثر من 120',   cls: 'age-cell--b6', badge: 'age-badge--b6' },
+  { key: 'b_0',       label: '0 يوم',         cls: 'age-cell--b0',  badge: 'age-badge--b0',  kpi: '--b0' },
+  { key: 'b_1_7',     label: '1-7 يوم',       cls: 'age-cell--b1',  badge: 'age-badge--b1',  kpi: '--b1' },
+  { key: 'b_8_15',    label: '8-15 يوم',      cls: 'age-cell--b1b', badge: 'age-badge--b1b', kpi: '--b1b' },
+  { key: 'b_16_30',   label: '16-30 يوم',     cls: 'age-cell--b2', badge: 'age-badge--b2', kpi: '--b2' },
+  { key: 'b_31_60',   label: '31-60 يوم',     cls: 'age-cell--b3', badge: 'age-badge--b3', kpi: '--b3' },
+  { key: 'b_61_90',   label: '61-90 يوم',     cls: 'age-cell--b4', badge: 'age-badge--b4', kpi: '--b4' },
+  { key: 'b_91_120',  label: '91-120 يوم',    cls: 'age-cell--b5', badge: 'age-badge--b5', kpi: '--b5' },
+  { key: 'b_120_plus',label: 'أكثر من 120',   cls: 'age-cell--b6', badge: 'age-badge--b6', kpi: '--b6' },
 ];
 
-const KPI_COLORS = ['--b1', '--b2', '--b3', '--b4', '--b5', '--b6'];
-
 function ageCellClass(days) {
-  if (days <= 15)  return 'age-cell--b1';
+  if (days <= 0)   return 'age-cell--b0';
+  if (days <= 7)   return 'age-cell--b1';
+  if (days <= 15)  return 'age-cell--b1b';
   if (days <= 30)  return 'age-cell--b2';
   if (days <= 60)  return 'age-cell--b3';
   if (days <= 90)  return 'age-cell--b4';
@@ -78,7 +81,7 @@ export default function AgingPage() {
   const [sortBy,       setSortBy]       = useState('total_balance');
   const [sortDir,      setSortDir]      = useState('DESC');
   const [activeTab,    setActiveTab]    = useState('customers'); // 'customers' | 'regions' | 'collections'
-  const [bucketFilter, setBucketFilter] = useState(''); // '' | b_1_15 | b_16_30 | …
+  const [bucketFilter, setBucketFilter] = useState(''); // '' | b_0 | b_1_7 | b_8_15 | b_16_30 | …
 
   /* ── Modal state ─────────────────────────────────────────────── */
   const [modalCustomer, setModalCustomer] = useState(null); // {id, name}
@@ -300,8 +303,7 @@ export default function AgingPage() {
     /* ── Sheet 1: Customers matrix ── */
     const custHeader = [
       'العميل',
-      '1-15 يوم', '16-30 يوم', '31-60 يوم',
-      '61-90 يوم', '91-120 يوم', 'أكثر من 120',
+      ...BUCKETS.map(b => b.label),
       'نسبة التحصيل %', 'نسبة المتبقي %',
       'عمر أقدم دين (يوم)', 'عمر أقرب دين (يوم)', 'إجمالي الدين', 'التغير اليومي',
     ];
@@ -311,12 +313,7 @@ export default function AgingPage() {
       const remRate  = totalAmt > 0 ? parseFloat((totalBal / totalAmt * 100).toFixed(1)) : 0;
       return [
         c.customer_name,
-        parseFloat(c.b_1_15    || 0),
-        parseFloat(c.b_16_30   || 0),
-        parseFloat(c.b_31_60   || 0),
-        parseFloat(c.b_61_90   || 0),
-        parseFloat(c.b_91_120  || 0),
-        parseFloat(c.b_120_plus|| 0),
+        ...BUCKETS.map(b => parseFloat(c[b.key] || 0)),
         parseFloat(c.collection_rate || 0),
         remRate,
         parseInt(c.avg_age_days || 0),
@@ -329,24 +326,20 @@ export default function AgingPage() {
     const k = data.kpis || {};
     custRows.push([
       'الإجمالي',
-      parseFloat(k.b_1_15 || 0), parseFloat(k.b_16_30 || 0),
-      parseFloat(k.b_31_60 || 0), parseFloat(k.b_61_90 || 0),
-      parseFloat(k.b_91_120 || 0), parseFloat(k.b_120_plus || 0),
+      ...BUCKETS.map(b => parseFloat(k[b.key] || 0)),
       '', '', '', '', parseFloat(k.total_balance || 0), '',
     ]);
     const ws1 = XLSX.utils.aoa_to_sheet([custHeader, ...custRows]);
     // Column widths
     ws1['!cols'] = [
-      { wch: 28 }, { wch: 12 }, { wch: 12 }, { wch: 12 },
-      { wch: 12 }, { wch: 13 }, { wch: 14 },
+      { wch: 28 }, ...BUCKETS.map(() => ({ wch: 12 })),
       { wch: 16 }, { wch: 16 }, { wch: 16 }, { wch: 16 }, { wch: 14 }, { wch: 13 },
     ];
     XLSX.utils.book_append_sheet(wb, ws1, 'العملاء');
 
     /* ── Sheet 2: Region summary ── */
     const regHeader = [
-      'المنطقة', '1-15 يوم', '16-30 يوم', '31-60 يوم',
-      '61-90 يوم', '91-120 يوم', 'أكثر من 120',
+      'المنطقة', ...BUCKETS.map(b => b.label),
       'إجمالي الدين', '% من الإجمالي', 'عدد العملاء',
     ];
     const grandTotal = parseFloat(k.total_balance || 0);
@@ -354,9 +347,7 @@ export default function AgingPage() {
       const bal = parseFloat(r.total_balance || 0);
       return [
         r.region_name || `منطقة ${r.region_id}`,
-        parseFloat(r.b_1_15 || 0), parseFloat(r.b_16_30 || 0),
-        parseFloat(r.b_31_60 || 0), parseFloat(r.b_61_90 || 0),
-        parseFloat(r.b_91_120 || 0), parseFloat(r.b_120_plus || 0),
+        ...BUCKETS.map(b => parseFloat(r[b.key] || 0)),
         bal,
         grandTotal > 0 ? parseFloat((bal / grandTotal * 100).toFixed(1)) : 0,
         r.customer_count || 0,
@@ -364,8 +355,7 @@ export default function AgingPage() {
     });
     const ws2 = XLSX.utils.aoa_to_sheet([regHeader, ...regRows]);
     ws2['!cols'] = [
-      { wch: 20 }, { wch: 12 }, { wch: 12 }, { wch: 12 },
-      { wch: 12 }, { wch: 13 }, { wch: 14 },
+      { wch: 20 }, ...BUCKETS.map(() => ({ wch: 12 })),
       { wch: 14 }, { wch: 13 }, { wch: 13 },
     ];
     XLSX.utils.book_append_sheet(wb, ws2, 'المناطق');
@@ -381,12 +371,7 @@ export default function AgingPage() {
       ['عدد الفواتير',        k.invoice_count  || 0],
       [''],
       ['الفئة', 'المبلغ', '% من الإجمالي'],
-      ['1-15 يوم',      parseFloat(k.b_1_15    || 0), grandTotal > 0 ? +((k.b_1_15    / grandTotal * 100).toFixed(1)) : 0],
-      ['16-30 يوم',     parseFloat(k.b_16_30   || 0), grandTotal > 0 ? +((k.b_16_30   / grandTotal * 100).toFixed(1)) : 0],
-      ['31-60 يوم',     parseFloat(k.b_31_60   || 0), grandTotal > 0 ? +((k.b_31_60   / grandTotal * 100).toFixed(1)) : 0],
-      ['61-90 يوم',     parseFloat(k.b_61_90   || 0), grandTotal > 0 ? +((k.b_61_90   / grandTotal * 100).toFixed(1)) : 0],
-      ['91-120 يوم',    parseFloat(k.b_91_120  || 0), grandTotal > 0 ? +((k.b_91_120  / grandTotal * 100).toFixed(1)) : 0],
-      ['أكثر من 120 يوم', parseFloat(k.b_120_plus || 0), grandTotal > 0 ? +((k.b_120_plus / grandTotal * 100).toFixed(1)) : 0],
+      ...BUCKETS.map(b => [b.label, parseFloat(k[b.key] || 0), grandTotal > 0 ? +((k[b.key] / grandTotal * 100).toFixed(1)) : 0]),
     ];
     const ws3 = XLSX.utils.aoa_to_sheet(kpiRows);
     ws3['!cols'] = [{ wch: 22 }, { wch: 16 }, { wch: 16 }];
@@ -522,7 +507,7 @@ export default function AgingPage() {
               const val = parseFloat(kpis[b.key] || 0);
               const pct = total > 0 ? (val / total * 100).toFixed(1) : '0.0';
               return (
-                <div key={b.key} className={`age-kpi-card age-kpi-card${KPI_COLORS[i]}`}>
+                <div key={b.key} className={`age-kpi-card age-kpi-card${b.kpi}`}>
                   <span className="age-kpi-label">{b.label}</span>
                   <span className="age-kpi-value">{fmt(val)}</span>
                   <span className="age-kpi-pct">{pct}% من الإجمالي</span>

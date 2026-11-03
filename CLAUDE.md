@@ -3517,6 +3517,16 @@ two halves always add up to the full list. Footer totals and the Excel export fo
 header again reverses (▲/▼ marker, ⇅ on inactive headers). Month headers are sortable too
 (`m:<key>` → that month's qty, no sales = 0).
 
+## Debt aging page (`/aging`) — «1-15 يوم» split into 0 / 1-7 / 8-15 (3 Nov 2026)
+
+`aging.js` returns three new buckets in all three queries (customers, KPI totals, regions):
+`b_0` (`CURRENT_DATE - invoice_date <= 0`), `b_1_7`, `b_8_15`; all sortable. **`b_0` fixes a real gap**:
+the old buckets started at 1 day, so an invoice dated today (or future-dated) was in the total but in
+NO bucket, and the bucket columns didn't foot to «إجمالي الدين». `b_1_15` is still returned (= b_1_7 +
+b_8_15) but no longer displayed. Frontend `BUCKETS` drives the KPI cards, filter chips, both tables and
+all three Excel sheets, so they all moved together; each bucket now carries its own `kpi` colour
+class (the old index-based `KPI_COLORS` array is gone).
+
 ## Customers report (`/sales-activity`, «تقرير العملاء العام») — month filter (2 Nov 2026)
 
 A «الشهر» dropdown (default «آخر شهر (…)» = latest month with data) next to region / rep. The picked

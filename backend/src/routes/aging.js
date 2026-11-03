@@ -81,6 +81,9 @@ function buildAgingFilters(req) {
 const SORT_COLS = {
   total_balance:   'total_balance',
   b_1_15:          'b_1_15',
+  b_0:             'b_0',
+  b_1_7:           'b_1_7',
+  b_8_15:          'b_8_15',
   b_16_30:         'b_16_30',
   b_31_60:         'b_31_60',
   b_61_90:         'b_61_90',
@@ -154,6 +157,16 @@ router.get('/', verifyToken, applyRegionFilter, async (req, res) => {
         ROUND(SUM(CASE
           WHEN i.invoice_date IS NOT NULL AND (CURRENT_DATE - i.invoice_date) BETWEEN 1  AND 15
           THEN i.balance ELSE 0 END)::numeric, 2) AS b_1_15,
+        -- 0 days = invoiced today (or future-dated) — previously fell in NO bucket
+        ROUND(SUM(CASE
+          WHEN i.invoice_date IS NOT NULL AND (CURRENT_DATE - i.invoice_date) <= 0
+          THEN i.balance ELSE 0 END)::numeric, 2) AS b_0,
+        ROUND(SUM(CASE
+          WHEN i.invoice_date IS NOT NULL AND (CURRENT_DATE - i.invoice_date) BETWEEN 1  AND 7
+          THEN i.balance ELSE 0 END)::numeric, 2) AS b_1_7,
+        ROUND(SUM(CASE
+          WHEN i.invoice_date IS NOT NULL AND (CURRENT_DATE - i.invoice_date) BETWEEN 8  AND 15
+          THEN i.balance ELSE 0 END)::numeric, 2) AS b_8_15,
         ROUND(SUM(CASE
           WHEN i.invoice_date IS NOT NULL AND (CURRENT_DATE - i.invoice_date) BETWEEN 16 AND 30
           THEN i.balance ELSE 0 END)::numeric, 2) AS b_16_30,
@@ -215,6 +228,9 @@ router.get('/', verifyToken, applyRegionFilter, async (req, res) => {
     const { rows: totals } = await pool.query(`
       SELECT
         ROUND(SUM(CASE WHEN i.invoice_date IS NOT NULL AND (CURRENT_DATE - i.invoice_date) BETWEEN 1  AND 15  THEN i.balance ELSE 0 END)::numeric,2) AS b_1_15,
+        ROUND(SUM(CASE WHEN i.invoice_date IS NOT NULL AND (CURRENT_DATE - i.invoice_date) <= 0              THEN i.balance ELSE 0 END)::numeric,2) AS b_0,
+        ROUND(SUM(CASE WHEN i.invoice_date IS NOT NULL AND (CURRENT_DATE - i.invoice_date) BETWEEN 1  AND 7   THEN i.balance ELSE 0 END)::numeric,2) AS b_1_7,
+        ROUND(SUM(CASE WHEN i.invoice_date IS NOT NULL AND (CURRENT_DATE - i.invoice_date) BETWEEN 8  AND 15  THEN i.balance ELSE 0 END)::numeric,2) AS b_8_15,
         ROUND(SUM(CASE WHEN i.invoice_date IS NOT NULL AND (CURRENT_DATE - i.invoice_date) BETWEEN 16 AND 30  THEN i.balance ELSE 0 END)::numeric,2) AS b_16_30,
         ROUND(SUM(CASE WHEN i.invoice_date IS NOT NULL AND (CURRENT_DATE - i.invoice_date) BETWEEN 31 AND 60  THEN i.balance ELSE 0 END)::numeric,2) AS b_31_60,
         ROUND(SUM(CASE WHEN i.invoice_date IS NOT NULL AND (CURRENT_DATE - i.invoice_date) BETWEEN 61 AND 90  THEN i.balance ELSE 0 END)::numeric,2) AS b_61_90,
@@ -233,6 +249,9 @@ router.get('/', verifyToken, applyRegionFilter, async (req, res) => {
         i.region_id,
         r.name_ar AS region_name,
         ROUND(SUM(CASE WHEN i.invoice_date IS NOT NULL AND (CURRENT_DATE - i.invoice_date) BETWEEN 1  AND 15  THEN i.balance ELSE 0 END)::numeric,2) AS b_1_15,
+        ROUND(SUM(CASE WHEN i.invoice_date IS NOT NULL AND (CURRENT_DATE - i.invoice_date) <= 0              THEN i.balance ELSE 0 END)::numeric,2) AS b_0,
+        ROUND(SUM(CASE WHEN i.invoice_date IS NOT NULL AND (CURRENT_DATE - i.invoice_date) BETWEEN 1  AND 7   THEN i.balance ELSE 0 END)::numeric,2) AS b_1_7,
+        ROUND(SUM(CASE WHEN i.invoice_date IS NOT NULL AND (CURRENT_DATE - i.invoice_date) BETWEEN 8  AND 15  THEN i.balance ELSE 0 END)::numeric,2) AS b_8_15,
         ROUND(SUM(CASE WHEN i.invoice_date IS NOT NULL AND (CURRENT_DATE - i.invoice_date) BETWEEN 16 AND 30  THEN i.balance ELSE 0 END)::numeric,2) AS b_16_30,
         ROUND(SUM(CASE WHEN i.invoice_date IS NOT NULL AND (CURRENT_DATE - i.invoice_date) BETWEEN 31 AND 60  THEN i.balance ELSE 0 END)::numeric,2) AS b_31_60,
         ROUND(SUM(CASE WHEN i.invoice_date IS NOT NULL AND (CURRENT_DATE - i.invoice_date) BETWEEN 61 AND 90  THEN i.balance ELSE 0 END)::numeric,2) AS b_61_90,

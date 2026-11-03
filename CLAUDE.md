@@ -3513,6 +3513,10 @@ mean of `avg_monthly_qty` over ALL customers in the baseline (computed before th
 doesn't move while typing), shown inside the option labels. "above" is `>=`, "below" is `<`, so the
 two halves always add up to the full list. Footer totals and the Excel export follow the filtered rows.
 
+**Sort direction**: clicking a header sorts by it (text A→Z, numbers high→low); clicking the same
+header again reverses (▲/▼ marker, ⇅ on inactive headers). Month headers are sortable too
+(`m:<key>` → that month's qty, no sales = 0).
+
 ## Customers report (`/sales-activity`, «تقرير العملاء العام») — month filter (2 Nov 2026)
 
 A «الشهر» dropdown (default «آخر شهر (…)» = latest month with data) next to region / rep. The picked

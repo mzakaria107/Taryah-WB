@@ -1150,7 +1150,16 @@ export default function SpecialCustomersPage() {
     if (!cs.length) return 0;
     return cs.reduce((s, c) => s + (Number(c.avg_monthly_qty) || 0), 0) / cs.length;
   }, [incentiveBaseline]);
-  const handleMonthlySort = useCallback(col => setMonthlySortCol(c => c === col ? c : col), []);
+  // Click a header once → its default direction (text A→Z, numbers high→low); click again → reverse
+  const [monthlySortDir, setMonthlySortDir] = useState('desc');
+  const handleMonthlySort = useCallback(col => {
+    if (col === monthlySortCol) { setMonthlySortDir(d => (d === 'asc' ? 'desc' : 'asc')); return; }
+    setMonthlySortCol(col);
+    setMonthlySortDir(col === 'customer_name' || col === 'region_name' ? 'asc' : 'desc');
+  }, [monthlySortCol]);
+  const monthlySortMark = col => (monthlySortCol === col
+    ? <span className="ds-sort ds-sort--active">{monthlySortDir === 'asc' ? ' ▲' : ' ▼'}</span>
+    : <span className="ds-sort"> ⇅</span>);
 
   const monthlyCustomers = useMemo(() => {
     if (!incentiveBaseline?.customers) return [];
@@ -1162,12 +1171,17 @@ export default function SpecialCustomersPage() {
     if (monthlyAvgBand === 'above') rows = rows.filter(c => (Number(c.avg_monthly_qty) || 0) >= monthlyAvgThreshold);
     else if (monthlyAvgBand === 'below') rows = rows.filter(c => (Number(c.avg_monthly_qty) || 0) < monthlyAvgThreshold);
     // Text columns (customer / region) sort alphabetically, numbers high → low
+    const sign = monthlySortDir === 'asc' ? 1 : -1;
     if (monthlySortCol === 'customer_name' || monthlySortCol === 'region_name') {
       const key = monthlySortCol === 'customer_name' ? arName : c => c.region_name || '';
-      return [...rows].sort((a, b) => String(key(a) || '').localeCompare(String(key(b) || ''), 'ar'));
+      return [...rows].sort((a, b) => String(key(a) || '').localeCompare(String(key(b) || ''), 'ar') * sign);
     }
-    return [...rows].sort((a, b) => Number(b[monthlySortCol]) - Number(a[monthlySortCol]));
-  }, [incentiveBaseline, monthlyCustSearch, monthlySortCol, monthlyAvgBand, monthlyAvgThreshold]);
+    // 'm:<key>' = one month's qty (a month with no sales counts as 0)
+    const val = monthlySortCol.startsWith('m:')
+      ? c => Number(c.by_month?.[monthlySortCol.slice(2)]?.qty) || 0
+      : c => Number(c[monthlySortCol]) || 0;
+    return [...rows].sort((a, b) => (val(a) - val(b)) * sign);
+  }, [incentiveBaseline, monthlyCustSearch, monthlySortCol, monthlySortDir, monthlyAvgBand, monthlyAvgThreshold]);
 
   const monthlyMonths = incentiveBaseline?.months || [];
 
@@ -3435,14 +3449,14 @@ export default function SpecialCustomersPage() {
                         <table className="ds-table ds-table--monthly">
                           <thead>
                             <tr>
-                              <th onClick={() => handleMonthlySort('customer_name')}>العميل</th>
-                              <th onClick={() => handleMonthlySort('region_name')}>المنطقة</th>
+                              <th className="ds-th" onClick={() => handleMonthlySort('customer_name')}>العميل{monthlySortMark('customer_name')}</th>
+                              <th className="ds-th" onClick={() => handleMonthlySort('region_name')}>المنطقة{monthlySortMark('region_name')}</th>
                               {monthlyMonths.map(m => (
-                                <th key={m.key}>{MONTH_AR[m.month]}{monthlyMonths.some(x => x.year !== m.year) ? ` ${m.year}` : ''}</th>
+                                <th key={m.key} className="ds-th" onClick={() => handleMonthlySort(`m:${m.key}`)}>{MONTH_AR[m.month]}{monthlyMonths.some(x => x.year !== m.year) ? ` ${m.year}` : ''}{monthlySortMark(`m:${m.key}`)}</th>
                               ))}
-                              <th onClick={() => handleMonthlySort('total_qty')}>إجمالي الكمية</th>
-                              <th onClick={() => handleMonthlySort('total_revenue')}>إجمالي القيمة</th>
-                              <th onClick={() => handleMonthlySort('avg_monthly_qty')}>متوسط الفترة</th>
+                              <th className="ds-th" onClick={() => handleMonthlySort('total_qty')}>إجمالي الكمية{monthlySortMark('total_qty')}</th>
+                              <th className="ds-th" onClick={() => handleMonthlySort('total_revenue')}>إجمالي القيمة{monthlySortMark('total_revenue')}</th>
+                              <th className="ds-th" onClick={() => handleMonthlySort('avg_monthly_qty')}>متوسط الفترة{monthlySortMark('avg_monthly_qty')}</th>
                             </tr>
                           </thead>
                           <tbody>

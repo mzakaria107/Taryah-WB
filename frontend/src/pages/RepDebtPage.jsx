@@ -282,6 +282,11 @@ export default function RepDebtPage() {
     if (next.has(id)) next.delete(id); else next.add(id);
     return next;
   });
+  // Export / print follow what's open: an expanded customer brings ALL its open invoices,
+  // a collapsed one only its noted invoices (none → the customer total row alone).
+  const exportInvoices = useCallback(c => (expandedCust.has(c.customer_id)
+    ? (openInvByCust.get(c.customer_id) || [])
+    : notedInvoices(c)), [expandedCust, openInvByCust, notedInvoices]);
 
   const printPagesRef = useRef(null);
   const [printPageSizes, setPrintPageSizes] = useState(null);
@@ -319,8 +324,8 @@ export default function RepDebtPage() {
   // Printed rows: each customer, followed by its noted invoices (highlighted sub-rows).
   const printItems = useMemo(() => sortedCustomers.flatMap(c => [
     { t: 'c', c },
-    ...notedInvoices(c).map(inv => ({ t: 'i', c, inv })),
-  ]), [sortedCustomers, notedInvoices]);
+    ...exportInvoices(c).map(inv => ({ t: 'i', c, inv })),
+  ]), [sortedCustomers, exportInvoices]);
   // Rows grouped into printed pages (one chunk = one A4 page). Until measured — or when the row
   // count changed since — everything sits in a single chunk, which is what gets measured.
   const printChunks = useMemo(() => {
@@ -397,7 +402,7 @@ export default function RepDebtPage() {
     if (activeTab === 'customers') {
       // Invoice columns appear only when some invoice carries a note; such invoices follow their
       // customer as "↳" rows (balance column left blank there so the column still foots).
-      const withInv = sortedCustomers.some(c => notedInvoices(c).length);
+      const withInv = sortedCustomers.some(c => exportInvoices(c).length);
       const invHead = withInv ? ['رقم الفاتورة', 'تاريخ الفاتورة', 'عمر الفاتورة (يوم)', 'متبقي الفاتورة', 'حالة الفاتورة', 'ملاحظة الفاتورة', 'العميل صاحب الدين الفعلي (الفاتورة)'] : [];
       const blankInv = invHead.map(() => '');
       header = ['كود العميل', 'العميل', 'المنطقة', 'صافي المديونية', 'عمر أقدم مديونية (يوم)', 'عمر أقرب مديونية (يوم)', 'ملاحظات', 'العميل صاحب الدين الفعلي', ...invHead];
@@ -413,7 +418,7 @@ export default function RepDebtPage() {
           ownerNotes[c.customer_id]?.note || '',
           ...blankInv,
         ],
-        ...notedInvoices(c).map(inv => [
+        ...exportInvoices(c).map(inv => [
           c.customer_id || '', `↳ ${c.customer_name}`, '', '', '', '', '', '',
           inv.invoice_number, fmtDate(inv.invoice_date), ageDays(inv.invoice_date) ?? '',
           Number(inv.balance || 0), (STATUS_MAP[inv.status]?.[0]) || inv.status || '—',
@@ -459,7 +464,7 @@ export default function RepDebtPage() {
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, sheetName);
     XLSX.writeFile(wb, `${fileTag}_${decodedName}_${dateSuffix}.xlsx`);
-  }, [activeTab, sortedInvoices, sortedCustomers, custSummary, invSummary, decodedName, notes, ownerNotes, notedInvoices, invNotes, invOwnerNotes]);
+  }, [activeTab, sortedInvoices, sortedCustomers, custSummary, invSummary, decodedName, notes, ownerNotes, exportInvoices, invNotes, invOwnerNotes]);
 
   return (
     <div className="rd-page">
@@ -600,6 +605,20 @@ export default function RepDebtPage() {
             >
               <EyeOff size={13} /> استبعاد القيم صفر
             </button>
+            {activeTab === 'customers' && (() => {
+              const withInv = sortedCustomers.filter(c => (openInvByCust.get(c.customer_id) || []).length);
+              const allOpen = withInv.length > 0 && withInv.every(c => expandedCust.has(c.customer_id));
+              return (
+                <button
+                  className={`rd-filter-btn${allOpen ? ' rd-filter-btn--active' : ''}`}
+                  disabled={!withInv.length}
+                  onClick={() => setExpandedCust(allOpen ? new Set() : new Set(withInv.map(c => c.customer_id)))}
+                  title="المفتوح يُصدَّر ويُطبع مع كل فواتيره — المضموم يُصدَّر بإجمالي العميل فقط (مع الفواتير المعلّق عليها)"
+                >
+                  {allOpen ? '▴ ضم الكل' : '▾ فتح الكل'}
+                </button>
+              );
+            })()}
           </div>
 
           {activeTab === 'invoices' ? (

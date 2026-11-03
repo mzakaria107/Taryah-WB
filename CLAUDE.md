@@ -3523,6 +3523,12 @@ header again reverses (▲/▼ marker, ⇅ on inactive headers). Month headers a
 (11), footer label colSpan (5) and the invoices Excel sheet (header + totals row) moved with it.
 The invoices tab prints the on-screen table, so print picks it up too.
 
+**«فتح الكل / ضم الكل» on the customers tab** (in the filter bar): expands/collapses every customer
+that has open invoices. Export AND print now follow the expansion via `exportInvoices(c)`: an expanded
+customer is exported with ALL its open invoices as «↳» rows; a collapsed one keeps the old rule (only
+its noted invoices, or the customer total row alone when none). The balance column on «↳» rows stays
+blank so the sheet still foots to the customers' net debt.
+
 ## Debt aging page (`/aging`) — «1-15 يوم» split into 0 / 1-7 / 8-15 (3 Nov 2026)
 
 `aging.js` returns three new buckets in all three queries (customers, KPI totals, regions):

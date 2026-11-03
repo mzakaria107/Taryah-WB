@@ -3508,6 +3508,11 @@ customers skipped months. The Excel export gained the same «الإجمالي» 
 content instead of stretching across the card; cell padding 6–8px × 7px; the sticky customer column is
 165px. Shared by both segment pages (SpecialCustomersPage imports DiscountShopsPage.css).
 
+**Above/below-average filter** (`monthlyAvgBand`: all / above / below): the threshold is the plain
+mean of `avg_monthly_qty` over ALL customers in the baseline (computed before the search box, so it
+doesn't move while typing), shown inside the option labels. "above" is `>=`, "below" is `<`, so the
+two halves always add up to the full list. Footer totals and the Excel export follow the filtered rows.
+
 ## Customers report (`/sales-activity`, «تقرير العملاء العام») — month filter (2 Nov 2026)
 
 A «الشهر» dropdown (default «آخر شهر (…)» = latest month with data) next to region / rep. The picked

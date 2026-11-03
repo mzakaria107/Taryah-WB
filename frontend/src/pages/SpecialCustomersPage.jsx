@@ -1142,6 +1142,14 @@ export default function SpecialCustomersPage() {
      tab's total_qty/total_revenue for the same customer. ══════════════ */
   const [monthlyCustSearch, setMonthlyCustSearch] = useState('');
   const [monthlySortCol, setMonthlySortCol] = useState('total_revenue');
+  // 'all' | 'above' | 'below' — compares each customer's period average qty
+  // with the mean of all customers' period averages (the whole list, before search)
+  const [monthlyAvgBand, setMonthlyAvgBand] = useState('all');
+  const monthlyAvgThreshold = useMemo(() => {
+    const cs = incentiveBaseline?.customers || [];
+    if (!cs.length) return 0;
+    return cs.reduce((s, c) => s + (Number(c.avg_monthly_qty) || 0), 0) / cs.length;
+  }, [incentiveBaseline]);
   const handleMonthlySort = useCallback(col => setMonthlySortCol(c => c === col ? c : col), []);
 
   const monthlyCustomers = useMemo(() => {
@@ -1151,13 +1159,15 @@ export default function SpecialCustomersPage() {
       const q = monthlyCustSearch.trim().toLowerCase();
       rows = rows.filter(c => (c.customer_name || '').toLowerCase().includes(q) || (c.customer_name_ar || '').includes(q) || (c.customer_code || '').includes(q) || (c.region_name || '').toLowerCase().includes(q));
     }
+    if (monthlyAvgBand === 'above') rows = rows.filter(c => (Number(c.avg_monthly_qty) || 0) >= monthlyAvgThreshold);
+    else if (monthlyAvgBand === 'below') rows = rows.filter(c => (Number(c.avg_monthly_qty) || 0) < monthlyAvgThreshold);
     // Text columns (customer / region) sort alphabetically, numbers high → low
     if (monthlySortCol === 'customer_name' || monthlySortCol === 'region_name') {
       const key = monthlySortCol === 'customer_name' ? arName : c => c.region_name || '';
       return [...rows].sort((a, b) => String(key(a) || '').localeCompare(String(key(b) || ''), 'ar'));
     }
     return [...rows].sort((a, b) => Number(b[monthlySortCol]) - Number(a[monthlySortCol]));
-  }, [incentiveBaseline, monthlyCustSearch, monthlySortCol]);
+  }, [incentiveBaseline, monthlyCustSearch, monthlySortCol, monthlyAvgBand, monthlyAvgThreshold]);
 
   const monthlyMonths = incentiveBaseline?.months || [];
 
@@ -3404,6 +3414,16 @@ export default function SpecialCustomersPage() {
                         value={monthlyCustSearch}
                         onChange={e => setMonthlyCustSearch(e.target.value)}
                       />
+                      <select
+                        className="ds-chicken-search ds-monthly-band"
+                        value={monthlyAvgBand}
+                        onChange={e => setMonthlyAvgBand(e.target.value)}
+                        title={`متوسط الفترة لكل العملاء = ${fmt(monthlyAvgThreshold, 1)}`}
+                      >
+                        <option value="all">كل العملاء</option>
+                        <option value="above">أعلى من متوسط الفترة ({fmt(monthlyAvgThreshold, 1)})</option>
+                        <option value="below">أقل من متوسط الفترة ({fmt(monthlyAvgThreshold, 1)})</option>
+                      </select>
                       <button type="button" className="ds-btn ds-btn--outline" onClick={handleMonthlyExport}>
                         📊 تصدير Excel
                       </button>

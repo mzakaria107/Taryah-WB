@@ -580,6 +580,23 @@ export default function HypermarketsPage() {
 
   /* ── Expense (credit note) matrix — branch × month, for the "توزيع
        الخصومات بالأشهر" table in the "نظرة عامة" tab ── */
+  /* Year picker for the expense matrix: rows now come per branch × year × month.
+     Default = latest year that has expense records; 'all' = sum every year (old behaviour). */
+  const [expenseYearSel, setExpenseYearSel] = useState('');
+  const expenseYears = useMemo(() => [...new Set((overview?.expense_month_matrix || []).map(r => r.year).filter(Boolean))]
+    .sort((a, b) => b - a), [overview]);
+  const expenseYear = expenseYearSel || (expenseYears[0] ? String(expenseYears[0]) : 'all');
+  const inExpenseYear = r => expenseYear === 'all' || String(r.year) === expenseYear;
+  // Whole-period fee amounts (all years) for the KPI cards, independent of the matrix year picker
+  const allYearsFees = useMemo(() => {
+    let listing = 0, marketing = 0;
+    (overview?.expense_month_matrix || []).forEach(r => {
+      const cvm = r.creation_vendor_marketing || 0;
+      if (cvm >= FEE_SPLIT_THRESHOLD) listing += cvm; else if (cvm > 0) marketing += cvm;
+    });
+    return { listing, marketing };
+  }, [overview]);
+
   const expenseMatrix = useMemo(() => {
     if (!overview?.expense_month_matrix?.length) return null;
     const zeroCell = () => ({ fixed_rebate: 0, sell_out: 0, creation_vendor_marketing: 0, total_credit_note: 0, listing_fee: 0, marketing_fee: 0 });
@@ -590,7 +607,7 @@ export default function HypermarketsPage() {
     const grandTotal = zeroCell();
     let maxAmount = 1;
 
-    overview.expense_month_matrix.forEach(raw => {
+    overview.expense_month_matrix.filter(inExpenseYear).forEach(raw => {
       // Split the combined fee into "listing" vs "marketing" HERE, at
       // single branch-month granularity, before any summation — doing
       // the magnitude split on an already-aggregated total (e.g. a
@@ -602,8 +619,15 @@ export default function HypermarketsPage() {
         listing_fee:   isListing ? cvm : 0,
         marketing_fee: (!isListing && cvm > 0) ? cvm : 0,
       };
-      cellByBranchMonth[`${c.branch_name}-${c.month_num}`] = c;
-      if (c.total_credit_note > maxAmount) maxAmount = c.total_credit_note;
+      // 'all' years: several rows share one branch-month cell → add them up
+      const ck = `${c.branch_name}-${c.month_num}`;
+      const prev = cellByBranchMonth[ck];
+      const cell = prev
+        ? ['fixed_rebate', 'sell_out', 'creation_vendor_marketing', 'total_credit_note', 'listing_fee', 'marketing_fee']
+            .reduce((o, f) => ({ ...o, [f]: (prev[f] || 0) + (c[f] || 0) }), { ...prev })
+        : c;
+      cellByBranchMonth[ck] = cell;
+      if (cell.total_credit_note > maxAmount) maxAmount = cell.total_credit_note;
 
       if (!branchTotals[c.branch_name]) branchTotals[c.branch_name] = zeroCell();
       branchTotals[c.branch_name].fixed_rebate              += c.fixed_rebate;
@@ -631,15 +655,15 @@ export default function HypermarketsPage() {
 
     const branches = Object.keys(branchTotals).sort((a, b) => branchTotals[b].total_credit_note - branchTotals[a].total_credit_note);
     return { branches, cellByBranchMonth, branchTotals, colTotals, grandTotal, maxAmount };
-  }, [overview]);
+  }, [overview, expenseYear]);
 
   /* Whole-period fee amount currently excluded by the two toggles above
      — used to keep the "إجمالي إشعارات الخصم" / "صافي الإيرادات" KPI
      cards in sync with the expense-matrix toggles instead of always
      showing the backend's unadjusted totals. */
   const kpiExcludedFee = expenseMatrix
-    ? (excludeListingFee ? expenseMatrix.grandTotal.listing_fee : 0) +
-      (excludeMarketingSupportFee ? expenseMatrix.grandTotal.marketing_fee : 0)
+    ? (excludeListingFee ? allYearsFees.listing : 0) +
+      (excludeMarketingSupportFee ? allYearsFees.marketing : 0)
     : 0;
 
   /* ── Revenue reconciliation rows for the expense matrix — scoped ONLY
@@ -654,12 +678,12 @@ export default function HypermarketsPage() {
     if (!overview?.expense_branch_revenue) return null;
     const colGross = Array.from({ length: 12 }, () => 0);
     let grandGross = 0;
-    overview.expense_branch_revenue.forEach(r => {
+    overview.expense_branch_revenue.filter(inExpenseYear).forEach(r => {
       colGross[r.month_num - 1] += r.gross_revenue;
       grandGross += r.gross_revenue;
     });
     return { colGross, grandGross };
-  }, [overview]);
+  }, [overview, expenseYear]);
 
   /* ── Customer × month matrix column/grand totals (row totals already
        come pre-computed per customer as annual_qty/returns/revenue) ── */
@@ -1339,6 +1363,15 @@ export default function HypermarketsPage() {
                       <div className="hm-card__title hm-card__title--with-filters">
                         <span>مصفوفة إشعارات الخصم الشهرية حسب الفرع — خصم ثابت ومبيعات نقاط بيع ورسوم إدراج ودعم تسويق</span>
                         <div className="hm-fee-toggle-group">
+                          <select
+                            className="hm-fee-toggle hm-expense-year"
+                            value={expenseYear}
+                            onChange={e => setExpenseYearSel(e.target.value)}
+                            title="السنة المعروضة في المصفوفة"
+                          >
+                            {expenseYears.map(y => <option key={y} value={String(y)}>سنة {y}</option>)}
+                            {expenseYears.length > 1 && <option value="all">كل السنوات (مجمّعة)</option>}
+                          </select>
                           <button
                             type="button"
                             className={`hm-fee-toggle${excludeListingFee ? ' hm-fee-toggle--active' : ''}`}
@@ -1361,9 +1394,9 @@ export default function HypermarketsPage() {
                             <tr>
                               <th className="hm-matrix-th-item">الفرع</th>
                               {MONTHS.map(([mn, ml]) => (
-                                <th key={mn} className="hm-matrix-th-month">{ml}</th>
+                                <th key={mn} className="hm-matrix-th-month">{ml}{expenseYear !== 'all' ? ` ${expenseYear}` : ''}</th>
                               ))}
-                              <th className="hm-matrix-th-total">الإجمالي</th>
+                              <th className="hm-matrix-th-total">الإجمالي{expenseYear !== 'all' ? ` ${expenseYear}` : ''}</th>
                             </tr>
                           </thead>
                           <tbody>

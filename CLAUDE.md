@@ -3517,6 +3517,17 @@ two halves always add up to the full list. Footer totals and the Excel export fo
 header again reverses (▲/▼ marker, ⇅ on inactive headers). Month headers are sortable too
 (`m:<key>` → that month's qty, no sales = 0).
 
+## Hypermarkets — year picker on «مصفوفة إشعارات الخصم الشهرية» (4 Nov 2026)
+
+`/overview` now returns `expense_month_matrix` per **branch × year × month** (each row carries `year`)
+and `expense_branch_revenue` grouped by `report_year, month_num`. Before, both were summed across
+every year by calendar month — so «يناير» mixed 2025 + 2026, and the revenue rows under the matrix
+added every sales year against expenses that existed for fewer years. The page picks a year
+(`expenseYear`, default = latest year with expense records, plus «كل السنوات (مجمّعة)» = old
+behaviour, cells merged client-side) and labels each month header «يناير 2026». The listing/marketing
+fee split still runs per raw branch-year-month row. The top KPI cards stay whole-period: their
+fee exclusions use `allYearsFees` (all years), not the year-filtered matrix.
+
 ## Rep debt page — «كود العميل» column on the invoices tab (3 Nov 2026)
 
 `INV_COLUMNS` gained `customer_id` (sortable, after «رقم الفاتورة»); row cell, empty-state colSpan

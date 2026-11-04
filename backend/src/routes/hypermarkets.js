@@ -1059,14 +1059,14 @@ router.get('/overview', verifyToken, applyRegionFilter, async (req, res) => {
         const params = [alias ? `%${alias}%` : `%${bName}%`];
         const matchCol = alias ? 'sa.customer_name' : 'sa.branch_name';
         const r = await pool.query(
-          `SELECT sa.month_num::int AS month_num, COALESCE(SUM(sa.net_revenue),0)::numeric AS gross_revenue
+          `SELECT sa.report_year::int AS year, sa.month_num::int AS month_num, COALESCE(SUM(sa.net_revenue),0)::numeric AS gross_revenue
            FROM sales_activity sa
            WHERE ${CATEGORY_FILTER} AND ${matchCol} ILIKE $1
-           GROUP BY sa.month_num`,
+           GROUP BY sa.report_year, sa.month_num`,
           params
         );
         r.rows.forEach(row => {
-          out.push({ branch_name: bName, month_num: row.month_num, gross_revenue: Number(row.gross_revenue) });
+          out.push({ branch_name: bName, year: row.year, month_num: row.month_num, gross_revenue: Number(row.gross_revenue) });
         });
       }
       return out;
@@ -1102,14 +1102,15 @@ router.get('/overview', verifyToken, applyRegionFilter, async (req, res) => {
       net_revenue: c.net_revenue - (expenseByBranchMonthAny[`${c.branch_name}-${c.month_num}`] || 0),
     }));
 
-    /* ── Expense (credit note) matrix — branch × month, summed across
-       every year present, for the "توزيع الخصومات بالأشهر" matrix ── */
+    /* ── Expense (credit note) matrix — branch × YEAR × month; the page
+       picks a year (or sums all years) client-side ── */
     const expenseMonthMap = {};
     expenses.forEach(e => {
-      const key = `${e.branch_name}-${e.month_num}`;
+      const key = `${e.year}-${e.branch_name}-${e.month_num}`;
       if (!expenseMonthMap[key]) {
         expenseMonthMap[key] = {
           branch_name: e.branch_name,
+          year:        e.year,
           month_num:   e.month_num,
           fixed_rebate: 0, sell_out: 0, creation_vendor_marketing: 0, total_credit_note: 0,
         };

@@ -546,6 +546,8 @@ and share of the selection. Counted over a separate `['fridges', {region_id}]` q
 is ignored on purpose, so the share always compares against the whole region; with no status filter it
 is the same key as the list, so no extra request). Verified headless: route 1401 → 4 fridges, 33.3% of
 12, فعالة 3 (75%) / بالمستودع للصيانة 1 (25%).
+The main card names both sides of the selection: picking a route shows its rep(s) (👤 line, distinct
+`salesrep_name` of the selected fridges, «بدون مندوب» when none); picking only a rep shows its route(s).
 
 ## Fridge notes column
 

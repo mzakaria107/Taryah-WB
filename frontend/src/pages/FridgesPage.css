@@ -2000,3 +2000,4 @@
 .frg-sel-lbl { font-size: 0.76rem; font-weight: 700; color: var(--color-text-muted, #64748b); }
 .frg-sel-num { font-size: 1.45rem; font-weight: 800; color: var(--color-text, #1e293b); font-family: var(--font-en); }
 .frg-sel-sub { font-size: 0.72rem; color: var(--color-text-muted, #64748b); }
+.frg-sel-rep { font-size: 0.82rem; font-weight: 700; color: #1e3a8a; }

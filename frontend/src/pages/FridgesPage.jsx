@@ -1558,7 +1558,10 @@ function FridgesList({ regions, onAddClick }) {
       .filter(f => !repFilter || String(f.salesrep_name ?? '').trim() === repFilter);
     const byStatus = {};
     sel.forEach(f => { byStatus[f.status] = (byStatus[f.status] || 0) + 1; });
-    return { count: sel.length, regionTotal: regionFridges.length, byStatus };
+    const uniq = key => [...new Set(sel.map(f => String(f[key] ?? '').trim()).filter(Boolean))];
+    return { count: sel.length, regionTotal: regionFridges.length, byStatus,
+             routes: uniq('route_code').sort((a, b) => a.localeCompare(b, 'en', { numeric: true })),
+             reps: uniq('salesrep_name').sort((a, b) => a.localeCompare(b)) };
   }, [regionFridges, routeFilter, repFilter]);
 
   /* Route / rep options come from the fridges already loaded for the selected region,
@@ -1710,11 +1713,14 @@ function FridgesList({ regions, onAddClick }) {
           ? (regions.find(r => String(r.id) === String(regionFilter))?.name_ar || 'المنطقة')
           : 'كل المناطق';
         const pct = (n, d) => (d > 0 ? (n / d * 100).toFixed(1) : '0.0');
-        const title = [routeFilter && `خط ${routeFilter}`, repFilter].filter(Boolean).join(' · ');
+        // Route(s) + rep(s) of the selection: picking a route shows its rep(s), picking a rep shows its route(s)
+        const routesTxt = routeFilter ? `خط ${routeFilter}` : (selectionStats.routes.length ? `خط ${selectionStats.routes.join('، ')}` : '');
+        const repsTxt = repFilter || selectionStats.reps.join('، ') || 'بدون مندوب';
         return (
           <div className="frg-sel-cards">
             <div className="frg-sel-card frg-sel-card--main">
-              <div className="frg-sel-lbl">ثلاجات {title}</div>
+              <div className="frg-sel-lbl">ثلاجات {routesTxt || 'الاختيار'}</div>
+              <div className="frg-sel-rep">👤 {repsTxt}</div>
               <div className="frg-sel-num">{selectionStats.count}</div>
               <div className="frg-sel-sub">
                 {pct(selectionStats.count, selectionStats.regionTotal)}% من ثلاجات {regionName} ({selectionStats.regionTotal})

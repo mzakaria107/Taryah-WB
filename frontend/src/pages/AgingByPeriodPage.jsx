@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Printer, CalendarRange, FileSpreadsheet, ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react';
 import * as XLSX from 'xlsx';
@@ -72,11 +72,18 @@ export default function AgingByPeriodPage() {
   const [sortBy,  setSortBy]  = useState('total');
   const [sortDir, setSortDir] = useState('desc');
 
+  // Routes / reps lists limited to the selected region (all when none is picked)
   const { data: meta } = useQuery({
-    queryKey: ['meta'],
-    queryFn: () => api.get('/invoices/meta').then(r => r.data),
+    queryKey: ['meta', 'aging', regionId || 'all'],
+    queryFn: () => api.get('/invoices/meta', { params: regionId ? { region_id: regionId } : {} }).then(r => r.data),
     staleTime: 300_000,
   });
+  // A route / rep that doesn't exist in the newly selected region is cleared
+  useEffect(() => {
+    if (!meta) return;
+    if (routeId && !(meta.routes || []).map(String).includes(String(routeId))) setRouteId('');
+    if (salesRep && !(meta.reps || []).includes(salesRep)) setSalesRep('');
+  }, [meta]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const params = useMemo(() => {
     const p = {};

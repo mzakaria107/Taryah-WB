@@ -3546,6 +3546,8 @@ supported server-side — distinct routes/reps from invoices in that region) und
 picked route/rep that doesn't exist in the newly chosen region is cleared. The collections tab has
 its own region filter and its own rep list (`colMeta`). The region dropdown itself still comes from
 `/aging` `by_region`, so it never narrows to one entry.
+Same behaviour on «أعمار المديونية حسب الفترة» (`AgingByPeriodPage.jsx`, same query key, regions from
+`/aging/by-period` `regions`).
 
 ## Hypermarkets — year picker on «مصفوفة إشعارات الخصم الشهرية» (4 Nov 2026)
 

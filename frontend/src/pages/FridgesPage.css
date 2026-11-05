@@ -1988,3 +1988,15 @@
 .frg-req-item__actions { display: flex; gap: 6px; flex-wrap: wrap; }
 
 @media print { .frg-req-banner { display: none; } }
+
+/* ── Selection cards (route / rep picked on the fridge list) ── */
+.frg-sel-cards { display: flex; flex-wrap: wrap; gap: 10px; margin: 0 0 14px; }
+.frg-sel-card {
+  min-width: 140px; padding: 10px 14px; border-radius: 12px;
+  background: var(--color-surface, #fff); border: 1px solid var(--color-border, #e2e8f0);
+  border-top: 3px solid #94a3b8; display: flex; flex-direction: column; gap: 2px;
+}
+.frg-sel-card--main { border-top-color: #1d4ed8; background: #eff6ff; min-width: 220px; }
+.frg-sel-lbl { font-size: 0.76rem; font-weight: 700; color: var(--color-text-muted, #64748b); }
+.frg-sel-num { font-size: 1.45rem; font-weight: 800; color: var(--color-text, #1e293b); font-family: var(--font-en); }
+.frg-sel-sub { font-size: 0.72rem; color: var(--color-text-muted, #64748b); }

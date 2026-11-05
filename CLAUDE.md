@@ -540,6 +540,13 @@ the rep. No backend change.
 `String(x ?? '').trim()`. Verified in headless Chromium with integer route codes and null reps: 12
 rows render, route options «خط 1400/1401/1402», no page error.
 
+**Selection cards** (shown only while a route and/or rep is picked, under the toolbar): «ثلاجات خط X ·
+المندوب» with the count and its share of the region's fridges, then one card per status with its count
+and share of the selection. Counted over a separate `['fridges', {region_id}]` query (the status filter
+is ignored on purpose, so the share always compares against the whole region; with no status filter it
+is the same key as the list, so no extra request). Verified headless: route 1401 → 4 fridges, 33.3% of
+12, فعالة 3 (75%) / بالمستودع للصيانة 1 (25%).
+
 ## Fridge notes column
 
 `fridge_notes` (one current note, shown in the list column) + `fridge_notes_history`

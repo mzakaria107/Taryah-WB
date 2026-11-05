@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef, useEffect } from 'react';
+import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { X, Pencil, Trash2, Search, RefreshCw, Plus, Upload, FileText, CheckCircle, AlertCircle, ChevronDown, ArrowUp, ArrowDown, ArrowUpDown, Printer, Paperclip, Download, Trash } from 'lucide-react';
@@ -1541,6 +1541,26 @@ function FridgesList({ regions, onAddClick }) {
   });
 
   /* client-side text search */
+  /* Selection cards (route / rep picked): counted over the WHOLE region (status filter ignored),
+     so "% of the region's fridges" always compares like with like. Same query key as the list
+     when no status filter is set, so React Query serves it from one request. */
+  const regionParams = regionFilter ? { region_id: regionFilter } : {};
+  const { data: regionFridges = [] } = useQuery({
+    queryKey: ['fridges', regionParams],
+    queryFn:  () => api.list(regionParams),
+    staleTime: 30000,
+    enabled:  !!(routeFilter || repFilter),
+  });
+  const selectionStats = useMemo(() => {
+    if (!routeFilter && !repFilter) return null;
+    const sel = regionFridges
+      .filter(f => !routeFilter || String(f.route_code ?? '').trim() === routeFilter)
+      .filter(f => !repFilter || String(f.salesrep_name ?? '').trim() === repFilter);
+    const byStatus = {};
+    sel.forEach(f => { byStatus[f.status] = (byStatus[f.status] || 0) + 1; });
+    return { count: sel.length, regionTotal: regionFridges.length, byStatus };
+  }, [regionFridges, routeFilter, repFilter]);
+
   /* Route / rep options come from the fridges already loaded for the selected region,
      so they only list routes and reps that exist in that region. The rep list also
      narrows to the picked route. */
@@ -1683,6 +1703,36 @@ function FridgesList({ regions, onAddClick }) {
           </button>
         )}
       </div>
+
+      {/* ── Selection cards: fridges of the picked route / rep ── */}
+      {selectionStats && (() => {
+        const regionName = regionFilter
+          ? (regions.find(r => String(r.id) === String(regionFilter))?.name_ar || 'المنطقة')
+          : 'كل المناطق';
+        const pct = (n, d) => (d > 0 ? (n / d * 100).toFixed(1) : '0.0');
+        const title = [routeFilter && `خط ${routeFilter}`, repFilter].filter(Boolean).join(' · ');
+        return (
+          <div className="frg-sel-cards">
+            <div className="frg-sel-card frg-sel-card--main">
+              <div className="frg-sel-lbl">ثلاجات {title}</div>
+              <div className="frg-sel-num">{selectionStats.count}</div>
+              <div className="frg-sel-sub">
+                {pct(selectionStats.count, selectionStats.regionTotal)}% من ثلاجات {regionName} ({selectionStats.regionTotal})
+              </div>
+            </div>
+            {STATUS_OPTS.filter(st => selectionStats.byStatus[st.v]).map(st => {
+              const n = selectionStats.byStatus[st.v];
+              return (
+                <div key={st.v} className="frg-sel-card" style={{ borderTopColor: st.color }}>
+                  <div className="frg-sel-lbl">{st.l}</div>
+                  <div className="frg-sel-num" style={{ color: st.color }}>{n}</div>
+                  <div className="frg-sel-sub">{pct(n, selectionStats.count)}% من ثلاجات الاختيار</div>
+                </div>
+              );
+            })}
+          </div>
+        );
+      })()}
 
       {/* ── Table ── */}
       {isLoading ? (

@@ -501,3 +501,9 @@
   .age-ptable--break { break-after: page; }
   .age-ptable th, .age-ptable tfoot td { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }
+
+/* «آخر تحصيل» column: amount over its date */
+.age-last-pay { white-space: nowrap; }
+.age-last-pay-amt { font-weight: 700; color: #15803d; }
+.age-last-pay-date { font-size: 0.72rem; color: var(--color-text-muted, #64748b); }
+.age-ptable .age-p-sub { font-size: 8.5px; color: #64748b; font-weight: 400; }

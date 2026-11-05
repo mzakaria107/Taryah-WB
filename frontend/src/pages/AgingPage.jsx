@@ -356,6 +356,7 @@ export default function AgingPage() {
       ...BUCKETS.map(b => b.label),
       'نسبة التحصيل %', 'نسبة المتبقي %',
       'عمر أقدم دين (يوم)', 'عمر أقرب دين (يوم)', 'إجمالي الدين', 'التغير اليومي',
+      'تاريخ آخر تحصيل', 'قيمة آخر تحصيل',
     ];
     const custRows = (data.customers || []).map(c => {
       const totalAmt = parseFloat(c.total_amount || 0);
@@ -370,6 +371,8 @@ export default function AgingPage() {
         c.newest_age_days == null ? '' : parseInt(c.newest_age_days),
         totalBal,
         parseFloat(c.daily_change || 0),
+        c.last_pay_date || '',
+        c.last_pay_amount == null ? '' : Number(c.last_pay_amount),
       ];
     });
     // Footer totals row
@@ -377,13 +380,13 @@ export default function AgingPage() {
     custRows.push([
       'الإجمالي',
       ...BUCKETS.map(b => parseFloat(k[b.key] || 0)),
-      '', '', '', '', parseFloat(k.total_balance || 0), '',
+      '', '', '', '', parseFloat(k.total_balance || 0), '', '', '',
     ]);
     const ws1 = XLSX.utils.aoa_to_sheet([custHeader, ...custRows]);
     // Column widths
     ws1['!cols'] = [
       { wch: 28 }, ...BUCKETS.map(() => ({ wch: 12 })),
-      { wch: 16 }, { wch: 16 }, { wch: 16 }, { wch: 16 }, { wch: 14 }, { wch: 13 },
+      { wch: 16 }, { wch: 16 }, { wch: 16 }, { wch: 16 }, { wch: 14 }, { wch: 13 }, { wch: 14 }, { wch: 14 },
     ];
     XLSX.utils.book_append_sheet(wb, ws1, 'العملاء');
 
@@ -804,7 +807,7 @@ function CustomerTable({ customers, kpis, sortBy, sortDir, onSort, onOpenModal }
             <SortIcon col="daily_change" sortBy={sortBy} sortDir={sortDir} />
             التغير اليومي
           </th>
-          <th>تفاصيل</th>
+          <th>آخر تحصيل</th>
         </tr>
       </thead>
       <tbody>
@@ -824,7 +827,7 @@ function CustomerTable({ customers, kpis, sortBy, sortDir, onSort, onOpenModal }
           <td>—</td>
           <td style={{ fontWeight: 800 }}>{fmtN(foot.total_balance)}</td>
           <td>—</td>
-          <td />
+          <td>—</td>
         </tr>
       </tfoot>
     </table>
@@ -914,18 +917,14 @@ function CustomerRow({ c, fmtN, onOpenModal }) {
       {/* Daily change */}
       <td>{changeEl}</td>
 
-      {/* Detail button */}
-      <td>
-        <button
-          onClick={() => onOpenModal({ id: c.customer_id, name: c.customer_name })}
-          style={{
-            background: 'none', border: '1px solid var(--color-border)',
-            borderRadius: 6, padding: '3px 10px', fontSize: '0.78rem',
-            cursor: 'pointer', color: 'var(--color-text-muted)',
-          }}
-        >
-          تفاصيل
-        </button>
+      {/* Last recorded collection (details open by clicking the customer name) */}
+      <td className="age-last-pay">
+        {c.last_pay_date ? (
+          <>
+            <div className="age-last-pay-amt">{fmtN(c.last_pay_amount)}</div>
+            <div className="age-last-pay-date">{fmtDate(c.last_pay_date)}</div>
+          </>
+        ) : <span className="age-cell--zero">—</span>}
       </td>
     </tr>
   );
@@ -947,6 +946,7 @@ function AgePrintTables({ chunks }) {
       <td colSpan={4} />
       <td className="age-p-num age-p-bal">{fmtN(sumOf(rows, 'total_balance'))}</td>
       <td className="age-p-num">{sumOf(rows, 'daily_change') ? Math.round(sumOf(rows, 'daily_change')).toLocaleString('en-SA') : '—'}</td>
+      <td />
     </tr>
   );
   return chunks.map((rows, pi) => {
@@ -957,14 +957,14 @@ function AgePrintTables({ chunks }) {
           <col />
           {BUCKETS.map(b => <col key={b.key} style={{ width: 62 }} />)}
           <col style={{ width: 48 }} /><col style={{ width: 48 }} /><col style={{ width: 46 }} /><col style={{ width: 46 }} />
-          <col style={{ width: 74 }} /><col style={{ width: 62 }} />
+          <col style={{ width: 70 }} /><col style={{ width: 54 }} /><col style={{ width: 74 }} />
         </colgroup>
         <thead>
           <tr>
             <th>العميل</th>
             {BUCKETS.map(b => <th key={b.key}>{b.label}</th>)}
             <th>التحصيل</th><th>المتبقي</th><th>أقدم دين</th><th>أقرب دين</th>
-            <th>إجمالي الدين</th><th>التغير اليومي</th>
+            <th>إجمالي الدين</th><th>التغير اليومي</th><th>آخر تحصيل</th>
           </tr>
         </thead>
         <tbody>
@@ -981,6 +981,7 @@ function AgePrintTables({ chunks }) {
                 <td className="age-p-num">{c.newest_age_days == null ? '—' : `${c.newest_age_days} يوم`}</td>
                 <td className="age-p-num age-p-bal">{fmtN(bal)}</td>
                 <td className="age-p-num">{n(c.daily_change) ? Math.round(n(c.daily_change)).toLocaleString('en-SA') : '—'}</td>
+                <td className="age-p-num">{c.last_pay_date ? <>{fmtN(c.last_pay_amount)}<div className="age-p-sub">{c.last_pay_date}</div></> : '—'}</td>
               </tr>
             );
           })}

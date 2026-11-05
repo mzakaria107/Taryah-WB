@@ -3529,6 +3529,12 @@ last page adds «الإجمالي العام» = sum of every printed row. Page 
 Verified in headless Chromium with 70 mocked customers: 3 pages (20/29/21 rows), page totals
 10,590 + 15,736 + 11,989 = grand total 38,315.
 
+**«آخر تحصيل» column replaced «تفاصيل»** (details still open by clicking the customer name). `GET /aging`
+attaches `last_pay_date` / `last_pay_amount` to each customer row — same rule as `/by-period`: latest
+`payments.tran_date` with `total_paid > 0` (`payments.customer_code = invoices.customer_id`) and the sum
+of every positive payment on that date. Not server-sortable (attached after the main query). Shown on
+screen (amount over date), in the print tables and as two Excel columns.
+
 ## Hypermarkets — year picker on «مصفوفة إشعارات الخصم الشهرية» (4 Nov 2026)
 
 `/overview` now returns `expense_month_matrix` per **branch × year × month** (each row carries `year`)

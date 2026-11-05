@@ -266,6 +266,30 @@ router.get('/', verifyToken, applyRegionFilter, async (req, res) => {
       ORDER BY total_balance DESC
     `, filterParams);
 
+    /* ── Last recorded collection per customer — same rule as /by-period: latest tran_date with
+       a positive payment, and the sum of every positive payment on that date ── */
+    const custIds = [...new Set(rows.map(r => r.customer_id).filter(Boolean))];
+    const { rows: lastPay } = custIds.length ? await pool.query(`
+        WITH last AS (
+          SELECT customer_code, MAX(tran_date) AS d
+          FROM payments
+          WHERE customer_code = ANY($1::text[]) AND total_paid > 0 AND tran_date IS NOT NULL
+          GROUP BY customer_code
+        )
+        SELECT l.customer_code AS customer_id, l.d::text AS last_pay_date,
+               ROUND(SUM(p.total_paid)::numeric, 2) AS last_pay_amount
+        FROM last l
+        JOIN payments p ON p.customer_code = l.customer_code AND p.tran_date = l.d AND p.total_paid > 0
+        GROUP BY l.customer_code, l.d`, [custIds])
+      .catch(err => { console.error('[Aging] last payments:', err.message); return { rows: [] }; })
+      : { rows: [] };
+    const lastPayMap = new Map(lastPay.map(r => [r.customer_id, r]));
+    rows.forEach(r => {
+      const lp = lastPayMap.get(r.customer_id);
+      r.last_pay_date = lp?.last_pay_date ?? null;
+      r.last_pay_amount = lp ? Number(lp.last_pay_amount) : null;
+    });
+
     /* ── Previous snapshot date (for display) ────────────────── */
     const { rows: prevSnap } = await pool.query(
       `SELECT MAX(snapshot_date)::text AS prev_date FROM balance_snapshots WHERE snapshot_date < $1`,

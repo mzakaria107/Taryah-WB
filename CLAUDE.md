@@ -3535,6 +3535,11 @@ attaches `last_pay_date` / `last_pay_amount` to each customer row — same rule 
 of every positive payment on that date. Not server-sortable (attached after the main query). Shown on
 screen (amount over date), in the print tables and as two Excel columns.
 
+**«كود العميل» column** before «العميل» on the customers table (screen, print, Excel). On screen both
+are pinned on the right while scrolling sideways: the code is `:first-child` (existing sticky rule,
+narrowed to 88px via `.age-table--cust .age-col-code`) and the name is sticky at `right: 88px`
+(`.age-col-name`). Scoped to `.age-table--cust`, so the regions/collections tables are unchanged.
+
 ## Hypermarkets — year picker on «مصفوفة إشعارات الخصم الشهرية» (4 Nov 2026)
 
 `/overview` now returns `expense_month_matrix` per **branch × year × month** (each row carries `year`)

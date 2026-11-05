@@ -507,3 +507,18 @@
 .age-last-pay-amt { font-weight: 700; color: #15803d; }
 .age-last-pay-date { font-size: 0.72rem; color: var(--color-text-muted, #64748b); }
 .age-ptable .age-p-sub { font-size: 8.5px; color: #64748b; font-weight: 400; }
+
+/* Customers table: code + name both pinned on the right while scrolling sideways.
+   The code column is :first-child (already sticky at right:0); the name sits right after it. */
+.age-table--cust th.age-col-code, .age-table--cust td.age-col-code {
+  min-width: 88px; width: 88px; max-width: 88px; font-family: var(--font-en); color: var(--color-text-muted);
+}
+.age-table--cust th.age-col-name, .age-table--cust td.age-col-name {
+  position: sticky; right: 88px; z-index: 2; background: var(--color-surface);
+  border-left: 1px solid var(--color-border); min-width: 180px;
+}
+.age-table--cust thead th.age-col-name { background: var(--color-bg); z-index: 3; }
+.age-table--cust tbody tr:hover td.age-col-name { background: var(--color-bg); }
+.age-table--cust tfoot td.age-col-name { background: var(--color-bg); }
+.age-table--cust th.age-col-code, .age-table--cust td.age-col-code { border-left: none; }
+.age-ptable .age-p-code { font-family: var(--font-en); color: #64748b; white-space: nowrap; }

@@ -76,8 +76,9 @@ async function fetchAging(params) {
   const { data } = await api.get('/aging', { params });
   return data;
 }
-async function fetchMeta() {
-  const { data } = await api.get('/invoices/meta');
+async function fetchMeta(regionId) {
+  // region_id narrows the routes / reps lists to those carrying debt in that region
+  const { data } = await api.get('/invoices/meta', { params: regionId ? { region_id: regionId } : {} });
   return data;
 }
 async function fetchCollections(params) {
@@ -131,11 +132,27 @@ export default function AgingPage() {
   const [colSalesRep, setColSalesRep] = useState('');
 
   /* ── Meta (routes + reps lists) ─────────────────────────────── */
+  // Main filters: routes / reps limited to the selected region (all when none is picked)
   const { data: meta } = useQuery({
-    queryKey: ['meta'],
-    queryFn:  fetchMeta,
+    queryKey: ['meta', 'aging', regionId || 'all'],
+    queryFn:  () => fetchMeta(regionId),
     staleTime: 300_000,
   });
+  // Collections tab has its own region filter → its own rep list
+  const { data: colMeta } = useQuery({
+    queryKey: ['meta', 'aging', colRegionId || 'all'],
+    queryFn:  () => fetchMeta(colRegionId),
+    staleTime: 300_000,
+  });
+  // A route / rep that doesn't exist in the newly selected region is cleared
+  useEffect(() => {
+    if (!meta) return;
+    if (routeId && !(meta.routes || []).map(String).includes(String(routeId))) setRouteId('');
+    if (salesRep && !(meta.reps || []).includes(salesRep)) setSalesRep('');
+  }, [meta]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (colMeta && colSalesRep && !(colMeta.reps || []).includes(colSalesRep)) setColSalesRep('');
+  }, [colMeta]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* Carrefour: one hypermarket group, 13 branches, ~560K of the open balance
      on long agreed terms — big enough to dominate the ageing buckets. OFF by
@@ -163,7 +180,6 @@ export default function AgingPage() {
   const { data, isLoading, isError } = useQuery({
     queryKey: ['aging', qParams],
     queryFn:  () => fetchAging(qParams),
-    keepPreviousData: true,
     staleTime: 120_000,
   });
 
@@ -219,7 +235,6 @@ export default function AgingPage() {
     queryKey: ['aging-collections', colParams],
     queryFn:  () => fetchCollections(colParams),
     enabled:  activeTab === 'collections' && !!colDateFrom && !!colDateTo,
-    keepPreviousData: true,
     staleTime: 60_000,
   });
 
@@ -656,7 +671,7 @@ export default function AgingPage() {
                 <span className="age-filter-label">المندوب</span>
                 <select className="age-filter-select" value={colSalesRep} onChange={e => setColSalesRep(e.target.value)}>
                   <option value="">كل المندوبين</option>
-                  {(meta?.reps || []).map(r => (
+                  {(colMeta?.reps || []).map(r => (
                     <option key={r} value={r}>{r}</option>
                   ))}
                 </select>

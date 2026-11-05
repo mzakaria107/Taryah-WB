@@ -3540,6 +3540,13 @@ are pinned on the right while scrolling sideways: the code is `:first-child` (ex
 narrowed to 88px via `.age-table--cust .age-col-code`) and the name is sticky at `right: 88px`
 (`.age-col-name`). Scoped to `.age-table--cust`, so the regions/collections tables are unchanged.
 
+**Route / rep dropdowns follow the region filter**: the page calls `/invoices/meta?region_id=` (already
+supported server-side — distinct routes/reps from invoices in that region) under its own query key
+`['meta','aging',region]`, so only routes and reps with debt in the selected region are listed. A
+picked route/rep that doesn't exist in the newly chosen region is cleared. The collections tab has
+its own region filter and its own rep list (`colMeta`). The region dropdown itself still comes from
+`/aging` `by_region`, so it never narrows to one entry.
+
 ## Hypermarkets — year picker on «مصفوفة إشعارات الخصم الشهرية» (4 Nov 2026)
 
 `/overview` now returns `expense_month_matrix` per **branch × year × month** (each row carries `year`)

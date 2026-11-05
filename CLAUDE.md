@@ -535,6 +535,11 @@ client-side over the fridges already loaded for the selected region (`fridges.ro
 list also narrows to the picked route. Changing the region clears both, changing the route clears
 the rep. No backend change.
 
+**Hotfix (same day)**: the first version blanked the whole page — `fridges.route_code` is an
+**INTEGER** column, and `(f.route_code || '').trim()` throws on a number. All reads now go through
+`String(x ?? '').trim()`. Verified in headless Chromium with integer route codes and null reps: 12
+rows render, route options «خط 1400/1401/1402», no page error.
+
 ## Fridge notes column
 
 `fridge_notes` (one current note, shown in the list column) + `fridge_notes_history`

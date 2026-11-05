@@ -1544,16 +1544,16 @@ function FridgesList({ regions, onAddClick }) {
   /* Route / rep options come from the fridges already loaded for the selected region,
      so they only list routes and reps that exist in that region. The rep list also
      narrows to the picked route. */
-  const routeOptions = [...new Set(fridges.map(f => (f.route_code || '').trim()).filter(Boolean))]
+  const routeOptions = [...new Set(fridges.map(f => String(f.route_code ?? '').trim()).filter(Boolean))]
     .sort((a, b) => a.localeCompare(b, 'en', { numeric: true }));
   const repOptions = [...new Set(fridges
-    .filter(f => !routeFilter || (f.route_code || '').trim() === routeFilter)
-    .map(f => (f.salesrep_name || '').trim()).filter(Boolean))]
+    .filter(f => !routeFilter || String(f.route_code ?? '').trim() === routeFilter)
+    .map(f => String(f.salesrep_name ?? '').trim()).filter(Boolean))]
     .sort((a, b) => a.localeCompare(b));
 
   const filtered = fridges
-    .filter(f => !routeFilter || (f.route_code || '').trim() === routeFilter)
-    .filter(f => !repFilter || (f.salesrep_name || '').trim() === repFilter)
+    .filter(f => !routeFilter || String(f.route_code ?? '').trim() === routeFilter)
+    .filter(f => !repFilter || String(f.salesrep_name ?? '').trim() === repFilter)
     .filter(f => !search ||
         (f.asset_number    || '').toLowerCase().includes(search.toLowerCase()) ||
         (f.customer_name   || '').includes(search) ||

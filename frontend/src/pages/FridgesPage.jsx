@@ -1493,7 +1493,11 @@ function FridgesList({ regions, onAddClick }) {
   const admin = isAdmin(user);
 
   const [statusFilter, setStatusFilter] = useState('');
-  const [regionFilter, setRegionFilter] = useState('');
+  const [regionFilter, setRegionFilterRaw] = useState('');
+  const [routeFilter, setRouteFilter]   = useState('');
+  const [repFilter, setRepFilter]       = useState('');
+  // Changing the region resets route / rep (their lists belong to the region)
+  const setRegionFilter = v => { setRegionFilterRaw(v); setRouteFilter(''); setRepFilter(''); };
   const [search, setSearch]             = useState('');
   const [detailId, setDetailId]         = useState(null);
 
@@ -1537,15 +1541,26 @@ function FridgesList({ regions, onAddClick }) {
   });
 
   /* client-side text search */
-  const filtered = search
-    ? fridges.filter(f =>
+  /* Route / rep options come from the fridges already loaded for the selected region,
+     so they only list routes and reps that exist in that region. The rep list also
+     narrows to the picked route. */
+  const routeOptions = [...new Set(fridges.map(f => (f.route_code || '').trim()).filter(Boolean))]
+    .sort((a, b) => a.localeCompare(b, 'en', { numeric: true }));
+  const repOptions = [...new Set(fridges
+    .filter(f => !routeFilter || (f.route_code || '').trim() === routeFilter)
+    .map(f => (f.salesrep_name || '').trim()).filter(Boolean))]
+    .sort((a, b) => a.localeCompare(b));
+
+  const filtered = fridges
+    .filter(f => !routeFilter || (f.route_code || '').trim() === routeFilter)
+    .filter(f => !repFilter || (f.salesrep_name || '').trim() === repFilter)
+    .filter(f => !search ||
         (f.asset_number    || '').toLowerCase().includes(search.toLowerCase()) ||
         (f.customer_name   || '').includes(search) ||
         (f.customer_code   || '').includes(search) ||
         (f.salesrep_name   || '').includes(search) ||
         (f.region_name     || '').includes(search)
-      )
-    : fridges;
+    );
 
   /* count per customer to show multi-fridge badge */
   const customerCounts = {};
@@ -1639,6 +1654,18 @@ function FridgesList({ regions, onAddClick }) {
           onChange={setRegionFilter}
           placeholder="جميع المناطق"
           options={regions.map(r => ({ value: String(r.id), label: r.name_ar || r.name_en }))}
+        />
+        <FilterSelect
+          value={routeFilter}
+          onChange={v => { setRouteFilter(v); setRepFilter(''); }}
+          placeholder="جميع الخطوط"
+          options={routeOptions.map(r => ({ value: r, label: `خط ${r}` }))}
+        />
+        <FilterSelect
+          value={repFilter}
+          onChange={setRepFilter}
+          placeholder="جميع المناديب"
+          options={repOptions.map(r => ({ value: r, label: r }))}
         />
         {admin && (
           <button

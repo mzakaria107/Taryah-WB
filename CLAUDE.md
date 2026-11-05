@@ -527,6 +527,14 @@ post-deploy (123→124, one restart, matching the deploy). Also caught and fixed
 column-matching fix would otherwise have sat locally forever, unpublished, the same class of mistake
 as the fridges deployment gap documented above.
 
+## Fridge list — route + rep filters (5 Nov 2026)
+
+`FridgesList` toolbar gained «جميع الخطوط» and «جميع المناديب» next to the region filter. Both are
+client-side over the fridges already loaded for the selected region (`fridges.route_code` /
+`fridges.salesrep_name`), so their options only list routes / reps present in that region; the rep
+list also narrows to the picked route. Changing the region clears both, changing the route clears
+the rep. No backend change.
+
 ## Fridge notes column
 
 `fridge_notes` (one current note, shown in the list column) + `fridge_notes_history`

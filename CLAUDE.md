@@ -3517,6 +3517,18 @@ two halves always add up to the full list. Footer totals and the Excel export fo
 header again reverses (▲/▼ marker, ⇅ on inactive headers). Month headers are sortable too
 (`m:<key>` → that month's qty, no sales = 0).
 
+## Debt aging page — paginated print with per-page totals (5 Nov 2026)
+
+The customers tab no longer prints the screen table (it was wider than the paper and cut off the
+left columns). It prints `AgePrintTables`: the same rows (`filteredCustomers`, so the bucket filter
+applies) split into one table per A4 landscape page, measured off-screen at 1046px exactly like
+RepDebtPage (`measureAgePrintPages`, re-measured on `beforeprint`, print forced to zoom 1). Each page
+ends with «إجمالي الصفحة N من M» summing only its own rows (all 8 buckets, total, daily change); the
+last page adds «الإجمالي العام» = sum of every printed row. Page 1 reserves 200px for the print header
++ KPI cards (measured ~175px). `.age-no-print` had no CSS rule before; it now hides in print.
+Verified in headless Chromium with 70 mocked customers: 3 pages (20/29/21 rows), page totals
+10,590 + 15,736 + 11,989 = grand total 38,315.
+
 ## Hypermarkets — year picker on «مصفوفة إشعارات الخصم الشهرية» (4 Nov 2026)
 
 `/overview` now returns `expense_month_matrix` per **branch × year × month** (each row carries `year`)

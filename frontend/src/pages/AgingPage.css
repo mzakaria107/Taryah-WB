@@ -468,3 +468,36 @@
 /* Invoice-detail modal: room for the المندوب column; keep date/age/rep on one line */
 .age-modal--wide { width: min(1060px, 96vw); }
 .age-inv-table td, .age-inv-table th { white-space: nowrap; }
+
+/* ── Customers tab: paginated print tables (see measureAgePrintPages in AgingPage.jsx) ──
+   Rendered off-screen at the A4-landscape printable width so rows can be measured; the same
+   rules apply in print, so measured heights match the printed ones. */
+.age-print-pages {
+  position: fixed; top: 0; left: 0; width: 0; height: 0;
+  overflow: hidden; visibility: hidden; pointer-events: none;
+}
+.age-print-pages-inner { width: 1046px; }
+.age-ptable { width: 100%; table-layout: fixed; border-collapse: collapse; font-size: 10px; color: #1e293b; direction: rtl; }
+.age-ptable th {
+  background: #f1f5f9; color: #334155; font-weight: 700; font-size: 9.5px; line-height: 1.2;
+  padding: 4px 3px; text-align: center; border-bottom: 1px solid #cbd5e1;
+}
+.age-ptable th:first-child { text-align: right; }
+.age-ptable td { padding: 3px 3px; border-bottom: 1px solid #e2e8f0; vertical-align: middle; line-height: 1.25; overflow-wrap: anywhere; }
+.age-ptable .age-p-name { font-weight: 600; }
+.age-ptable .age-p-num { text-align: center; white-space: nowrap; font-family: var(--font-en); }
+.age-ptable .age-p-bal { font-weight: 700; color: #b91c1c; }
+.age-ptable tfoot td { font-weight: 700; padding: 4px 3px; border-top: 2px solid #cbd5e1; background: #f8fafc; }
+.age-ptable .age-p-grand td { background: #e2e8f0; border-top: 2px solid #94a3b8; font-size: 10.5px; }
+.age-ptable tr { break-inside: avoid; }
+.age-ptable thead { display: table-header-group; }
+.age-ptable tfoot { display: table-row-group; }
+@media print {
+  /* print at zoom 1 (index.css zooms the app to 0.9) so the measured page breaks hold */
+  html:has(.age-page) { zoom: 1 !important; }
+  .age-no-print { display: none !important; }
+  .age-cust-screen { display: none !important; }
+  .age-print-pages { position: static; width: auto; height: auto; overflow: visible; visibility: visible; }
+  .age-ptable--break { break-after: page; }
+  .age-ptable th, .age-ptable tfoot td { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}

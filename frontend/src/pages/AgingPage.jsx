@@ -1,5 +1,5 @@
-import React, { useState, useMemo, useCallback, useEffect } from 'react';
-import ReactDOM from 'react-dom';
+import React, { useState, useMemo, useCallback, useEffect, useLayoutEffect, useRef } from 'react';
+import ReactDOM, { flushSync } from 'react-dom';
 import { Link } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Printer, ClockArrowUp, X, ChevronUp, ChevronDown, ChevronsUpDown, FileSpreadsheet, RefreshCw } from 'lucide-react';
@@ -41,6 +41,34 @@ function ageCellClass(days) {
   if (days <= 90)  return 'age-cell--b4';
   if (days <= 120) return 'age-cell--b5';
   return 'age-cell--b6';
+}
+
+/* ── Customers-tab print pagination (same method as RepDebtPage) ──
+   The printed customer table is split into one table per A4 page so each page carries its own
+   «إجمالي الصفحة» and the last one also «الإجمالي العام». Rows can wrap (long names), so page sizes
+   are MEASURED off-screen at the printable width (A4 landscape 297mm − 2cm ≈ 1046px) and packed
+   greedily into the printable height (210mm − 2cm ≈ 718px). */
+const AGE_PRINT_PAGE_H = 718 - 14;
+const AGE_PRINT_FIRST_PAGE_RESERVE = 200; // print header + KPI cards row on page 1 (measured ~175px in print)
+function measureAgePrintPages(container) {
+  if (!container) return null;
+  // index.css zooms the app to 0.9 on screen; print runs at zoom 1 — un-zoom measured heights.
+  const z = parseFloat(getComputedStyle(document.documentElement).zoom) || 1;
+  const hOf = el => (el ? el.getBoundingClientRect().height / z : 0);
+  const rows = [...container.querySelectorAll('tr[data-prow]')].map(hOf);
+  if (!rows.length) return [];
+  const theadH = hOf(container.querySelector('thead')) || 30;
+  const footH = hOf(container.querySelector('tfoot tr')) || 24;
+  const avail = pg => AGE_PRINT_PAGE_H - (pg === 0 ? AGE_PRINT_FIRST_PAGE_RESERVE : 0) - theadH - footH;
+  const sizes = [];
+  let page = 0, used = 0, count = 0;
+  for (const h of rows) {
+    if (count > 0 && used + h > avail(page)) { sizes.push(count); page += 1; used = 0; count = 0; }
+    used += h; count += 1;
+  }
+  if (count > 1 && used + footH > avail(page)) { sizes.push(count - 1); count = 1; } // room for the grand total
+  sizes.push(count);
+  return sizes;
 }
 
 /* ── Fetch ───────────────────────────────────────────────────── */
@@ -155,6 +183,28 @@ export default function AgingPage() {
     if (!bucketFilter) return all;
     return all.filter(c => parseFloat(c[bucketFilter] || 0) > 0);
   }, [data?.customers, bucketFilter]);
+
+  /* ── Print pagination for the customers table ── */
+  const agePrintRef = useRef(null);
+  const [agePrintSizes, setAgePrintSizes] = useState(null);
+  const agePrintChunks = useMemo(() => {
+    const sizes = agePrintSizes;
+    if (!sizes || sizes.reduce((a, b) => a + b, 0) !== filteredCustomers.length) return [filteredCustomers];
+    const out = []; let i = 0;
+    for (const n of sizes) { out.push(filteredCustomers.slice(i, i + n)); i += n; }
+    return out;
+  }, [agePrintSizes, filteredCustomers]);
+  const remeasureAgePrint = useCallback(() => {
+    const sizes = measureAgePrintPages(agePrintRef.current);
+    if (sizes) setAgePrintSizes(prev => (prev && prev.join() === sizes.join() ? prev : sizes));
+  }, []);
+  useLayoutEffect(() => { if (activeTab === 'customers') remeasureAgePrint(); },
+    [activeTab, filteredCustomers, remeasureAgePrint]);
+  useEffect(() => {
+    const onBefore = () => flushSync(remeasureAgePrint);
+    window.addEventListener('beforeprint', onBefore);
+    return () => window.removeEventListener('beforeprint', onBefore);
+  }, [remeasureAgePrint]);
 
   /* ── Old-debt collection tracker query ────────────────────────── */
   const colParams = useMemo(() => {
@@ -632,7 +682,8 @@ export default function AgingPage() {
                 {bucketFilter ? 'لا يوجد عملاء لديهم ديون في هذه الفترة' : 'لا توجد مديونيات'}
               </div>
             ) : (
-              <div className="age-table-wrap">
+              <>
+              <div className="age-table-wrap age-cust-screen">
                 <CustomerTable
                   customers={filteredCustomers}
                   kpis={kpis}
@@ -642,6 +693,14 @@ export default function AgingPage() {
                   onOpenModal={setModalCustomer}
                 />
               </div>
+              {activeTab === 'customers' && (
+                <div className="age-print-pages" aria-hidden="true">
+                  <div className="age-print-pages-inner" ref={agePrintRef}>
+                    <AgePrintTables chunks={agePrintChunks} />
+                  </div>
+                </div>
+              )}
+              </>
             )}
           </div>
 
@@ -870,6 +929,69 @@ function CustomerRow({ c, fmtN, onOpenModal }) {
       </td>
     </tr>
   );
+}
+
+/* ─────────────────────────────────────────────────────────────
+   AgePrintTables — print-only copy of the customer table, one table per A4 page.
+   Each page totals ONLY its own rows; the last page adds the grand total of every printed row.
+───────────────────────────────────────────────────────────── */
+function AgePrintTables({ chunks }) {
+  const n = v => Number(v || 0);
+  const fmtN = v => (n(v) ? Math.round(n(v)).toLocaleString('en-SA') : '—');
+  const sumOf = (rows, key) => rows.reduce((s, c) => s + n(c[key]), 0);
+  const all = chunks.flat();
+  const totalCells = (rows, label, cls) => (
+    <tr className={cls}>
+      <td>{label}</td>
+      {BUCKETS.map(b => <td key={b.key} className="age-p-num">{fmtN(sumOf(rows, b.key))}</td>)}
+      <td colSpan={4} />
+      <td className="age-p-num age-p-bal">{fmtN(sumOf(rows, 'total_balance'))}</td>
+      <td className="age-p-num">{sumOf(rows, 'daily_change') ? Math.round(sumOf(rows, 'daily_change')).toLocaleString('en-SA') : '—'}</td>
+    </tr>
+  );
+  return chunks.map((rows, pi) => {
+    const last = pi === chunks.length - 1;
+    return (
+      <table key={pi} className={`age-ptable${last ? '' : ' age-ptable--break'}`}>
+        <colgroup>
+          <col />
+          {BUCKETS.map(b => <col key={b.key} style={{ width: 62 }} />)}
+          <col style={{ width: 48 }} /><col style={{ width: 48 }} /><col style={{ width: 46 }} /><col style={{ width: 46 }} />
+          <col style={{ width: 74 }} /><col style={{ width: 62 }} />
+        </colgroup>
+        <thead>
+          <tr>
+            <th>العميل</th>
+            {BUCKETS.map(b => <th key={b.key}>{b.label}</th>)}
+            <th>التحصيل</th><th>المتبقي</th><th>أقدم دين</th><th>أقرب دين</th>
+            <th>إجمالي الدين</th><th>التغير اليومي</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map(c => {
+            const amt = n(c.total_amount), bal = n(c.total_balance);
+            const rem = amt > 0 ? (bal / amt * 100).toFixed(1) : '0';
+            return (
+              <tr key={c.customer_id} data-prow="">
+                <td className="age-p-name">{c.customer_name}</td>
+                {BUCKETS.map(b => <td key={b.key} className={`age-p-num ${n(c[b.key]) ? b.cls : 'age-cell--zero'}`}>{fmtN(c[b.key])}</td>)}
+                <td className="age-p-num">{n(c.collection_rate)}%</td>
+                <td className="age-p-num">{rem}%</td>
+                <td className="age-p-num">{c.avg_age_days ? `${c.avg_age_days} يوم` : '—'}</td>
+                <td className="age-p-num">{c.newest_age_days == null ? '—' : `${c.newest_age_days} يوم`}</td>
+                <td className="age-p-num age-p-bal">{fmtN(bal)}</td>
+                <td className="age-p-num">{n(c.daily_change) ? Math.round(n(c.daily_change)).toLocaleString('en-SA') : '—'}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+        <tfoot>
+          {chunks.length > 1 && totalCells(rows, `إجمالي الصفحة ${pi + 1} من ${chunks.length} (${rows.length} عميل)`, 'age-p-pagetotal')}
+          {last && totalCells(all, `الإجمالي العام (${all.length} عميل)`, 'age-p-grand')}
+        </tfoot>
+      </table>
+    );
+  });
 }
 
 /* ─────────────────────────────────────────────────────────────

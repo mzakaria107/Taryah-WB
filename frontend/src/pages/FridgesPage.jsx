@@ -1506,17 +1506,30 @@ function FridgesList({ regions, onAddClick }) {
   const [refreshing, setRefreshing] = useState(false);
   const doRefreshCustomerData = async () => {
     if (!window.confirm(
-      'تحديث خط السير واسم المندوب لكل الثلاجات من العميل المرتبط بكل ثلاجة حالياً؟'
+      'ربط كل ثلاجة بخط السير والمندوب لآخر عملية بيع تمت لعميلها؟\n' +
+      '(آخر فاتورة بيع فعلية بكمية موجبة — المرتجعات و Direct لا تُحتسب)'
     )) return;
     setRefreshing(true);
     try {
       const d = await api.refreshCustomerData();
       qc.invalidateQueries({ queryKey: ['fridges'] });
       qc.invalidateQueries({ queryKey: ['fridge-stats'] });
-      alert(
-        `تم تحديث ${d.updated} ثلاجة من أصل ${d.total_with_customer} مرتبطة بعميل — ` +
-        'تم جلب خط السير واسم المندوب المرتبطين بالعميل حالياً.'
-      );
+      const b = d.by_source || {};
+      const n = k => b[k]?.total || 0;
+      const lines = [
+        `تم تحديث ${d.updated} ثلاجة من أصل ${d.total_with_customer} مرتبطة بعميل.`,
+        '',
+        `مربوطة بآخر عملية بيع: ${d.from_last_sale ?? 0}`,
+        `  • الخط من فاتورة البيع نفسها: ${n('invoice')}`,
+        `  • الخط من آخر فاتورة لنفس المندوب مع العميل: ${n('customer_rep_invoice')}`,
+        `  • الخط من إدارة المناديب: ${n('rep_management')}`,
+        `  • الخط الأكثر فواتير للمندوب: ${n('rep_invoices')}`,
+        `  • الخط الأكثر عملاء للمندوب: ${n('rep_customers')}`,
+        n('no_route') ? `  • المندوب فقط (لم يُعثر على خط — بقي الخط الحالي): ${n('no_route')}` : null,
+        `بدون مبيعات — من بيانات العميل: ${n('fallback')}`,
+        n('unknown') ? `لم يتم العثور على بيانات (بقيت كما هي): ${n('unknown')}` : null,
+      ].filter(x => x !== null);
+      alert(lines.join('\n'));
     } catch (e) {
       alert(e.response?.data?.error || 'تعذّر تحديث البيانات');
     } finally {
@@ -1695,7 +1708,7 @@ function FridgesList({ regions, onAddClick }) {
             className="frg-btn frg-btn-ghost"
             onClick={doRefreshCustomerData}
             disabled={refreshing}
-            title="جلب خط السير واسم المندوب المرتبطين حالياً بعميل كل ثلاجة"
+            title="ربط كل ثلاجة بخط السير والمندوب لآخر عملية بيع تمت لعميلها"
           >
             <RefreshCw size={14} /> {refreshing ? 'جارٍ التحديث…' : 'تحديث بيانات الثلاجات'}
           </button>

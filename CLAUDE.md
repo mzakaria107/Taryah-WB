@@ -527,6 +527,27 @@ post-deploy (123→124, one restart, matching the deploy). Also caught and fixed
 column-matching fix would otherwise have sat locally forever, unpublished, the same class of mistake
 as the fridges deployment gap documented above.
 
+## «تحديث بيانات الثلاجات» now follows the customer's LAST SALE (5 Nov 2026)
+
+`POST /fridges/refresh-customer-data` was rewritten. It used to take route/rep from the customers
+master first (→ invoices → sales_activity). Now each fridge with a customer gets the rep and route of
+the **last sale to that customer**:
+1. Last sale = latest `sales_activity` line with `qty > 0` (returns don't count) and a real rep;
+   `Direct` (central-warehouse pseudo-rep) is skipped. Order: year, month, day, uploaded_at,
+   invoice_number — deterministic ties.
+2. Rep = that line's `salesrep_name`.
+3. Route (sales_activity has none), first hit wins: (a) the route on that same invoice in `invoices`;
+   (b) the latest invoice of this customer by this rep; (c) `sales_reps.route_id` (matched on
+   netsuite_name / name_en / name_ar, active only); (d) the route the rep has most invoices on;
+   (e) the route the rep holds most customers on in `customers`. None → the current route is kept.
+   (d)/(e) are computed once per rep in CTEs, not per fridge.
+4. No qualifying sale → old rule (customers master → latest invoice). Nothing anywhere → untouched.
+Response: `{ updated, total_with_customer, from_last_sale, by_source: {invoice, customer_rep_invoice,
+rep_management, rep_invoices, rep_customers, no_route, fallback, unknown → {total, updated}} }`; the
+button's alert lists the breakdown. Verified on a local DB with 7 scenarios (rolled back): return and
+Direct lines ignored, each route source picked in order, no-route keeps the route, unknown untouched.
+The reassign / transfer-approval flows still use `customerRouteInfo()` (master) — unchanged.
+
 ## Fridge list — route + rep filters (5 Nov 2026)
 
 `FridgesList` toolbar gained «جميع الخطوط» and «جميع المناديب» next to the region filter. Both are

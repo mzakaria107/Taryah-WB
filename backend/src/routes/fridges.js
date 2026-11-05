@@ -204,47 +204,136 @@ router.get('/customer-lookup', async (req, res) => {
    Precedence matches /customer-lookup: customers master → invoices → sales_activity.
    Only fridges whose customer is actually known somewhere are touched; a fridge
    whose customer_code matches nothing is left exactly as it was. */
+/* ── Refresh route + salesrep of every fridge from its customer's LAST SALE ──
+   The fridge follows whoever sold to its customer most recently:
+   1. Last sale = the customer's latest `sales_activity` line with qty > 0 (a real sale, not a
+      return) and a real rep — ordered by year, month, day, then upload time and invoice number,
+      so ties resolve the same way every run. «Direct» (the central-warehouse pseudo-rep) is not a
+      field rep and is skipped, so the fridge stays with the last field rep.
+   2. The rep of that line is the fridge's salesrep_name.
+   3. Its route (sales_activity has no route column), first hit wins:
+        a. the route on that very invoice in `invoices`;
+        b. the route of the latest invoice of THIS customer by THIS rep;
+        c. the rep's own route in rep management (`sales_reps.route_id`, matched on
+           netsuite_name / name_en / name_ar);
+        d. the route the rep has the most invoices on;
+        e. the route the rep holds most customers on in the customers master.
+      No route found → the fridge keeps its current route (never nulled).
+   Customers with no qualifying sale fall back to the old rule (customers master → invoices).
+   The response reports how each fridge was resolved. */
 router.post('/refresh-customer-data', canEdit, async (req, res) => {
   try {
     const { rows } = await pool.query(
-      `WITH cust AS (
+      `WITH fc AS (
+         SELECT DISTINCT customer_code FROM fridges WHERE customer_code IS NOT NULL
+       ),
+       last_sale AS (
+         SELECT DISTINCT ON (sa.customer_code)
+                sa.customer_code, TRIM(sa.salesrep_name) AS rep, sa.invoice_number
+         FROM sales_activity sa
+         JOIN fc ON fc.customer_code = sa.customer_code
+         WHERE sa.qty > 0
+           AND NULLIF(TRIM(sa.salesrep_name), '') IS NOT NULL
+           AND LOWER(TRIM(sa.salesrep_name)) <> 'direct'
+         ORDER BY sa.customer_code, sa.report_year DESC, sa.month_num DESC,
+                  sa.day DESC NULLS LAST, sa.uploaded_at DESC, sa.invoice_number DESC
+       ),
+       reps AS (SELECT DISTINCT LOWER(rep) AS rep_l FROM last_sale),
+       -- (d) / (e) computed once per rep, not once per fridge
+       rep_inv_route AS (
+         SELECT DISTINCT ON (rep_l) rep_l, route_id
+         FROM (SELECT r.rep_l, i.route_id, COUNT(*) AS n
+               FROM invoices i JOIN reps r ON r.rep_l = LOWER(TRIM(i.sales_rep_name))
+               WHERE i.route_id IS NOT NULL
+               GROUP BY r.rep_l, i.route_id) t
+         ORDER BY rep_l, n DESC, route_id
+       ),
+       rep_cust_route AS (
+         SELECT DISTINCT ON (rep_l) rep_l, route_code
+         FROM (SELECT r.rep_l, c.route_code, COUNT(*) AS n
+               FROM customers c JOIN reps r ON r.rep_l = LOWER(TRIM(c.salesman_name))
+               WHERE c.route_code IS NOT NULL
+               GROUP BY r.rep_l, c.route_code) t
+         ORDER BY rep_l, n DESC, route_code
+       ),
+       ls_route AS (
+         SELECT ls.customer_code, ls.rep,
+                r_a.route_id AS ra, r_b.route_id AS rb, r_c.route_id AS rc, r_d.route_id AS rd, r_e.route_code AS re
+         FROM last_sale ls
+         LEFT JOIN LATERAL (
+           SELECT i.route_id FROM invoices i
+            WHERE i.invoice_number = ls.invoice_number AND i.route_id IS NOT NULL
+            LIMIT 1
+         ) r_a ON true
+         LEFT JOIN LATERAL (
+           SELECT i.route_id FROM invoices i
+            WHERE i.customer_id = ls.customer_code AND i.route_id IS NOT NULL
+              AND LOWER(TRIM(i.sales_rep_name)) = LOWER(ls.rep)
+            ORDER BY i.invoice_date DESC NULLS LAST, i.invoice_number DESC
+            LIMIT 1
+         ) r_b ON true
+         LEFT JOIN LATERAL (
+           SELECT sr.route_id FROM sales_reps sr
+            WHERE sr.route_id IS NOT NULL AND sr.is_active
+              AND LOWER(ls.rep) IN (LOWER(TRIM(COALESCE(sr.netsuite_name, ''))),
+                                    LOWER(TRIM(COALESCE(sr.name_en, ''))),
+                                    LOWER(TRIM(COALESCE(sr.name_ar, ''))))
+            ORDER BY sr.id
+            LIMIT 1
+         ) r_c ON true
+         LEFT JOIN rep_inv_route  r_d ON r_d.rep_l = LOWER(ls.rep)
+         LEFT JOIN rep_cust_route r_e ON r_e.rep_l = LOWER(ls.rep)
+       ),
+       cust AS (
          SELECT f.id,
-                COALESCE(c.route_code, inv.route_id)                          AS route_code,
-                COALESCE(NULLIF(TRIM(c.salesman_name), ''), sa.salesrep_name) AS salesrep_name,
-                (c.customer_code IS NOT NULL
-                 OR inv.route_id IS NOT NULL
-                 OR sa.salesrep_name IS NOT NULL)                            AS known
+                CASE WHEN lr.customer_code IS NOT NULL
+                     THEN COALESCE(lr.ra, lr.rb, lr.rc, lr.rd, lr.re, f.route_code)
+                     ELSE COALESCE(c.route_code, inv.route_id, f.route_code) END        AS route_code,
+                CASE WHEN lr.customer_code IS NOT NULL
+                     THEN lr.rep
+                     ELSE COALESCE(NULLIF(TRIM(c.salesman_name), ''), f.salesrep_name) END AS salesrep_name,
+                CASE WHEN lr.customer_code IS NULL THEN
+                       CASE WHEN c.customer_code IS NOT NULL OR inv.route_id IS NOT NULL THEN 'fallback' ELSE 'unknown' END
+                     WHEN lr.ra IS NOT NULL THEN 'invoice'
+                     WHEN lr.rb IS NOT NULL THEN 'customer_rep_invoice'
+                     WHEN lr.rc IS NOT NULL THEN 'rep_management'
+                     WHEN lr.rd IS NOT NULL THEN 'rep_invoices'
+                     WHEN lr.re IS NOT NULL THEN 'rep_customers'
+                     ELSE 'no_route' END                                                  AS source
          FROM fridges f
+         LEFT JOIN ls_route lr ON lr.customer_code = f.customer_code
          LEFT JOIN customers c ON c.customer_code = f.customer_code
          LEFT JOIN LATERAL (
            SELECT i.route_id FROM invoices i
             WHERE i.customer_id = f.customer_code AND i.route_id IS NOT NULL
+            ORDER BY i.invoice_date DESC NULLS LAST
             LIMIT 1
          ) inv ON true
-         LEFT JOIN LATERAL (
-           SELECT salesrep_name FROM sales_activity
-            WHERE customer_code = f.customer_code
-            ORDER BY report_year DESC, month_num DESC LIMIT 1
-         ) sa ON true
          WHERE f.customer_code IS NOT NULL
+       ),
+       upd AS (
+         UPDATE fridges f SET
+           route_code    = cust.route_code,
+           salesrep_name = cust.salesrep_name,
+           updated_by    = $1,
+           updated_at    = NOW()
+         FROM cust
+         WHERE cust.id = f.id
+           AND cust.source <> 'unknown'
+           AND (f.route_code    IS DISTINCT FROM cust.route_code
+             OR f.salesrep_name IS DISTINCT FROM cust.salesrep_name)
+         RETURNING f.id
        )
-       UPDATE fridges f SET
-         route_code    = cust.route_code,
-         salesrep_name = COALESCE(cust.salesrep_name, f.salesrep_name),
-         updated_by    = $1,
-         updated_at    = NOW()
-       FROM cust
-       WHERE cust.id = f.id
-         AND cust.known
-         AND (f.route_code    IS DISTINCT FROM cust.route_code
-           OR f.salesrep_name IS DISTINCT FROM COALESCE(cust.salesrep_name, f.salesrep_name))
-       RETURNING f.id`,
+       SELECT cust.source, COUNT(*)::int AS total, COUNT(upd.id)::int AS updated
+       FROM cust LEFT JOIN upd ON upd.id = cust.id
+       GROUP BY cust.source`,
       [req.user.id]
     );
-    const totalRes = await pool.query(
-      `SELECT COUNT(*)::int AS c FROM fridges WHERE customer_code IS NOT NULL`
-    );
-    res.json({ updated: rows.length, total_with_customer: totalRes.rows[0].c });
+    const by_source = Object.fromEntries(rows.map(r => [r.source, { total: r.total, updated: r.updated }]));
+    const updated = rows.reduce((s, r) => s + r.updated, 0);
+    const total_with_customer = rows.reduce((s, r) => s + r.total, 0);
+    const from_last_sale = rows.filter(r => !['fallback', 'unknown'].includes(r.source)).reduce((s, r) => s + r.total, 0);
+    res.json({ updated, total_with_customer, from_last_sale, by_source });
   } catch (e) {
     console.error('[Fridges] refresh-customer-data:', e);
     res.status(500).json({ error: e.message });

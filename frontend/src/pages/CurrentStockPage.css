@@ -1158,3 +1158,14 @@
   .csp-mx-reg-chip      { font-size: 11px; padding: 3px 9px; }
   .csp-mx-save-btn      { font-size: 11px; padding: 3px 10px; }
 }
+
+/* ── Compact matrix columns (8 Nov 2026): the table no longer stretches to the full card
+   width — region / total columns size to their content with tighter padding. ── */
+.csp-matrix-table { width: auto; }
+.csp-matrix-table thead th { padding: 8px 8px; }
+.csp-mx-th-reg { min-width: 70px; }
+.csp-mx-th-total { min-width: 78px; }
+.csp-mx-reg-name { max-width: 105px; }
+.csp-mx-td-type-total, .csp-mx-td-item-total { padding-left: 8px; padding-right: 8px; }
+.csp-mx-td-type-cell, .csp-mx-td-item-cell { padding-left: 7px; padding-right: 7px; }
+.csp-mx-grand-row td { padding-left: 8px; padding-right: 8px; }

@@ -527,6 +527,12 @@ post-deploy (123→124, one restart, matching the deploy). Also caught and fixed
 column-matching fix would otherwise have sat locally forever, unpublished, the same class of mistake
 as the fridges deployment gap documented above.
 
+## Current stock — compact matrix columns (8 Nov 2026)
+
+`.csp-matrix-table` is `width: auto` (override block at the end of CurrentStockPage.css): region /
+total columns hug their numbers (min 70 / 78px, padding ~7–8px) instead of stretching across the card.
+The frozen label column (`--mx-label-w`) and the sticky total column are unchanged.
+
 ## «تحديث بيانات الثلاجات» now follows the customer's LAST SALE (5 Nov 2026)
 
 `POST /fridges/refresh-customer-data` was rewritten. It used to take route/rep from the customers

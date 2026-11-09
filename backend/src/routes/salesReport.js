@@ -566,27 +566,80 @@ router.get('/branch-summary', verifyToken, applyRegionFilter, async (req, res) =
       ORDER BY value DESC
     `, params);
 
-    /* Collections: each customer attributed to the ONE label (within this
-       exact scope) where they moved the most qty — same "dominant bucket"
-       rule regionPerformance.js uses for multi-region customers — so a
-       customer split across two reps this period is not double-counted
-       into both reps' collection totals. */
+    /* Collections — must match «أداء التحصيل» (collections.js) exactly:
+       • EVERY payment in the window counts, whether or not the customer bought anything in
+         the period (the old version only counted customers with sales in the period, so a
+         customer paying without buying that day vanished — Riyadh read 77.6K vs 90.4K);
+       • each paying customer is booked to the region holding MOST of its invoices (same
+         `DISTINCT ON … ORDER BY COUNT(*) DESC` rule as collections.js), not to its sales branch.
+       Deeper levels split that region's collections further:
+       • rep      = the customer's dominant rep by qty in the period; else the rep of its latest
+                    sale ever; else the rep on most of its invoices; else «غير محدد»;
+       • category = dominant category in the period; else the latest sale's; else «غير محدد»;
+       • customer = keyed by customer_code.
+       So every level sums back to the branch row, and the branch rows to the collections page. */
+    const cParams = useRange ? [dateFrom, dateTo] : [year, fromMonth, toMonth];
+    const pPeriod = useRange ? `make_date(sa.report_year::int, sa.month_num::int, sa.day::int) BETWEEN $1::date AND $2::date`
+                             : `sa.report_year = $1 AND sa.month_num BETWEEN $2 AND $3`;
+    let cWhere = 'TRUE';
+    if (branch)    { cParams.push(branch);    cWhere += ` AND pc.branch = $${cParams.length}`; }
+    if (pRep)      { cParams.push(pRep);      cWhere += ` AND pc.rep = $${cParams.length}`; }
+    if (pCategory) { cParams.push(pCategory); cWhere += ` AND pc.cat = $${cParams.length}`; }
+    const cGroup = { branch: 'pc.branch', rep: 'pc.rep', category: 'pc.cat', customer: 'pc.customer_code' }[level];
     const collQ = pool.query(`
-      WITH cust_totals AS (
-        SELECT sa.customer_code, ${groupExpr} AS label, SUM(sa.qty) AS qty
-        FROM sales_activity sa
-        WHERE ${where}
-        GROUP BY sa.customer_code, ${groupExpr}
-      ), cust_label AS (
-        SELECT DISTINCT ON (customer_code) customer_code, label
-        FROM cust_totals ORDER BY customer_code, qty DESC
+      WITH pay AS (
+        SELECT p.customer_code, SUM(p.total_paid) AS amt
+        FROM payments p
+        WHERE ${payDateWhere}
+        GROUP BY p.customer_code
+      ), cust_region AS (
+        SELECT DISTINCT ON (customer_id) customer_id, region_id
+        FROM invoices
+        WHERE region_id IS NOT NULL
+        GROUP BY customer_id, region_id
+        ORDER BY customer_id, COUNT(*) DESC
+      ), per_rep AS (
+        SELECT DISTINCT ON (sa.customer_code) sa.customer_code, NULLIF(TRIM(sa.salesrep_name),'') AS rep
+        FROM sales_activity sa JOIN pay ON pay.customer_code = sa.customer_code
+        WHERE ${pPeriod}
+        GROUP BY sa.customer_code, NULLIF(TRIM(sa.salesrep_name),'')
+        ORDER BY sa.customer_code, SUM(sa.qty) DESC
+      ), per_cat AS (
+        SELECT DISTINCT ON (sa.customer_code) sa.customer_code, NULLIF(TRIM(sa.category_name),'') AS cat
+        FROM sales_activity sa JOIN pay ON pay.customer_code = sa.customer_code
+        WHERE ${pPeriod}
+        GROUP BY sa.customer_code, NULLIF(TRIM(sa.category_name),'')
+        ORDER BY sa.customer_code, SUM(sa.qty) DESC
+      ), last_sale AS (
+        SELECT DISTINCT ON (sa.customer_code) sa.customer_code,
+               NULLIF(TRIM(sa.salesrep_name),'') AS rep, NULLIF(TRIM(sa.category_name),'') AS cat,
+               NULLIF(TRIM(sa.customer_name),'') AS name
+        FROM sales_activity sa JOIN pay ON pay.customer_code = sa.customer_code
+        ORDER BY sa.customer_code, sa.report_year DESC, sa.month_num DESC, sa.day DESC NULLS LAST, sa.uploaded_at DESC
+      ), inv_rep AS (
+        SELECT DISTINCT ON (i.customer_id) i.customer_id, NULLIF(TRIM(i.sales_rep_name),'') AS rep,
+               NULLIF(TRIM(i.customer_name),'') AS name
+        FROM invoices i JOIN pay ON pay.customer_code = i.customer_id
+        GROUP BY i.customer_id, NULLIF(TRIM(i.sales_rep_name),''), NULLIF(TRIM(i.customer_name),'')
+        ORDER BY i.customer_id, COUNT(*) DESC
+      ), pc AS (
+        SELECT pay.customer_code, pay.amt, r.name_ar AS branch,
+               COALESCE(pr.rep, ls.rep, ir.rep, 'غير محدد')  AS rep,
+               COALESCE(pk.cat, ls.cat, 'غير محدد')          AS cat,
+               COALESCE(ls.name, ir.name, pay.customer_code) AS name
+        FROM pay
+        JOIN cust_region cr ON cr.customer_id = pay.customer_code
+        JOIN regions r      ON r.id = cr.region_id
+        LEFT JOIN per_rep pr   ON pr.customer_code = pay.customer_code
+        LEFT JOIN per_cat pk   ON pk.customer_code = pay.customer_code
+        LEFT JOIN last_sale ls ON ls.customer_code = pay.customer_code
+        LEFT JOIN inv_rep ir   ON ir.customer_id   = pay.customer_code
       )
-      SELECT cl.label, COALESCE(SUM(p.total_paid),0)::numeric AS collected
-      FROM cust_label cl
-      JOIN payments p ON p.customer_code = cl.customer_code
-      WHERE ${payDateWhere}
-      GROUP BY cl.label
-    `, params);
+      SELECT ${cGroup} AS label, MAX(pc.name) AS name, COALESCE(SUM(pc.amt),0)::numeric AS collected
+      FROM pc
+      WHERE ${cWhere}
+      GROUP BY ${cGroup}
+    `, cParams);
 
     /* Quality issue — branch level only, region_id resolved the same way
        every other route in this app does: regions.name_ar stores the
@@ -606,6 +659,8 @@ router.get('/branch-summary', verifyToken, applyRegionFilter, async (req, res) =
 
     const collByLabel = Object.fromEntries(collRows.map(r => [r.label, Number(r.collected)]));
     const qiByLabel   = Object.fromEntries(qiRows.map(r => [r.label, Number(r.quantity)]));
+    // At customer level sales labels are "code|name" while collections key on the code
+    const keyOf = label => (level === 'customer' ? String(label).split('|')[0] : label);
 
     const rows = aggRows.map(r => {
       const qty = Number(r.qty);
@@ -620,13 +675,24 @@ router.get('/branch-summary', verifyToken, applyRegionFilter, async (req, res) =
         returns: Number(r.returns),
         quality_issue: level === 'branch' ? (qiByLabel[r.label] ?? 0) : null,
         customers: Number(r.customers),
-        // collQ groups by the SAME groupExpr as aggQ at every level (including
-        // "customer_code|customer_name" for level=customer), so r.label is
-        // always the right join key — splitting it into customerCode here
-        // was a stale leftover that made every customer-level lookup miss.
-        collections: +(collByLabel[r.label] ?? 0).toFixed(2),
+        collections: +(collByLabel[keyOf(r.label)] ?? 0).toFixed(2),
         drillable: level !== 'customer',
       };
+    });
+    // Labels that collected money but sold nothing in the period still get a row, so the
+    // collections column foots to «أداء التحصيل».
+    const seen = new Set(aggRows.map(r => keyOf(r.label)));
+    collRows.filter(c => !seen.has(c.label) && Number(c.collected) !== 0).forEach(c => {
+      rows.push({
+        label: level === 'customer' ? (c.name || c.label) : c.label,
+        customer_code: level === 'customer' ? c.label : null,
+        qty: 0, value: 0, avg_price: 0, returns: 0,
+        quality_issue: level === 'branch' ? (qiByLabel[c.label] ?? 0) : null,
+        customers: 0,
+        collections: +Number(c.collected).toFixed(2),
+        collections_only: true,
+        drillable: level !== 'customer',
+      });
     });
 
     const totals = rows.reduce((t, r) => ({

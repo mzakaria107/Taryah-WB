@@ -527,6 +527,22 @@ post-deploy (123→124, one restart, matching the deploy). Also caught and fixed
 column-matching fix would otherwise have sat locally forever, unpublished, the same class of mistake
 as the fridges deployment gap documented above.
 
+## Sales report «ملخص المبيعات» — collections column now matches «أداء التحصيل» (9 Nov 2026)
+
+`/sales-report/branch-summary` read 269,179 for 9 Nov while «أداء التحصيل» read 296,736. Two causes:
+1. It only counted payments of customers who ALSO had sales in the window (`cust_label` was built
+   from `sales_activity`), so a customer paying without buying that day vanished.
+2. It booked a customer to its sales branch; collections.js books it to the region holding MOST of
+   its invoices (`DISTINCT ON (customer_id) … ORDER BY COUNT(*) DESC`) — Arar read higher, Riyadh lower.
+Now `collQ` starts from ALL payments in the window and uses the collections.js region rule, so the
+branch rows foot to the collections page (customers with no invoice region drop out of both, the
+same way). Deeper levels: rep = dominant rep by qty in the period → rep of the latest sale ever → rep
+on most invoices → «غير محدد»; category = dominant in period → latest sale's → «غير محدد»; customer
+keyed by code. Labels that collected but sold nothing get a row (`collections_only: true`, qty 0), so
+every level sums to its parent. Verified on a local DB: Riyadh 150 (incl. a non-buying payer and a
+customer whose sales sat in another branch), Jeddah 30 (never-sold payer), no-invoice payer excluded
+→ total 180 = collections-page rule; rep and customer levels foot to their parents.
+
 ## Current stock — compact matrix columns (8 Nov 2026)
 
 `.csp-matrix-table` is `width: auto` (override block at the end of CurrentStockPage.css): region /

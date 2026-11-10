@@ -543,6 +543,18 @@ every level sums to its parent. Verified on a local DB: Riyadh 150 (incl. a non-
 customer whose sales sat in another branch), Jeddah 30 (never-sold payer), no-invoice payer excluded
 → total 180 = collections-page rule; rep and customer levels foot to their parents.
 
+### «نوع الصنف» multi-select on «ملخص المبيعات» (10 Nov 2026)
+
+`/branch-summary` takes repeated `item_cat` (item categories to KEEP, `sales_activity.item_category_en`,
+which holds Arabic text; empty = all) via `itemCatScope()`; options come from
+`GET /sales-report/branch-summary/item-categories` (categories with sales, biggest first). The filter
+applies to qty / value / returns / customers only — **collections and quality issues have no item
+dimension and stay whole for the period**; `meta.item_cat_caveat` says so on screen, and the Excel
+sheet carries a «نوع الصنف» line. UI: `ItemCatMultiSelect` (الكل / تحديد الكل / «فقط» per row).
+Also fixed a latent bug found while testing: the quality-issue query was passed the full `params`
+(date + branch + filters), so any extra param — including the branch a region manager is forced to —
+made it fail with "bind message supplies 3 parameters"; it now gets the date params only.
+
 ## Current stock — compact matrix columns (8 Nov 2026)
 
 `.csp-matrix-table` is `width: auto` (override block at the end of CurrentStockPage.css): region /

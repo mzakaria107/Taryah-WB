@@ -1249,6 +1249,45 @@ function monthBoundsSRP(year, month) {
   return { from: `${year}-${pad(month)}-01`, to: `${year}-${pad(month)}-${pad(lastDay)}` };
 }
 
+/* «نوع الصنف» multi-select — empty = all item types. «فقط» picks one in a click. */
+function ItemCatMultiSelect({ options, selected, onChange }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  useEffect(() => {
+    const onDoc = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, []);
+  const toggle = v => onChange(selected.includes(v) ? selected.filter(x => x !== v) : [...selected, v]);
+  const label = !selected.length ? 'كل الأصناف'
+    : selected.length === 1 ? selected[0] : `${selected.length} أنواع أصناف`;
+  return (
+    <div className="srp-ms" ref={ref}>
+      <button type="button" className="srp-filter-select srp-ms__btn" onClick={() => setOpen(o => !o)} title={selected.join('، ')}>
+        <span className="srp-ms__lbl">{label}</span> <span className="srp-ms__caret">▾</span>
+      </button>
+      {open && (
+        <div className="srp-ms__panel">
+          <div className="srp-ms__actions">
+            <button type="button" onClick={() => onChange([])}>الكل</button>
+            <button type="button" onClick={() => onChange([...options])}>تحديد الكل</button>
+          </div>
+          {options.map(o => (
+            <div key={o} className="srp-ms__opt">
+              <label>
+                <input type="checkbox" checked={selected.includes(o)} onChange={() => toggle(o)} />
+                <span>{o}</span>
+              </label>
+              <button type="button" className="srp-ms__only" onClick={() => onChange([o])}>فقط</button>
+            </div>
+          ))}
+          {!options.length && <div className="srp-ms__empty">لا توجد أصناف</div>}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function BranchSummaryTab() {
   const now = new Date();
   const [year,      setYear]      = useState(now.getFullYear());
@@ -1276,7 +1315,17 @@ function BranchSummaryTab() {
   const rep      = path[1]?.value;
   const category = path[2]?.value;
 
+  // «نوع الصنف» — item categories to keep; empty = all
+  const [itemCats, setItemCats] = useState([]);
+  const { data: itemCatData } = useQuery({
+    queryKey: ['srp-item-categories'],
+    queryFn:  () => client.get('/sales-report/branch-summary/item-categories').then(r => r.data),
+    staleTime: 10 * 60 * 1000,
+  });
+  const itemCatOptions = itemCatData?.categories || [];
+
   const params = new URLSearchParams({ level });
+  itemCats.forEach(c => params.append('item_cat', c));
   if (useDateRange) { params.set('date_from', dateFrom); params.set('date_to', dateTo); }
   else { params.set('year', year); params.set('from_month', fromMonth); params.set('to_month', toMonth); }
   if (branch)   params.set('branch', branch);
@@ -1285,7 +1334,7 @@ function BranchSummaryTab() {
 
   const { data, isLoading, isError, error } = useQuery({
     queryKey: ['srp-branch-summary', useDateRange, useDateRange ? dateFrom : year,
-               useDateRange ? dateTo : fromMonth, toMonth, level, branch, rep, category],
+               useDateRange ? dateTo : fromMonth, toMonth, level, branch, rep, category, itemCats.join('|')],
     queryFn:  () => client.get(`/sales-report/branch-summary?${params}`).then(r => r.data),
     enabled:  !rangeInvalid,
     staleTime: 2 * 60 * 1000,
@@ -1313,7 +1362,8 @@ function BranchSummaryTab() {
       r.quality_issue ?? '', r.customers, r.collections]);
     const totalRow = ['الإجمالي', t.qty, t.value, t.avg_price, t.returns,
       t.quality_issue ?? '', t.customers, t.collections];
-    const ws = XLSX.utils.aoa_to_sheet([header, ...body, totalRow]);
+    const filterRows = itemCats.length ? [['نوع الصنف', itemCats.join('، ')], []] : [];
+    const ws = XLSX.utils.aoa_to_sheet([...filterRows, header, ...body, totalRow]);
     ws['!cols'] = header.map(() => ({ wch: 16 }));
     XLSX.utils.book_append_sheet(wb, ws, 'ملخص المبيعات');
     XLSX.writeFile(wb, `ملخص_المبيعات_${periodLabel.replace(/\s/g, '')}.xlsx`);
@@ -1371,6 +1421,11 @@ function BranchSummaryTab() {
             </div>
           </>
         )}
+
+        <div className="srp-filter-group">
+          <label className="srp-filter-label">نوع الصنف</label>
+          <ItemCatMultiSelect options={itemCatOptions} selected={itemCats} onChange={setItemCats} />
+        </div>
 
         <button className="srp-btn srp-btn--excel" onClick={handleExport} disabled={!data}>
           <FileDown size={14}/> تصدير Excel
@@ -1469,6 +1524,7 @@ function BranchSummaryTab() {
 
       {data?.meta && (
         <div className="srp-caveat">
+          {data.meta.item_cat_caveat && <div><b>{data.meta.item_cat_caveat}</b></div>}
           <div>{data.meta.qty_caveat}</div>
           <div>{data.meta.quality_issue_caveat}</div>
           <div>اضغط على اسم الصف للانتقال للمستوى التالي.</div>

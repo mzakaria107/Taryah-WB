@@ -495,6 +495,29 @@ router.get('/rep-categories', verifyToken, async (req, res) => {
    ══════════════════════════════════════════════════════════════ */
 const BS_LEVELS = ['branch', 'rep', 'category', 'customer'];
 
+/* «نوع الصنف» filter: repeated `item_cat` (or one comma list) = item categories to KEEP
+   (`sales_activity.item_category_en`, which holds the Arabic category text). Empty = all. */
+function itemCatScope(q) {
+  const raw = [].concat(q.item_cat || []).flatMap(v => String(v).split(','));
+  return [...new Set(raw.map(v => v.trim()).filter(Boolean))];
+}
+
+// Options for the «نوع الصنف» picker — every category that has sales, biggest first
+router.get('/branch-summary/item-categories', verifyToken, async (req, res) => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT TRIM(item_category_en) AS category, COALESCE(SUM(qty),0)::bigint AS qty
+      FROM sales_activity
+      WHERE NULLIF(TRIM(item_category_en),'') IS NOT NULL
+      GROUP BY TRIM(item_category_en)
+      ORDER BY qty DESC`);
+    res.json({ categories: rows.map(r => r.category) });
+  } catch (err) {
+    console.error('[SalesReport] item-categories error:', err.message);
+    res.status(500).json({ error: 'خطأ في الخادم' });
+  }
+});
+
 router.get('/branch-summary', verifyToken, applyRegionFilter, async (req, res) => {
   const year      = parseInt(req.query.year) || new Date().getFullYear();
   const fromMonth = Math.max(1,  parseInt(req.query.from_month) || 1);
@@ -553,6 +576,8 @@ router.get('/branch-summary', verifyToken, applyRegionFilter, async (req, res) =
     if (branch)     { params.push(branch);     where += ` AND TRIM(sa.branch_name) = $${params.length}`; }
     if (pRep)       { params.push(pRep);       where += ` AND TRIM(sa.salesrep_name) = $${params.length}`; }
     if (pCategory)  { params.push(pCategory);  where += ` AND TRIM(sa.category_name) = $${params.length}`; }
+    const itemCats = itemCatScope(req.query);
+    if (itemCats.length) { params.push(itemCats); where += ` AND TRIM(COALESCE(sa.item_category_en,'')) = ANY($${params.length}::text[])`; }
 
     const aggQ = pool.query(`
       SELECT ${groupExpr} AS label,
@@ -652,7 +677,7 @@ router.get('/branch-summary', verifyToken, applyRegionFilter, async (req, res) =
           JOIN regions r ON r.id = qi.region_id
           WHERE ${qiDateWhere}
           GROUP BY r.name_ar
-        `, params)
+        `, useRange ? [dateFrom, dateTo] : [year, fromMonth, toMonth]) // date params only — \`params\` also carries the branch / item filters
       : Promise.resolve({ rows: [] });
 
     const [{ rows: aggRows }, { rows: collRows }, { rows: qiRows }] = await Promise.all([aggQ, collQ, qiQ]);
@@ -713,6 +738,10 @@ router.get('/branch-summary', verifyToken, applyRegionFilter, async (req, res) =
         year, from_month: fromMonth, to_month: toMonth,
         use_range: useRange, date_from: useRange ? dateFrom : null, date_to: useRange ? dateTo : null,
         branch: branch || null, rep: pRep, category: pCategory,
+        item_categories: itemCats,
+        item_cat_caveat: itemCats.length
+          ? 'فلتر نوع الصنف يطبَّق على الكمية والقيمة والتوالف والعملاء فقط — التحصيل وتوالف الجودة لا يحملان بُعد الصنف، فيظهران كاملين للفترة.'
+          : null,
         next_level: level === 'branch' ? 'rep' : level === 'rep' ? 'category' : level === 'category' ? 'customer' : null,
         qty_caveat: 'الكمية الإجمالية والقيمة من مبيعات النظام؛ لا يتوفر لدينا مصدر لأعمدة Free / Good Return / Expire — التوالف المعروضة هي bad_return_qty فقط، دون تمييز جيد/تالف/منتهي الصلاحية.',
         quality_issue_caveat: 'توالف الجودة متاحة على مستوى المنطقة فقط — تعديلات المخزون في NetSuite لا تحمل بُعد مندوب/فئة/عميل.',

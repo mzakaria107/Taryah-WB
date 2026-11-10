@@ -806,6 +806,7 @@ export default function HypermarketsPage() {
         ['الفترة', `${overview.period.from_year} — ${overview.period.to_year}`],
         ['إجمالي الكمية', overview.totals.total_qty],
         ['إجمالي المرتجعات', overview.totals.total_returns],
+        ['قيمة المرتجعات', overview.totals.returns_value],
         ['نسبة المرتجعات %', overview.totals.returns_pct],
         ['الإيرادات قبل الخصم', overview.totals.gross_revenue],
         ['إجمالي إشعارات الخصم', overview.totals.total_credit_notes],
@@ -820,6 +821,10 @@ export default function HypermarketsPage() {
         ['الترند الشهري (كل الفترة)'],
         ['الشهر', 'الكمية', 'المرتجعات', 'صافي الإيرادات', 'العملاء', 'عدد الفواتير'],
         ...overview.trend.map(t => [t.label, t.total_qty, t.total_returns, t.net_revenue, t.active_customers, t.invoice_count]),
+        [''],
+        ['المرتجعات حسب فئة الصنف'],
+        ['فئة الصنف', 'كمية المرتجعات', 'قيمة المرتجعات'],
+        ...(overview.returns_by_item_category || []).map(r => [r.category, r.qty, r.value]),
       ];
       const ws5 = XLSX.utils.aoa_to_sheet(ovRows);
       ws5['!cols'] = [{ wch: 24 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 16 }];
@@ -1155,7 +1160,7 @@ export default function HypermarketsPage() {
                     <KpiCard big icon="↩️" accent="orange"
                       label="إجمالي المرتجعات"
                       value={fmt(overview.totals.total_returns)}
-                      sub={`نسبة المرتجعات: ${fmt(overview.totals.returns_pct, 1)}%`} />
+                      sub={`قيمة المرتجعات: ${fmt(overview.totals.returns_value)} ر.س · النسبة: ${fmt(overview.totals.returns_pct, 1)}%`} />
                     <KpiCard big icon="🧾" accent="purple"
                       label="عدد الفواتير المدخلة"
                       value={fmt(overview.totals.invoice_count)} />
@@ -1176,6 +1181,50 @@ export default function HypermarketsPage() {
                       value={`${fmt(overview.totals.net_revenue + kpiExcludedFee)} ر.س`}
                       sub="بعد خصم مصروفات الفرع (رِبيت كارفور)" />
                   </div>
+
+                  {/* ── Returns split by item category (qty + value) ── */}
+                  {overview.returns_by_item_category?.length > 0 && (() => {
+                    const rows = overview.returns_by_item_category;
+                    const tq = rows.reduce((a, r) => a + r.qty, 0);
+                    const tv = rows.reduce((a, r) => a + r.value, 0);
+                    const fb = rows.reduce((a, r) => a + (r.fallback_qty || 0), 0);
+                    const pct = (n, d) => (d ? (n / d * 100).toFixed(1) : '0.0');
+                    return (
+                      <div className="hm-card">
+                        <div className="hm-card__title">↩️ المرتجعات حسب فئة الصنف — الكمية والقيمة</div>
+                        <div className="hm-table-wrap">
+                          <table className="hm-table hm-ret-cat-table">
+                            <thead>
+                              <tr><th>فئة الصنف</th><th>كمية المرتجعات</th><th>% من الكمية</th><th>قيمة المرتجعات</th><th>% من القيمة</th></tr>
+                            </thead>
+                            <tbody>
+                              {rows.map(r => (
+                                <tr key={r.category}>
+                                  <td className="hm-td-bold">{r.category}</td>
+                                  <td className="hm-td-num">{fmt(r.qty)}</td>
+                                  <td className="hm-td-num">{pct(r.qty, tq)}%</td>
+                                  <td className="hm-td-num">{fmt(r.value)} ر.س</td>
+                                  <td className="hm-td-num">{pct(r.value, tv)}%</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                            <tfoot>
+                              <tr>
+                                <td className="hm-td-bold">الإجمالي</td>
+                                <td className="hm-td-num hm-td-bold">{fmt(tq)}</td>
+                                <td className="hm-td-num">100%</td>
+                                <td className="hm-td-num hm-td-bold">{fmt(tv)} ر.س</td>
+                                <td className="hm-td-num">100%</td>
+                              </tr>
+                            </tfoot>
+                          </table>
+                        </div>
+                        <div className="hm-ret-cat-note">
+                          القيمة محسوبة بسعر الوحدة في سطر المرتجع نفسه{fb > 0 ? ` — ${fmt(fb)} حبة بدون سعر في سطرها سُعّرت بمتوسط سعر بيع الصنف في الفترة` : ''}.
+                        </div>
+                      </div>
+                    );
+                  })()}
 
                   {overview.best_branch && (
                     <div className="hm-best-branch">

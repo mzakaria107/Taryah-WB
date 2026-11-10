@@ -1067,3 +1067,5 @@
 .hm-region-ms__only:hover { color: #1d4ed8; background: #e0e7ff; border-color: #c7d2fe; }
 .hm-region-ms__empty { padding: 10px; font-size: 0.78rem; color: #94a3b8; text-align: center; }
 .hm-expense-year { color: var(--color-text, #1e293b); }
+.hm-ret-cat-table tfoot td { border-top: 2px solid var(--color-border, #e2e8f0); background: #f8fafc; }
+.hm-ret-cat-note { margin-top: 8px; font-size: 0.74rem; color: var(--color-text-muted, #64748b); }

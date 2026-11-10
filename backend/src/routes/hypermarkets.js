@@ -937,6 +937,35 @@ router.get('/overview', verifyToken, applyRegionFilter, async (req, res) => {
       return r.rows[0] ?? {};
     }
 
+    /* ── Returns VALUE + split by item category (whole period, same filters as totals()) ──
+       Each return line is priced at ITS OWN unit price (|net_revenue / qty| of that line — a
+       return line books negative qty and negative value, so the ratio is the real price).
+       A line that can't price itself (qty or value 0) falls back to the item's average selling
+       price over the period's positive sale lines; still nothing → counted in qty, 0 value. */
+    async function returnsBreakdown() {
+      const { params, bSql, repSql } = periodParams();
+      const r = await pool.query(`
+        WITH item_avg AS (
+          SELECT sa.item_name_en, SUM(sa.net_revenue) / NULLIF(SUM(sa.qty), 0) AS price
+          FROM sales_activity sa
+          WHERE ${CATEGORY_FILTER}${bSql}${repSql} AND sa.qty > 0 AND sa.net_revenue > 0
+          GROUP BY sa.item_name_en
+        )
+        SELECT COALESCE(NULLIF(TRIM(sa.item_category_en), ''), 'غير مصنف') AS category,
+               SUM(sa.bad_return_qty)::bigint AS qty,
+               ROUND(SUM(sa.bad_return_qty * COALESCE(
+                 CASE WHEN sa.qty <> 0 AND sa.net_revenue <> 0 THEN ABS(sa.net_revenue / sa.qty) END,
+                 ia.price, 0))::numeric, 2) AS value,
+               SUM(CASE WHEN NOT (sa.qty <> 0 AND sa.net_revenue <> 0) THEN sa.bad_return_qty ELSE 0 END)::bigint AS fallback_qty
+        FROM sales_activity sa
+        LEFT JOIN item_avg ia ON ia.item_name_en = sa.item_name_en
+        WHERE ${CATEGORY_FILTER}${bSql}${repSql} AND sa.bad_return_qty <> 0
+        GROUP BY 1
+        ORDER BY value DESC, qty DESC
+      `, params);
+      return r.rows.map(x => ({ category: x.category, qty: Number(x.qty), value: Number(x.value), fallback_qty: Number(x.fallback_qty) }));
+    }
+
     /* ── Monthly trend across every year present ────────────── */
     async function fullTrend() {
       const { params, bSql, repSql } = periodParams();
@@ -1072,8 +1101,8 @@ router.get('/overview', verifyToken, applyRegionFilter, async (req, res) => {
       return out;
     }
 
-    const [t, trend, branches, branchMonth, expenses] = await Promise.all([
-      totals(), fullTrend(), bestBranches(), branchMonthMatrix(), branchExpenses(),
+    const [t, trend, branches, branchMonth, expenses, retByCat] = await Promise.all([
+      totals(), fullTrend(), bestBranches(), branchMonthMatrix(), branchExpenses(), returnsBreakdown(),
     ]);
     const expenseBranchNames = [...new Set(expenses.map(e => e.branch_name))];
     const branchRevenue = await expenseBranchRevenue(expenseBranchNames);
@@ -1132,6 +1161,7 @@ router.get('/overview', verifyToken, applyRegionFilter, async (req, res) => {
       totals: {
         total_qty:        Number(t.total_qty || 0),
         total_returns:    Number(t.total_returns || 0),
+        returns_value:    +retByCat.reduce((a, x) => a + x.value, 0).toFixed(2),
         gross_revenue:    Number(t.net_revenue || 0),
         total_credit_notes: expenseTotal,
         net_revenue:      Number(t.net_revenue || 0) - expenseTotal,
@@ -1145,6 +1175,7 @@ router.get('/overview', verifyToken, applyRegionFilter, async (req, res) => {
       branch_month_matrix: branchMonthWithDeduction,
       expense_month_matrix: expenseMonthMatrix,
       expense_branch_revenue: branchRevenue,
+      returns_by_item_category: retByCat,
       by_branch: branches,
       best_branch: branches[0] || null,
     });

@@ -3626,6 +3626,17 @@ its own region filter and its own rep list (`colMeta`). The region dropdown itse
 Same behaviour on «أعمار المديونية حسب الفترة» (`AgingByPeriodPage.jsx`, same query key, regions from
 `/aging/by-period` `regions`).
 
+## Hypermarkets overview — returns value + split by item category (10 Nov 2026)
+
+`/overview` adds `totals.returns_value` and `returns_by_item_category: [{category, qty, value,
+fallback_qty}]` (`returnsBreakdown()`, same branch / rep filters as `totals()`, whole period). Each
+return line is priced at its own unit price `|net_revenue / qty|` (return lines carry negative qty and
+value); a line that can't price itself (qty or value 0) uses the item's average selling price over the
+period's positive lines (`fallback_qty` counts those units, shown in the card's note); category =
+`item_category_en` («غير مصنف» when blank). Category qty sums to `total_returns`. The «إجمالي المرتجعات»
+KPI shows the value; a new card lists qty / % / value / % per category; the Excel «نظرة عامة» sheet
+has both. Verified locally: 2 units at line price 10 + 3 unpriced units at item avg 15 → 65 SAR.
+
 ## Hypermarkets — year picker on «مصفوفة إشعارات الخصم الشهرية» (4 Nov 2026)
 
 `/overview` now returns `expense_month_matrix` per **branch × year × month** (each row carries `year`)

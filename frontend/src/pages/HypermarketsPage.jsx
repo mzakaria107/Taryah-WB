@@ -548,12 +548,17 @@ export default function HypermarketsPage() {
 
     const branchTotals    = {}; // branch_name → summed cell (row total)
     const cellByBranchMonth = {};
-    const colTotals = Array.from({ length: 12 }, zeroCell); // index 0 = month 1
+    // Columns = every (year, month) present, oldest first — Nov/Dec 2025 come before Jan 2026
+    const ymKey = c => `${c.year}-${c.month_num}`;
+    const cols = [...new Map(overview.branch_month_matrix.map(c => [ymKey(c), { key: ymKey(c), year: c.year, month: c.month_num }])).values()]
+      .sort((a, b) => a.year - b.year || a.month - b.month);
+    const colIndex = Object.fromEntries(cols.map((c, i) => [c.key, i]));
+    const colTotals = cols.map(zeroCell);
     const grandTotal = zeroCell();
     let maxQty = 1;
 
     overview.branch_month_matrix.forEach(c => {
-      cellByBranchMonth[`${c.branch_name}-${c.month_num}`] = c;
+      cellByBranchMonth[`${c.branch_name}-${ymKey(c)}`] = c;
       if (c.total_qty > maxQty) maxQty = c.total_qty;
 
       if (!branchTotals[c.branch_name]) branchTotals[c.branch_name] = zeroCell();
@@ -562,7 +567,7 @@ export default function HypermarketsPage() {
       branchTotals[c.branch_name].gross_revenue  += c.gross_revenue;
       branchTotals[c.branch_name].net_revenue    += c.net_revenue;
 
-      const col = colTotals[c.month_num - 1];
+      const col = colTotals[colIndex[ymKey(c)]];
       col.total_qty     += c.total_qty;
       col.total_returns += c.total_returns;
       col.gross_revenue += c.gross_revenue;
@@ -575,7 +580,8 @@ export default function HypermarketsPage() {
     });
 
     const branches = Object.keys(branchTotals).sort((a, b) => branchTotals[b].total_qty - branchTotals[a].total_qty);
-    return { branches, cellByBranchMonth, branchTotals, colTotals, grandTotal, maxQty };
+    const multiYear = new Set(cols.map(c => c.year)).size > 1;
+    return { branches, cellByBranchMonth, branchTotals, colTotals, grandTotal, maxQty, cols, multiYear };
   }, [overview]);
 
   /* ── Expense (credit note) matrix — branch × month, for the "توزيع
@@ -1344,8 +1350,11 @@ export default function HypermarketsPage() {
                           <thead>
                             <tr>
                               <th className="hm-matrix-th-item">المنطقة</th>
-                              {MONTHS.map(([mn, ml]) => (
-                                <th key={mn} className="hm-matrix-th-month">{ml}</th>
+                              {overviewMatrix.cols.map(c => (
+                                <th key={c.key} className="hm-matrix-th-month">
+                                  {MONTHS.find(([mn]) => mn === c.month)?.[1] ?? c.month}
+                                  {overviewMatrix.multiYear && <span className="hm-matrix-th-year">{c.year}</span>}
+                                </th>
                               ))}
                               <th className="hm-matrix-th-total">الإجمالي</th>
                             </tr>
@@ -1356,7 +1365,7 @@ export default function HypermarketsPage() {
                               return (
                                 <tr key={br}>
                                   <td className="hm-matrix-td-item">{br}</td>
-                                  {MONTHS.map(([mn]) => {
+                                  {overviewMatrix.cols.map(({ key: mn }) => {
                                     const cell = overviewMatrix.cellByBranchMonth[`${br}-${mn}`];
                                     const qty = cell?.total_qty || 0;
                                     const returns = cell?.total_returns || 0;

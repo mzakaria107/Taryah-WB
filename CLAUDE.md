@@ -3626,6 +3626,15 @@ its own region filter and its own rep list (`colMeta`). The region dropdown itse
 Same behaviour on «أعمار المديونية حسب الفترة» (`AgingByPeriodPage.jsx`, same query key, regions from
 `/aging/by-period` `regions`).
 
+## Hypermarkets overview — region matrix columns are chronological year-months (10 Nov 2026)
+
+`branch_month_matrix` is now grouped by branch × **year** × month (each row carries `year`); it used to
+be summed by calendar month across years, so «نوفمبر» mixed Nov 2025 with Nov 2026 and the columns
+always ran Jan→Dec. `overviewMatrix` builds its columns from the (year, month) pairs present, oldest
+first (Nov 2025, Dec 2025, Jan 2026 …), and shows the year under each month when more than one year
+is present. The branch-expense deduction on this matrix is keyed by branch-year-month too. The
+customer × month matrix (`/customer-matrix`) still groups by month only — not changed.
+
 ## Hypermarkets overview — returns value + split by item category (10 Nov 2026)
 
 `/overview` adds `totals.returns_value` and `returns_by_item_category: [{category, qty, value,

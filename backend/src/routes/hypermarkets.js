@@ -1032,16 +1032,18 @@ router.get('/overview', verifyToken, applyRegionFilter, async (req, res) => {
       const r = await pool.query(`
         SELECT
           COALESCE(TRIM(sa.branch_name), 'غير محدد') AS branch_name,
+          sa.report_year::int                          AS year,
           sa.month_num::int                            AS month_num,
           COALESCE(SUM(sa.qty),0)::bigint               AS total_qty,
           COALESCE(SUM(sa.bad_return_qty),0)::bigint    AS total_returns,
           COALESCE(SUM(sa.net_revenue),0)::numeric      AS net_revenue
         FROM sales_activity sa
         WHERE ${CATEGORY_FILTER}${bSql}${repSql}
-        GROUP BY COALESCE(TRIM(sa.branch_name), 'غير محدد'), sa.month_num
+        GROUP BY COALESCE(TRIM(sa.branch_name), 'غير محدد'), sa.report_year, sa.month_num
       `, params);
       return r.rows.map(row => ({
         branch_name:   row.branch_name,
+        year:          row.year,
         month_num:     row.month_num,
         total_qty:     Number(row.total_qty),
         total_returns: Number(row.total_returns),
@@ -1109,15 +1111,15 @@ router.get('/overview', verifyToken, applyRegionFilter, async (req, res) => {
 
     /* ── Apply deductions ────────────────────────────────────── */
     const expenseTotal = expenses.reduce((s, e) => s + e.amount, 0);
-    // trend rows are keyed by (year, month); branchMonth rows are already
-    // summed across every year for a given (branch, month) — so they need
-    // a year-agnostic lookup.
+    // trend rows and branchMonth rows are both keyed by (year, month) now —
+    // branchMonth used to be summed across years, which put Nov 2025 and
+    // Nov 2026 in the same column.
     const expenseByYearMonth       = {};
     const expenseByBranchMonthAny  = {};
     expenses.forEach(e => {
       const ymKey = `${e.year}-${e.month_num}`;
       expenseByYearMonth[ymKey] = (expenseByYearMonth[ymKey] || 0) + e.amount;
-      const bmKey = `${e.branch_name}-${e.month_num}`;
+      const bmKey = `${e.branch_name}-${e.year}-${e.month_num}`;
       expenseByBranchMonthAny[bmKey] = (expenseByBranchMonthAny[bmKey] || 0) + e.amount;
     });
 
@@ -1128,7 +1130,7 @@ router.get('/overview', verifyToken, applyRegionFilter, async (req, res) => {
     const branchMonthWithDeduction = branchMonth.map(c => ({
       ...c,
       gross_revenue: c.net_revenue, // raw SUM(sa.net_revenue), independent of any expense deduction
-      net_revenue: c.net_revenue - (expenseByBranchMonthAny[`${c.branch_name}-${c.month_num}`] || 0),
+      net_revenue: c.net_revenue - (expenseByBranchMonthAny[`${c.branch_name}-${c.year}-${c.month_num}`] || 0),
     }));
 
     /* ── Expense (credit note) matrix — branch × YEAR × month; the page

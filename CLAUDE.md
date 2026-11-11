@@ -1678,6 +1678,14 @@ inserts it after «انتاج» (sort_order انتاج+1) and moves the own bran
 the last column; idempotent (re-running neither duplicates nor shifts again). Both the entry matrix and
 the cross-branch report read the active brands catalog, so the column appears in both with no code
 change; it counts in the row «Average» like every other competitor brand.
+**It did not appear in production** — the startup runner applies migrations in order and stops at the
+first failing file, so 123 never ran. `carrefourDamage.js` now has `LAZY_MIGRATIONS` +
+`ensureLazyMigrations()` (router middleware on `/price-survey`): on the first price-survey request it
+runs the same SQL file inside a transaction (with a `_migrations` table lock) and records it in
+`_migrations` under the same filename, so neither path can apply it twice and an admin deleting the
+brand later won't see it return. Verified locally: first request inserts it (طريه → 10), second is a
+no-op, one marker row. **Some earlier migration is still failing in production** and blocking every
+later file — worth finding from the PM2 log at startup.
 
 ### Unified cross-branch report for "الأسعار Survey"
 

@@ -25,6 +25,46 @@ const router = express.Router();
 
 const ADMIN_ROLES = ['super_admin', 'it_admin'];
 
+/* ── One-off catalog additions that can't wait for the migration runner ──
+   Production applies migrations strictly in order and stops at the first one that fails, so a
+   later migration file may never run there. Each entry runs its SQL once — the first time a
+   price-survey endpoint is hit — and records itself in `_migrations` under the SAME filename as
+   its migration file, so whichever path gets there first, it never runs twice (and an admin who
+   later deletes the row from the settings screen won't see it come back). */
+const LAZY_MIGRATIONS = ['123_carrefour_price_brand_watania.sql'];
+let lazyMigrationsDone = null;
+function ensureLazyMigrations() {
+  if (!lazyMigrationsDone) {
+    lazyMigrationsDone = (async () => {
+      for (const file of LAZY_MIGRATIONS) {
+        const client = await pool.connect();
+        try {
+          await client.query('BEGIN');
+          await client.query(`CREATE TABLE IF NOT EXISTS _migrations (
+            id SERIAL PRIMARY KEY, filename VARCHAR(255) UNIQUE NOT NULL, applied_at TIMESTAMPTZ DEFAULT NOW())`);
+          await client.query('LOCK TABLE _migrations IN SHARE ROW EXCLUSIVE MODE');
+          const { rows } = await client.query('SELECT 1 FROM _migrations WHERE filename = $1', [file]);
+          if (!rows.length) {
+            const sql = fs.readFileSync(path.join(__dirname, '..', 'db', 'migrations', file), 'utf8');
+            await client.query(sql);
+            await client.query('INSERT INTO _migrations (filename) VALUES ($1)', [file]);
+            console.log(`[Carrefour] lazy migration applied: ${file}`);
+          }
+          await client.query('COMMIT');
+        } catch (e) {
+          await client.query('ROLLBACK').catch(() => {});
+          console.error(`[Carrefour] lazy migration ${file} failed:`, e.message);
+          lazyMigrationsDone = null; // retry on the next request
+        } finally {
+          client.release();
+        }
+      }
+    })();
+  }
+  return lazyMigrationsDone;
+}
+router.use('/price-survey', (req, res, next) => { ensureLazyMigrations().then(() => next(), () => next()); });
+
 /* ── Photo attachment storage ──────────────────────────────────
    Laid out on disk as <UPLOAD_DIR>/carrefour-photos/<report_type>/<branch_id>/<report_date>/
    — a numeric branch_id keeps the path filesystem-safe; the "album" grouping

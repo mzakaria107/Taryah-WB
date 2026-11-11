@@ -1673,6 +1673,12 @@ rows), not just zeroed. Deleted all test entries and the throwaway branch afterw
 leftover `TEST-PRICE-SURVEY-BRANCH-%` branches and 0 leftover survey-entry rows anywhere. PM2 stable
 post-deploy (134→135, one restart, matching the deploy).
 
+**«الوطنية» brand added (11 Nov 2026)** — migration `123_carrefour_price_brand_watania.sql`
+inserts it after «انتاج» (sort_order انتاج+1) and moves the own brand «طريه» one slot right so it stays
+the last column; idempotent (re-running neither duplicates nor shifts again). Both the entry matrix and
+the cross-branch report read the active brands catalog, so the column appears in both with no code
+change; it counts in the row «Average» like every other competitor brand.
+
 ### Unified cross-branch report for "الأسعار Survey"
 
 Follow-up request: the entry tab above is per-branch (a promoter only ever sees their own branch's

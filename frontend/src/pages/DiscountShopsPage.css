@@ -1452,3 +1452,7 @@
 .ds-table--monthly td:first-child { width: 165px; min-width: 165px; max-width: 165px; }
 .ds-table--monthly td.ds-monthly-region { white-space: nowrap; color: var(--color-text-secondary, #475569); font-weight: 600; }
 .ds-monthly-band { background: var(--color-surface, #fff); cursor: pointer; min-width: 220px; }
+/* Special customers — add / remove log badges */
+.ds-list-log-badge { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 0.74rem; font-weight: 700; white-space: nowrap; }
+.ds-list-log-badge--add    { background: #dcfce7; color: #15803d; }
+.ds-list-log-badge--remove { background: #fee2e2; color: #b91c1c; }

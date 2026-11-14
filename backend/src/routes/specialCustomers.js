@@ -50,6 +50,26 @@ function ensureTables() {
       );
       CREATE INDEX IF NOT EXISTS idx_sc_contracts_customer ON special_customer_contracts(customer_code, created_at DESC);
       CREATE INDEX IF NOT EXISTS idx_sc_contracts_created  ON special_customer_contracts(created_at DESC);
+
+      -- When/who added each customer to the list. Kept across full re-uploads (uploaded_at is not:
+      -- it is rewritten on every upload). Rows that predate this column take uploaded_at.
+      ALTER TABLE special_customers ADD COLUMN IF NOT EXISTS added_at      TIMESTAMPTZ;
+      ALTER TABLE special_customers ADD COLUMN IF NOT EXISTS added_by_name VARCHAR(200);
+      UPDATE special_customers SET added_at = uploaded_at WHERE added_at IS NULL;
+
+      -- Append-only log of every add / remove (manual, by code, or through a full upload)
+      CREATE TABLE IF NOT EXISTS special_customer_list_log (
+        id            SERIAL PRIMARY KEY,
+        action        VARCHAR(10)  NOT NULL CHECK (action IN ('add', 'remove')),
+        customer_code VARCHAR(50)  NOT NULL,
+        customer_name TEXT,
+        source        VARCHAR(10)  NOT NULL CHECK (source IN ('manual', 'upload')),
+        done_by       UUID,
+        done_by_name  VARCHAR(200),
+        done_at       TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_sc_list_log_at   ON special_customer_list_log(done_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_sc_list_log_code ON special_customer_list_log(customer_code);
     `).catch(err => { tablesReady = null; throw err; });
   }
   return tablesReady;
@@ -1510,7 +1530,8 @@ router.get('/customer-list', verifyToken, async (req, res) => {
     // anything that needs a real English/Arabic split (the contract print).
     const r = await pool.query(`
       SELECT d.customer_code, d.customer_name, c.customer_name AS customer_name_en,
-             c.customer_name_ar, r.name_ar AS region_name, d.uploaded_at
+             c.customer_name_ar, r.name_ar AS region_name, d.uploaded_at,
+             d.added_at, d.added_by_name
       FROM special_customers d
       LEFT JOIN customers c ON c.customer_code = d.customer_code
       LEFT JOIN regions   r ON r.id = c.region_id
@@ -1529,6 +1550,24 @@ router.get('/customer-list', verifyToken, async (req, res) => {
   } catch (err) {
     console.error('[SpecialCustomers] customer-list:', err);
     res.status(500).json({ error: 'خطأ في جلب قائمة عملاء عملاء الاسبيشيال' });
+  }
+});
+
+/* GET /api/special-customers/customer-list/log — add / remove history, newest first */
+router.get('/customer-list/log', verifyToken, async (req, res) => {
+  try {
+    const limit = Math.min(parseInt(req.query.limit, 10) || 500, 2000);
+    const r = await pool.query(`
+      SELECT l.id, l.action, l.customer_code, l.customer_name, l.source, l.done_by_name, l.done_at,
+             (s.customer_code IS NOT NULL) AS in_list_now
+      FROM special_customer_list_log l
+      LEFT JOIN special_customers s ON s.customer_code = l.customer_code
+      ORDER BY l.done_at DESC, l.id DESC
+      LIMIT $1`, [limit]);
+    res.json({ log: r.rows });
+  } catch (err) {
+    console.error('[SpecialCustomers] customer-list/log:', err);
+    res.status(500).json({ error: 'خطأ في جلب سجل القائمة' });
   }
 });
 
@@ -1591,24 +1630,47 @@ router.post(
       try {
         await client.query('BEGIN');
 
-        const oldRes = await client.query('SELECT customer_code FROM special_customers');
-        oldCodes = new Set(oldRes.rows.map(r => r.customer_code));
+        const oldRes = await client.query('SELECT customer_code, customer_name, added_at, added_by_name FROM special_customers');
+        const oldByCode = new Map(oldRes.rows.map(r => [r.customer_code, r]));
+        oldCodes = new Set(oldByCode.keys());
         previousCount = oldCodes.size;
 
         await client.query('TRUNCATE special_customers');
 
+        // A customer that stays in the list keeps its ORIGINAL add date / signature
+        const now = new Date();
+        const byName = req.user.name || null;
         const values = [];
         const placeholders = newRows.map((row, idx) => {
-          const base = idx * 4;
-          values.push(row.customer_code, row.customer_name, req.user.id, new Date());
-          return `($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4})`;
+          const base = idx * 6;
+          const prev = oldByCode.get(row.customer_code);
+          values.push(row.customer_code, row.customer_name, req.user.id, now,
+                      prev ? (prev.added_at || now) : now, prev ? prev.added_by_name : byName);
+          return `($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}, $${base + 5}, $${base + 6})`;
         }).join(', ');
 
         await client.query(
-          `INSERT INTO special_customers (customer_code, customer_name, uploaded_by, uploaded_at)
+          `INSERT INTO special_customers (customer_code, customer_name, uploaded_by, uploaded_at, added_at, added_by_name)
            VALUES ${placeholders}`,
           values
         );
+
+        // Log what the upload changed: new codes → add, dropped codes → remove
+        const logRows = [
+          ...newRows.filter(r => !oldByCode.has(r.customer_code)).map(r => ['add', r.customer_code, r.customer_name]),
+          ...oldRes.rows.filter(r => !newRows.some(n => n.customer_code === r.customer_code)).map(r => ['remove', r.customer_code, r.customer_name]),
+        ];
+        if (logRows.length) {
+          const lv = [];
+          const lp = logRows.map((r, i) => {
+            lv.push(r[0], r[1], r[2], req.user.id, byName);
+            const b = i * 5;
+            return `($${b + 1}, $${b + 2}, $${b + 3}, 'upload', $${b + 4}, $${b + 5})`;
+          }).join(', ');
+          await client.query(
+            `INSERT INTO special_customer_list_log (action, customer_code, customer_name, source, done_by, done_by_name)
+             VALUES ${lp}`, lv);
+        }
 
         await client.query('COMMIT');
       } catch (txErr) {
@@ -1681,15 +1743,21 @@ router.post(
         if (sa.rows.length && sa.rows[0].name) name = sa.rows[0].name;
       }
 
+      // Re-adding a customer already in the list refreshes its name but keeps its original add date
       await pool.query(
-        `INSERT INTO special_customers (customer_code, customer_name, uploaded_by, uploaded_at)
-         VALUES ($1, $2, $3, NOW())
+        `INSERT INTO special_customers (customer_code, customer_name, uploaded_by, uploaded_at, added_at, added_by_name)
+         VALUES ($1, $2, $3, NOW(), NOW(), $4)
          ON CONFLICT (customer_code) DO UPDATE SET
            customer_name = COALESCE(EXCLUDED.customer_name, special_customers.customer_name),
            uploaded_by   = EXCLUDED.uploaded_by,
            uploaded_at   = NOW()`,
-        [code, name, req.user.id]
+        [code, name, req.user.id, req.user.name || null]
       );
+      if (!alreadyInList) {
+        await pool.query(
+          `INSERT INTO special_customer_list_log (action, customer_code, customer_name, source, done_by, done_by_name)
+           VALUES ('add', $1, $2, 'manual', $3, $4)`, [code, name, req.user.id, req.user.name || null]);
+      }
 
       res.json({
         ok: true,
@@ -1723,6 +1791,9 @@ router.delete(
         [code]
       );
       if (!r.rows.length) return res.status(404).json({ error: 'العميل غير موجود في القائمة' });
+      await pool.query(
+        `INSERT INTO special_customer_list_log (action, customer_code, customer_name, source, done_by, done_by_name)
+         VALUES ('remove', $1, $2, 'manual', $3, $4)`, [code, r.rows[0].customer_name, req.user.id, req.user.name || null]);
       res.json({ ok: true, removed: r.rows[0] });
     } catch (err) {
       console.error('[SpecialCustomers] customer-list delete:', err);

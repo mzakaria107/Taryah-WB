@@ -295,12 +295,33 @@ function SpecialCustomerListPanel({ onUploaded }) {
   const [addError, setAddError] = useState('');
   const [deletingCode, setDeletingCode] = useState(null);
   const [listSearch, setListSearch] = useState('');
+  const [showLog, setShowLog] = useState(false);
+  const [logFilter, setLogFilter] = useState(''); // '' | add | remove
+  const [logSearch, setLogSearch] = useState('');
 
-  const { data: listInfo, refetch } = useQuery({
+  const { data: listInfo, refetch: refetchList } = useQuery({
     queryKey: ['sc-customer-list'],
     queryFn: () => client.get('/special-customers/customer-list').then(r => r.data),
     staleTime: 60 * 1000,
   });
+  // Add / remove history — refreshed together with the list after every change
+  const { data: logData, refetch: refetchLog } = useQuery({
+    queryKey: ['sc-customer-list-log'],
+    queryFn: () => client.get('/special-customers/customer-list/log').then(r => r.data),
+    staleTime: 60 * 1000,
+    enabled: showLog,
+  });
+  const refetch = () => Promise.all([refetchList(), showLog ? refetchLog() : null]);
+  const fmtStamp = v => (v ? new Date(v).toLocaleString('en-GB', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—');
+  const logRows = useMemo(() => {
+    let rows = logData?.log || [];
+    if (logFilter) rows = rows.filter(r => r.action === logFilter);
+    if (logSearch.trim()) {
+      const q = logSearch.trim().toLowerCase();
+      rows = rows.filter(r => (r.customer_name || '').toLowerCase().includes(q) || r.customer_code.includes(q));
+    }
+    return rows;
+  }, [logData, logFilter, logSearch]);
 
   const handleAddCustomer = async () => {
     const code = addCode.trim();
@@ -388,6 +409,9 @@ function SpecialCustomerListPanel({ onUploaded }) {
         <button className="ds-btn ds-btn--outline" onClick={() => setShowList(s => !s)}>
           {showList ? '▲ إخفاء القائمة' : '▼ عرض القائمة'}
         </button>
+        <button className="ds-btn ds-btn--outline" onClick={() => setShowLog(s => !s)}>
+          {showLog ? '▲ إخفاء سجل الإضافة والحذف' : '🕘 سجل الإضافة والحذف'}
+        </button>
         <button className="ds-btn ds-btn--outline" onClick={handleFilePick} disabled={uploading}>
           {uploading ? 'جاري الرفع…' : '⬆️ رفع/تحديث القائمة بالكامل'}
         </button>
@@ -451,6 +475,8 @@ function SpecialCustomerListPanel({ onUploaded }) {
                 <tr>
                   <th>كود العميل</th>
                   <th>اسم العميل</th>
+                  <th>تاريخ الإضافة</th>
+                  <th>أضافه</th>
                   <th></th>
                 </tr>
               </thead>
@@ -459,6 +485,8 @@ function SpecialCustomerListPanel({ onUploaded }) {
                   <tr key={c.customer_code}>
                     <td className="ds-td-num">{c.customer_code}</td>
                     <td>{c.customer_name || <span className="ds-add-cust-warning">— بدون اسم —</span>}</td>
+                    <td className="ds-td-num">{fmtStamp(c.added_at)}</td>
+                    <td>{c.added_by_name || '—'}</td>
                     <td className="ds-td-num">
                       <button
                         type="button" className="ds-cust-del-btn"
@@ -472,7 +500,61 @@ function SpecialCustomerListPanel({ onUploaded }) {
                   </tr>
                 ))}
                 {filteredList.length === 0 && (
-                  <tr><td colSpan={3} className="ds-empty">لا يوجد عملاء مطابقون</td></tr>
+                  <tr><td colSpan={5} className="ds-empty">لا يوجد عملاء مطابقون</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* ── Add / remove log ── */}
+      {showLog && (
+        <div className="ds-cust-list-panel">
+          <div className="ds-upload-card__row">
+            <input
+              type="text" className="ds-chicken-search"
+              placeholder="بحث بالاسم أو الكود…"
+              value={logSearch}
+              onChange={e => setLogSearch(e.target.value)}
+            />
+            <select className="ds-chicken-search" value={logFilter} onChange={e => setLogFilter(e.target.value)}>
+              <option value="">كل الحركات</option>
+              <option value="add">إضافة فقط</option>
+              <option value="remove">حذف فقط</option>
+            </select>
+          </div>
+          <div className="ds-table-wrap">
+            <table className="ds-table">
+              <thead>
+                <tr>
+                  <th>التاريخ</th>
+                  <th>الحركة</th>
+                  <th>كود العميل</th>
+                  <th>اسم العميل</th>
+                  <th>الطريقة</th>
+                  <th>بواسطة</th>
+                  <th>الحالة الآن</th>
+                </tr>
+              </thead>
+              <tbody>
+                {logRows.map(r => (
+                  <tr key={r.id}>
+                    <td className="ds-td-num">{fmtStamp(r.done_at)}</td>
+                    <td>
+                      <span className={`ds-list-log-badge ds-list-log-badge--${r.action}`}>
+                        {r.action === 'add' ? '➕ إضافة' : '🗑 حذف'}
+                      </span>
+                    </td>
+                    <td className="ds-td-num">{r.customer_code}</td>
+                    <td>{r.customer_name || '—'}</td>
+                    <td>{r.source === 'upload' ? 'رفع ملف القائمة' : 'يدوي بالكود'}</td>
+                    <td>{r.done_by_name || '—'}</td>
+                    <td>{r.in_list_now ? 'ضمن القائمة' : 'خارج القائمة'}</td>
+                  </tr>
+                ))}
+                {logRows.length === 0 && (
+                  <tr><td colSpan={7} className="ds-empty">لا توجد حركات مسجلة بعد</td></tr>
                 )}
               </tbody>
             </table>

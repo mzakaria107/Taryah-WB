@@ -3693,6 +3693,19 @@ b_8_15) but no longer displayed. Frontend `BUCKETS` drives the KPI cards, filter
 all three Excel sheets, so they all moved together; each bucket now carries its own `kpi` colour
 class (the old index-based `KPI_COLORS` array is gone).
 
+## Special customers — add/remove signature + list log (14 Nov 2026)
+
+`special_customers` gained `added_at` / `added_by_name` (lazy `ALTER … ADD COLUMN IF NOT EXISTS` in
+`ensureTables()`; pre-existing rows backfilled from `uploaded_at`, so their date is the last upload,
+not necessarily the real add date). New append-only `special_customer_list_log` (action add/remove,
+code, name, source manual/upload, done_by_name, done_at). Logged by: add-one (only when the code was
+NOT already in the list — a re-add refreshes the name and keeps the original add date), DELETE, and
+the full upload (diffs old vs new: new codes → add, dropped → remove; kept codes keep their original
+`added_at` / `added_by_name` through the TRUNCATE). `GET /customer-list/log` (newest first,
+`in_list_now`). UI: «تاريخ الإضافة» + «أضافه» columns in the list, and a «سجل الإضافة والحذف» panel with
+action filter and search. Discount Shops' list was NOT changed. Verified locally: add / re-add / upload
+/ delete produce exactly the expected 4 log rows, and a kept customer keeps its add signature.
+
 ## Customers report (`/sales-activity`, «تقرير العملاء العام») — month filter (2 Nov 2026)
 
 A «الشهر» dropdown (default «آخر شهر (…)» = latest month with data) next to region / rep. The picked

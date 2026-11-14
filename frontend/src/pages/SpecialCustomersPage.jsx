@@ -366,6 +366,50 @@ function SpecialCustomerListPanel({ onUploaded }) {
 
   const handleFilePick = () => fileRef.current?.click();
 
+  /* Excel: the whole current list + one sheet of customers who LEFT the list and one of the
+     customers ADDED to it (both from the add/remove log — latest movement per customer). */
+  const [exporting, setExporting] = useState(false);
+  const handleExportList = async () => {
+    setExporting(true);
+    try {
+      const [{ data: list }, { data: lg }] = await Promise.all([
+        client.get('/special-customers/customer-list'),
+        client.get('/special-customers/customer-list/log', { params: { limit: 2000 } }),
+      ]);
+      const srcLbl = v => (v === 'upload' ? 'رفع ملف القائمة' : 'يدوي بالكود');
+      const latest = action => {
+        const seen = new Set();
+        return (lg.log || []).filter(r => r.action === action && !seen.has(r.customer_code) && seen.add(r.customer_code));
+      };
+      const wb = XLSX.utils.book_new();
+      const add = (name, header, rows, widths) => {
+        const ws = XLSX.utils.aoa_to_sheet([header, ...rows]);
+        ws['!cols'] = widths.map(w => ({ wch: w }));
+        ws['!views'] = [{ RTL: true }];
+        XLSX.utils.book_append_sheet(wb, ws, name);
+      };
+      add('القائمة الحالية',
+        ['كود العميل', 'اسم العميل', 'المنطقة', 'تاريخ الإضافة', 'أضافه'],
+        (list.customers || []).map(c => [c.customer_code, c.customer_name || '', c.region_name || '', fmtStamp(c.added_at), c.added_by_name || '']),
+        [14, 36, 14, 20, 20]);
+      // Left the list = latest removal of a customer that is NOT back in the list now
+      add('الخارجون من القائمة',
+        ['كود العميل', 'اسم العميل', 'تاريخ الحذف', 'الطريقة', 'بواسطة'],
+        latest('remove').filter(r => !r.in_list_now).map(r => [r.customer_code, r.customer_name || '', fmtStamp(r.done_at), srcLbl(r.source), r.done_by_name || '']),
+        [14, 36, 20, 18, 20]);
+      // Added = latest add of a customer that is still in the list
+      add('المضافون حديثاً',
+        ['كود العميل', 'اسم العميل', 'تاريخ الإضافة', 'الطريقة', 'بواسطة'],
+        latest('add').filter(r => r.in_list_now).map(r => [r.customer_code, r.customer_name || '', fmtStamp(r.done_at), srcLbl(r.source), r.done_by_name || '']),
+        [14, 36, 20, 18, 20]);
+      XLSX.writeFile(wb, `قائمة_عملاء_الاسبيشيال_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    } catch (err) {
+      window.alert(err?.response?.data?.error || 'تعذّر تصدير القائمة');
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const handleFileChange = async (e) => {
     const file = e.target.files?.[0];
     e.target.value = ''; // allow re-selecting the same file name later
@@ -408,6 +452,9 @@ function SpecialCustomerListPanel({ onUploaded }) {
         <span>آخر تحديث: <strong>{lastUploaded}</strong></span>
         <button className="ds-btn ds-btn--outline" onClick={() => setShowList(s => !s)}>
           {showList ? '▲ إخفاء القائمة' : '▼ عرض القائمة'}
+        </button>
+        <button className="ds-btn ds-btn--outline" onClick={handleExportList} disabled={exporting}>
+          {exporting ? 'جاري التصدير…' : '📊 تصدير القائمة Excel'}
         </button>
         <button className="ds-btn ds-btn--outline" onClick={() => setShowLog(s => !s)}>
           {showLog ? '▲ إخفاء سجل الإضافة والحذف' : '🕘 سجل الإضافة والحذف'}

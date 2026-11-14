@@ -3706,6 +3706,11 @@ the full upload (diffs old vs new: new codes → add, dropped → remove; kept c
 action filter and search. Discount Shops' list was NOT changed. Verified locally: add / re-add / upload
 / delete produce exactly the expected 4 log rows, and a kept customer keeps its add signature.
 
+**«📊 تصدير القائمة Excel»** (client-side, fetches list + log fresh): sheet «القائمة الحالية» (code, name,
+region, add date, added by); «الخارجون من القائمة» = each customer's LATEST removal in the log, only if
+not back in the list now; «المضافون حديثاً» = each customer's latest add that is still in the list. Both
+history sheets only reach back to when the log started (14 Nov 2026).
+
 ## Customers report (`/sales-activity`, «تقرير العملاء العام») — month filter (2 Nov 2026)
 
 A «الشهر» dropdown (default «آخر شهر (…)» = latest month with data) next to region / rep. The picked

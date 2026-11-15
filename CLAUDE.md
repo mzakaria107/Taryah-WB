@@ -3719,6 +3719,12 @@ clamped to Riyadh "today". UI `CollectionsAfterRefundsTab.jsx/.css` (prefix `car
 table, region table, notes (incl. the excluded documents), one-page A4 print (`body.car-printing`).
 The page's own filters / KPIs are hidden while this tab is open. Logic unit-tested with mocked SuiteQL;
 the real NetSuite credentials only exist on the server, so the end-to-end call was not run here.
+**First live try (15 Nov): «إعدادات الربط مع NetSuite غير مكتملة»** — `app_settings.netsuite_config` is
+empty in production (the aging page's SuiteQL lookup is best-effort and silently skipped, so nobody
+noticed). The token-based-auth credentials are entered at «المخزون» → «الإعدادات» (StockPage
+`SettingsTab`, `PUT /settings/netsuite_config`, with «اختبار الاتصال»); the error message now says so.
+The NetSuite role behind the token needs REST Web Services + Log in using Access Tokens + view access to
+Customer Payments, Customer Refunds, Invoices, Customers, Locations and Accounts.
 
 ## Special customers — add/remove signature + list log (14 Nov 2026)
 

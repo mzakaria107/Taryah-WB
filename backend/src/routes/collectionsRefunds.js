@@ -145,7 +145,7 @@ router.get('/after-refunds', verifyToken, async (req, res) => {
     };
 
     const cfg = await nsConfig();
-    if (!cfg) return res.status(503).json({ error: 'إعدادات الربط مع NetSuite غير مكتملة', configured: false });
+    if (!cfg) return res.status(503).json({ error: 'إعدادات الربط مع NetSuite (REST API) غير مكتملة — يدخلها مسؤول النظام من صفحة «المخزون» ← تبويب «الإعدادات» (Account ID و Consumer Key/Secret و Token Key/Secret)، ثم «اختبار الاتصال».', configured: false });
 
     const key = `${from}|${to}`;
     let raw = cache.get(key);

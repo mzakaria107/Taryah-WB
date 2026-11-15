@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Printer, TrendingDown, X } from 'lucide-react';
 import api from '../api/client';
 import './CollectionsPerformancePage.css';
+import CollectionsAfterRefundsTab from './CollectionsAfterRefundsTab';
 
 /* ── helpers ─────────────────────────────────────────────────── */
 const fmt = (n) =>
@@ -207,7 +208,9 @@ export default function CollectionsPerformancePage() {
   const [regionId,  setRegionId]  = useState('');
   const [dateFrom,  setDateFrom]  = useState('');
   const [dateTo,    setDateTo]    = useState('');
-  const [activeTab, setActiveTab] = useState('daily'); // 'daily' | 'regions' | 'live'
+  const [activeTab, setActiveTab] = useState('daily'); // 'daily' | 'regions' | 'live' | 'refunds'
+  // «التحصيل بعد الاستردادات» has its own filters / KPIs — hide the page-level ones while it is open
+  const pageChrome = activeTab === 'refunds' ? { display: 'none' } : undefined;
 
   /* ── Handle date-from: auto-sync year/month ─────────────────── */
   const handleDateFrom = useCallback((val) => {
@@ -321,7 +324,7 @@ export default function CollectionsPerformancePage() {
       </div>
 
       {/* Filters */}
-      <div className="cp-filters cp-no-print">
+      <div className="cp-filters cp-no-print" style={pageChrome}>
         {/* Year */}
         <div className="cp-filter-group">
           <span className="cp-filter-label">السنة</span>
@@ -420,7 +423,7 @@ export default function CollectionsPerformancePage() {
       {!isLoading && !isError && data && (
         <>
           {/* ── KPI cards ────────────────────────────────────────── */}
-          <div className="cp-kpis">
+          <div className="cp-kpis" style={pageChrome}>
             <div className="cp-kpi-card cp-kpi-card--primary">
               <span className="cp-kpi-label">إجمالي التحصيل</span>
               <span className="cp-kpi-value">{fmt(data.kpis.total_paid)}</span>
@@ -502,6 +505,12 @@ export default function CollectionsPerformancePage() {
             >
               🔴 التحصيل اليوم لايف
             </button>
+            <button
+              className={`cp-tab${activeTab === 'refunds' ? ' cp-tab--active' : ''}`}
+              onClick={() => setActiveTab('refunds')}
+            >
+              التحصيل بعد الاستردادات
+            </button>
           </div>
 
           {/* ── Tab: Daily pivot table ────────────────────────────── */}
@@ -550,6 +559,13 @@ export default function CollectionsPerformancePage() {
           {activeTab === 'live' && (
             <div className="cp-no-print" style={{ marginTop: 16 }}>
               <LiveTodayTab />
+            </div>
+          )}
+
+          {/* ── Tab: التحصيل بعد الاستردادات (NetSuite, own filters + exclusion toggles) ── */}
+          {activeTab === 'refunds' && (
+            <div className="car-host">
+              <CollectionsAfterRefundsTab />
             </div>
           )}
         </>

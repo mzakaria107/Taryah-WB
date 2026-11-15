@@ -3693,6 +3693,33 @@ b_8_15) but no longer displayed. Frontend `BUCKETS` drives the KPI cards, filter
 all three Excel sheets, so they all moved together; each bucket now carries its own `kpi` colour
 class (the old index-based `KPI_COLORS` array is gone).
 
+## «التحصيل بعد الاستردادات» tab on «أداء التحصيل» (15 Nov 2026)
+
+Reproduces the user's reference PDF (1–15 Nov 2026). `GET /api/collections/after-refunds`
+(`routes/collectionsRefunds.js`) reads NetSuite through SuiteQL (`app_settings.netsuite_config`, same as
+the aging page), because refunds, invoice warehouses and GL accounts are not in our tables.
+Rules — each one checked against NetSuite to the riyal with the MCP SuiteQL tool:
+- receipts = `CustPymt.foreigntotal` per `trandate`; refunds = `CustRfnd` (negative) → collection =
+  receipts − refunds (1 Nov: 750,583.74 − 2,622.68, exactly the PDF);
+- «المركز الرئيسي» = customer category «عملاء دجاج حي» (1 Nov: 161,047, exact);
+- excluded «إقفال دورة» = receipts with a debit line on account **150110 خزينة عملاء وموردين**
+  (two receipts, 3,869,680.55 — the PDF's figure);
+- region = warehouse of the invoice each receipt was applied to (`PreviousTransactionLineLink` →
+  invoice `transactionline` **id = 1** — the invoice header location is NULL; the line-1 join is fast,
+  a `MAX(location)` subquery timed out); the unapplied remainder and refunds go to the warehouse of
+  the customer's LATEST invoice (`custentity_tp_cust_territory` is empty for everyone). Checked on
+  1–14 Nov: Dawadmi's refunds −8,862.73 exact, other regions' gaps = their unapplied, total 6,366;
+- daily average = completed days (today excluded) without Fridays and without the main centre
+  (359,700 = 4,316,396 / 12, exact); «عن المتوسط» compares each day's without-main value.
+Applications are fetched in 7-day windows (a month in one statement timed out); results are cached
+3 min per range («تحديث» forces a refetch). Every exclusion is a query flag, default 1 = excluded:
+`ex_clearing`, `ex_main`, `ex_friday`, `ex_today`, `deduct_refunds` — the tab shows them as red pills
+(on) that the user switches off to include. Filters: month (year + month) or date range; the range is
+clamped to Riyadh "today". UI `CollectionsAfterRefundsTab.jsx/.css` (prefix `car-`): KPI row, daily
+table, region table, notes (incl. the excluded documents), one-page A4 print (`body.car-printing`).
+The page's own filters / KPIs are hidden while this tab is open. Logic unit-tested with mocked SuiteQL;
+the real NetSuite credentials only exist on the server, so the end-to-end call was not run here.
+
 ## Special customers — add/remove signature + list log (14 Nov 2026)
 
 `special_customers` gained `added_at` / `added_by_name` (lazy `ALTER … ADD COLUMN IF NOT EXISTS` in

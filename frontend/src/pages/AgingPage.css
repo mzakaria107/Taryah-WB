@@ -522,3 +522,16 @@
 .age-table--cust tfoot td.age-col-name { background: var(--color-bg); }
 .age-table--cust th.age-col-code, .age-table--cust td.age-col-code { border-left: none; }
 .age-ptable .age-p-code { font-family: var(--font-en); color: #64748b; white-space: nowrap; }
+
+/* ── Customers table: compact so every column (incl. «آخر تحصيل») fits the page width ── */
+.age-table--cust { font-size: 0.74rem; }
+.age-table--cust th { padding: 8px 5px; font-size: 0.7rem; white-space: normal; line-height: 1.2; }
+.age-table--cust td { padding: 6px 5px; }
+.age-table--cust th.age-col-code, .age-table--cust td.age-col-code { min-width: 72px; width: 72px; max-width: 72px; font-size: 0.7rem; }
+.age-table--cust th.age-col-name, .age-table--cust td.age-col-name { right: 72px; min-width: 150px; max-width: 190px; overflow: hidden; text-overflow: ellipsis; }
+.age-table--cust td.age-col-name .age-customer-link { display: block; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.age-table--cust .age-coll-track { min-width: 26px; }
+.age-table--cust .age-coll-bar { gap: 4px; }
+.age-table--cust .age-avg-badge { padding: 1px 6px; font-size: 0.68rem; }
+.age-table--cust .age-change { padding: 1px 5px; font-size: 0.68rem; }
+.age-table--cust .age-last-pay-date { font-size: 0.64rem; }

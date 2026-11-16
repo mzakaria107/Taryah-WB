@@ -3619,6 +3619,13 @@ two halves always add up to the full list. Footer totals and the Excel export fo
 header again reverses (▲/▼ marker, ⇅ on inactive headers). Month headers are sortable too
 (`m:<key>` → that month's qty, no sales = 0).
 
+## Debt aging page — compact customers table (17 Nov 2026)
+
+`.age-table--cust` overrides (end of AgingPage.css): smaller font / padding, wrapping headers, code
+column 72px (sticky name now at `right: 72px`), name 150–190px with ellipsis, narrower collection bars
+and badges — all 19 columns incl. «آخر تحصيل» fit without horizontal scroll at 1440px and 1700px
+(measured headless with 70 mocked customers).
+
 ## Debt aging page — paginated print with per-page totals (5 Nov 2026)
 
 The customers tab no longer prints the screen table (it was wider than the paper and cut off the

@@ -11,6 +11,14 @@ import './DiscountShopsPage.css';
 
 // Arabic display name for incentive / monthly rows (customer_name stays English there for the contract)
 const arName = c => c.customer_name_ar || c.customer_name;
+/* Item label: keep the product words, drop the weight description after the number and put
+   «وزن» before it — «دجاجة كاملة 1200 مبردة-طرية» → «دجاجة كاملة وزن 1200». Names with no
+   weight number are left as they are. */
+const shortItemName = name => {
+  const m = String(name || '').match(/^(.*?)\s*(\d{2,5})(?:\s*(?:جم|جرام|غ|g|gm))?(?:[\s-].*)?$/i);
+  if (!m || !m[1].trim()) return name;
+  return `${m[1].trim()} وزن ${m[2]}`;
+};
 
 /* ── Constants ─────────────────────────────────────────────── */
 const ADMIN_ROLES = ['super_admin', 'it_admin'];
@@ -2011,7 +2019,7 @@ export default function SpecialCustomersPage() {
       c.customer_code, c.customer_name, c.branch_name || '', c.salesrep_name || '',
       Number(c.total_qty) || 0, Number(c.total_returns) || 0, Number(c.returns_pct) || 0, Number(c.invoice_count) || 0,
       c.asp ?? '', c.chilled_asp ?? '',
-      ...[0, 1, 2].flatMap(i => { const it = (c.top_items || [])[i]; return it ? [it.item_name, it.qty, it.asp ?? ''] : ['', '', '']; }),
+      ...[0, 1, 2].flatMap(i => { const it = (c.top_items || [])[i]; return it ? [shortItemName(it.item_name), it.qty, it.asp ?? ''] : ['', '', '']; }),
     ]);
     const ws4 = XLSX.utils.aoa_to_sheet([custHeader, ...custRows]);
     ws4['!cols'] = [{ wch: 14 }, { wch: 28 }, { wch: 16 }, { wch: 22 }, { wch: 12 }, { wch: 12 }, { wch: 16 }, { wch: 12 },
@@ -2834,7 +2842,7 @@ export default function SpecialCustomersPage() {
                             <td key={idx} className="ds-top-item">
                               {it ? (
                                 <>
-                                  <div className="ds-top-item-name" title={it.item_name_en}>{it.item_name}</div>
+                                  <div className="ds-top-item-name" title={`${it.item_name}${it.item_name_en && it.item_name_en !== it.item_name ? ` — ${it.item_name_en}` : ''}`}>{shortItemName(it.item_name)}</div>
                                   <div className="ds-top-item-meta">{fmt(it.qty)} · <b>{it.asp != null ? it.asp.toFixed(2) : '—'}</b> ر.س</div>
                                 </>
                               ) : <span className="ds-dash">—</span>}

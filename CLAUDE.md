@@ -3773,6 +3773,9 @@ net qty in the period, each with its weighted `asp`; Arabic item name from `qual
 when present, English otherwise — the query retries without that join if the table is missing). The
 table shows «متوسط السعر العام» / «متوسط سعر المبرد» (sortable) and «الصنف الأول/الثاني/الثالث» (name, qty ·
 price); the Excel «العملاء» sheet has the same fields. Verified locally (12.29 / 13.33 / correct top 3).
+Item labels in those columns (screen + Excel) go through `shortItemName()`: product words + «وزن» + the
+weight number, dropping what follows it («دجاجة كاملة 1200 مبردة-طرية» → «دجاجة كاملة وزن 1200», «كبدة دجاج
+450 جم-طرية» → «كبدة دجاج وزن 450»); names without a number unchanged; the full name stays in the tooltip.
 Discount Shops not changed.
 
 ## Customers report (`/sales-activity`, «تقرير العملاء العام») — month filter (2 Nov 2026)

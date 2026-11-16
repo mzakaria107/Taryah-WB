@@ -390,7 +390,7 @@ function SpecialCustomerListPanel({ onUploaded }) {
       };
       add('القائمة الحالية',
         ['كود العميل', 'اسم العميل', 'المنطقة', 'تاريخ الإضافة', 'أضافه'],
-        (list.customers || []).map(c => [c.customer_code, c.customer_name || '', c.region_name || '', fmtStamp(c.added_at), c.added_by_name || '']),
+        (list.customers || []).map(c => [c.customer_code, c.customer_name || '', c.region_name || 'غير محدد', fmtStamp(c.added_at), c.added_by_name || '']),
         [14, 36, 14, 20, 20]);
       // Left the list = latest removal of a customer that is NOT back in the list now
       add('الخارجون من القائمة',
@@ -522,6 +522,7 @@ function SpecialCustomerListPanel({ onUploaded }) {
                 <tr>
                   <th>كود العميل</th>
                   <th>اسم العميل</th>
+                  <th>المنطقة</th>
                   <th>تاريخ الإضافة</th>
                   <th>أضافه</th>
                   <th></th>
@@ -532,6 +533,7 @@ function SpecialCustomerListPanel({ onUploaded }) {
                   <tr key={c.customer_code}>
                     <td className="ds-td-num">{c.customer_code}</td>
                     <td>{c.customer_name || <span className="ds-add-cust-warning">— بدون اسم —</span>}</td>
+                    <td>{c.region_name || <span className="ds-add-cust-warning">غير محدد</span>}</td>
                     <td className="ds-td-num">{fmtStamp(c.added_at)}</td>
                     <td>{c.added_by_name || '—'}</td>
                     <td className="ds-td-num">
@@ -547,7 +549,7 @@ function SpecialCustomerListPanel({ onUploaded }) {
                   </tr>
                 ))}
                 {filteredList.length === 0 && (
-                  <tr><td colSpan={5} className="ds-empty">لا يوجد عملاء مطابقون</td></tr>
+                  <tr><td colSpan={6} className="ds-empty">لا يوجد عملاء مطابقون</td></tr>
                 )}
               </tbody>
             </table>

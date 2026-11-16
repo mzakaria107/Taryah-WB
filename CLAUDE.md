@@ -3755,6 +3755,13 @@ region, add date, added by); «الخارجون من القائمة» = each cus
 not back in the list now; «المضافون حديثاً» = each customer's latest add that is still in the list. Both
 history sheets only reach back to when the log started (14 Nov 2026).
 
+**Region for every list customer (16 Nov 2026)** — many list customers have no `region_id` in the
+customers master, so the export's «المنطقة» was blank. `GET /customer-list` now resolves
+`region_name` = master region → branch of the customer's LATEST sale (`sales_activity`, by year/month/
+day) → region holding most of its invoices, and returns `region_source` (master / sales / invoices).
+Only a customer with no data anywhere stays empty («غير محدد» in the export and the list). The list
+panel shows an «المنطقة» column too. Verified locally on all four cases. Discount Shops' list unchanged.
+
 ## Customers report (`/sales-activity`, «تقرير العملاء العام») — month filter (2 Nov 2026)
 
 A «الشهر» dropdown (default «آخر شهر (…)» = latest month with data) next to region / rep. The picked

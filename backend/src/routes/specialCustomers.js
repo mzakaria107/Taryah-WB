@@ -1530,11 +1530,30 @@ router.get('/customer-list', verifyToken, async (req, res) => {
     // anything that needs a real English/Arabic split (the contract print).
     const r = await pool.query(`
       SELECT d.customer_code, d.customer_name, c.customer_name AS customer_name_en,
-             c.customer_name_ar, r.name_ar AS region_name, d.uploaded_at,
-             d.added_at, d.added_by_name
+             c.customer_name_ar, d.uploaded_at, d.added_at, d.added_by_name,
+             -- Region: customers master → latest sale's branch → region holding most of its invoices.
+             -- Many list customers have no region in the master, which left the export blank.
+             COALESCE(r.name_ar, ls.branch_name, ir.name_ar) AS region_name,
+             CASE WHEN r.name_ar IS NOT NULL THEN 'master'
+                  WHEN ls.branch_name IS NOT NULL THEN 'sales'
+                  WHEN ir.name_ar IS NOT NULL THEN 'invoices' END AS region_source
       FROM special_customers d
       LEFT JOIN customers c ON c.customer_code = d.customer_code
       LEFT JOIN regions   r ON r.id = c.region_id
+      LEFT JOIN LATERAL (
+        SELECT NULLIF(TRIM(sa.branch_name), '') AS branch_name
+        FROM sales_activity sa
+        WHERE sa.customer_code = d.customer_code AND NULLIF(TRIM(sa.branch_name), '') IS NOT NULL
+        ORDER BY sa.report_year DESC, sa.month_num DESC, sa.day DESC NULLS LAST
+        LIMIT 1
+      ) ls ON true
+      LEFT JOIN LATERAL (
+        SELECT rg.name_ar
+        FROM invoices i JOIN regions rg ON rg.id = i.region_id
+        WHERE i.customer_id = d.customer_code
+        GROUP BY rg.name_ar ORDER BY COUNT(*) DESC
+        LIMIT 1
+      ) ir ON true
       ORDER BY d.customer_name NULLS LAST, d.customer_code
     `);
     const lastUploadedAt = r.rows.reduce((max, row) => {

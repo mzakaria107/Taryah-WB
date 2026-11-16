@@ -466,6 +466,29 @@ function SpecialCustomerListPanel({ onUploaded }) {
                onChange={handleFileChange} />
       </div>
 
+      {/* ── One card: customers per region in the CURRENT list ── */}
+      {(() => {
+        const rows = listInfo?.customers || [];
+        if (!rows.length) return null;
+        const counts = {};
+        rows.forEach(c => { const r = c.region_name || 'غير محدد'; counts[r] = (counts[r] || 0) + 1; });
+        const list = Object.entries(counts).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+        return (
+          <div className="ds-region-count-card">
+            <div className="ds-region-count-title">عملاء الاسبيشيال حسب المنطقة <span>({fmt(rows.length)} عميل في القائمة الفعالة)</span></div>
+            <div className="ds-region-count-grid">
+              {list.map(([r, n]) => (
+                <div key={r} className={`ds-region-count-item${r === 'غير محدد' ? ' is-unknown' : ''}`}>
+                  <span className="ds-region-count-name">{r}</span>
+                  <span className="ds-region-count-num">{fmt(n)}</span>
+                  <span className="ds-region-count-pct">{(n / rows.length * 100).toFixed(0)}%</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
+
       {/* ── Add a single customer by code ── */}
       <div className="ds-upload-card__row ds-upload-card__add-row">
         <input

@@ -3761,6 +3761,8 @@ customers master, so the export's «المنطقة» was blank. `GET /customer-l
 day) → region holding most of its invoices, and returns `region_source` (master / sales / invoices).
 Only a customer with no data anywhere stays empty («غير محدد» in the export and the list). The list
 panel shows an «المنطقة» column too. Verified locally on all four cases. Discount Shops' list unchanged.
+A «عملاء الاسبيشيال حسب المنطقة» card in the list panel counts the CURRENT list per resolved region
+(client-side from `/customer-list`, «غير محدد» last-resort bucket, count + share).
 
 ## Customers report (`/sales-activity`, «تقرير العملاء العام») — month filter (2 Nov 2026)
 

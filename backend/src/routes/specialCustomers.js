@@ -476,13 +476,52 @@ router.get('/summary', verifyToken, applyRegionFilter, async (req, res) => {
           MAX(TRIM(sa.salesrep_name))                 AS salesrep_name,
           COALESCE(SUM(sa.qty),0)::int                AS total_qty,
           COALESCE(SUM(sa.bad_return_qty),0)::int     AS total_returns,
-          COUNT(DISTINCT sa.invoice_number)::int                               AS invoice_count
+          COUNT(DISTINCT sa.invoice_number)::int                               AS invoice_count,
+          COALESCE(SUM(sa.net_revenue),0)::numeric    AS revenue,
+          COALESCE(SUM(sa.qty)         FILTER (WHERE TRIM(COALESCE(sa.item_category_en,'')) LIKE 'دجاج مبرد%'),0)::numeric AS chilled_qty,
+          COALESCE(SUM(sa.net_revenue) FILTER (WHERE TRIM(COALESCE(sa.item_category_en,'')) LIKE 'دجاج مبرد%'),0)::numeric AS chilled_revenue
         FROM sales_activity sa
         WHERE ${periodSql}
           AND ${CATEGORY_FILTER}${bSql}${repSql}
         GROUP BY sa.customer_code
         ORDER BY total_qty DESC
       `, params);
+      // Top 3 items per customer by net qty, each with its own weighted price
+      const it = await pool.query(`
+        SELECT customer_code, item_name, item_name_ar, qty, revenue FROM (
+          SELECT sa.customer_code,
+                 COALESCE(NULLIF(TRIM(sa.item_name_en),''),'غير محدد') AS item_name,
+                 MAX(qi.item_name_ar) AS item_name_ar,
+                 SUM(sa.qty)::numeric AS qty, SUM(sa.net_revenue)::numeric AS revenue,
+                 ROW_NUMBER() OVER (PARTITION BY sa.customer_code ORDER BY SUM(sa.qty) DESC) AS rn
+          FROM sales_activity sa
+          LEFT JOIN quality_returns_item_info qi ON qi.item_name_en = TRIM(sa.item_name_en)
+          WHERE ${periodSql}
+            AND ${CATEGORY_FILTER}${bSql}${repSql}
+          GROUP BY sa.customer_code, COALESCE(NULLIF(TRIM(sa.item_name_en),''),'غير محدد')
+        ) x WHERE rn <= 3 AND qty > 0
+        ORDER BY customer_code, rn
+      `, params).catch(async err => {
+        // quality_returns_item_info may not exist on an old database — retry without Arabic names
+        console.error('[SpecialCustomers] top items (retrying without Arabic names):', err.message);
+        return pool.query(`
+          SELECT customer_code, item_name, NULL AS item_name_ar, qty, revenue FROM (
+            SELECT sa.customer_code, COALESCE(NULLIF(TRIM(sa.item_name_en),''),'غير محدد') AS item_name,
+                   SUM(sa.qty)::numeric AS qty, SUM(sa.net_revenue)::numeric AS revenue,
+                   ROW_NUMBER() OVER (PARTITION BY sa.customer_code ORDER BY SUM(sa.qty) DESC) AS rn
+            FROM sales_activity sa
+            WHERE ${periodSql} AND ${CATEGORY_FILTER}${bSql}${repSql}
+            GROUP BY sa.customer_code, COALESCE(NULLIF(TRIM(sa.item_name_en),''),'غير محدد')
+          ) x WHERE rn <= 3 AND qty > 0 ORDER BY customer_code, rn`, params);
+      });
+      const topByCust = {};
+      it.rows.forEach(x => {
+        (topByCust[x.customer_code] = topByCust[x.customer_code] || []).push({
+          item_name: x.item_name_ar || x.item_name, item_name_en: x.item_name,
+          qty: Number(x.qty), asp: Number(x.qty) > 0 ? +(Number(x.revenue) / Number(x.qty)).toFixed(2) : null,
+        });
+      });
+      r.rows.forEach(c => { c.top_items = topByCust[c.customer_code] || []; });
       return r.rows;
     }
 
@@ -618,6 +657,10 @@ router.get('/summary', verifyToken, applyRegionFilter, async (req, res) => {
         returns_pct:     Number(c.total_qty) > 0
           ? +(Number(c.total_returns) / Number(c.total_qty) * 100).toFixed(1)
           : 0,
+        // weighted average prices: net revenue ÷ net qty (overall, and chilled «دجاج مبرد…» only)
+        asp:         Number(c.total_qty) > 0 ? +(Number(c.revenue) / Number(c.total_qty)).toFixed(2) : null,
+        chilled_asp: Number(c.chilled_qty) > 0 ? +(Number(c.chilled_revenue) / Number(c.chilled_qty)).toFixed(2) : null,
+        top_items:   c.top_items || [],
       })),
     });
 

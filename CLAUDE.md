@@ -3767,6 +3767,14 @@ The «طباعة عقد عميل» tab was removed from the special-customers pa
 JSX, `special_customer_contracts` table and `/contracts` endpoints are untouched, so it can be restored
 by re-adding the one tab entry). Discount Shops keeps its contract tab.
 
+**Customers tab — price columns (17 Nov 2026)**: `/summary` → `customers[]` now carries `asp` (net revenue ÷
+net qty), `chilled_asp` (same, `item_category_en LIKE 'دجاج مبرد%'` only) and `top_items` (top 3 items by
+net qty in the period, each with its weighted `asp`; Arabic item name from `quality_returns_item_info`
+when present, English otherwise — the query retries without that join if the table is missing). The
+table shows «متوسط السعر العام» / «متوسط سعر المبرد» (sortable) and «الصنف الأول/الثاني/الثالث» (name, qty ·
+price); the Excel «العملاء» sheet has the same fields. Verified locally (12.29 / 13.33 / correct top 3).
+Discount Shops not changed.
+
 ## Customers report (`/sales-activity`, «تقرير العملاء العام») — month filter (2 Nov 2026)
 
 A «الشهر» dropdown (default «آخر شهر (…)» = latest month with data) next to region / rep. The picked

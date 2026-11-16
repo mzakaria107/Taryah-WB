@@ -1466,3 +1466,7 @@
 .ds-region-count-name { font-size: 0.78rem; font-weight: 600; color: #475569; }
 .ds-region-count-num { font-size: 1.3rem; font-weight: 800; font-family: var(--font-en); color: #1e293b; }
 .ds-region-count-pct { font-size: 0.7rem; color: #94a3b8; }
+/* Special customers — top-3 items per customer */
+.ds-top-item { min-width: 130px; max-width: 190px; }
+.ds-top-item-name { font-size: 0.74rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ds-top-item-meta { font-size: 0.7rem; color: var(--color-text-muted, #64748b); font-family: var(--font-en); white-space: nowrap; }

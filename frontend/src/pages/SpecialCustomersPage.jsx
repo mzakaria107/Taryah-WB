@@ -2004,13 +2004,18 @@ export default function SpecialCustomersPage() {
     XLSX.utils.book_append_sheet(wb, ws3, 'المناديب');
 
     /* ── Sheet 4: Customers ── */
-    const custHeader = ['كود العميل', 'اسم العميل', 'المنطقة', 'المندوب', 'الكمية', 'المرتجعات', 'نسبة المرتجعات %', 'عدد الفواتير'];
+    const custHeader = ['كود العميل', 'اسم العميل', 'المنطقة', 'المندوب', 'الكمية', 'المرتجعات', 'نسبة المرتجعات %', 'عدد الفواتير',
+      'متوسط السعر العام', 'متوسط سعر المبرد',
+      ...[1, 2, 3].flatMap(n => [`الصنف ${n}`, `كمية الصنف ${n}`, `متوسط سعر الصنف ${n}`])];
     const custRows = [...(data.customers || [])].sort((a, b) => b.total_qty - a.total_qty).map(c => [
       c.customer_code, c.customer_name, c.branch_name || '', c.salesrep_name || '',
       Number(c.total_qty) || 0, Number(c.total_returns) || 0, Number(c.returns_pct) || 0, Number(c.invoice_count) || 0,
+      c.asp ?? '', c.chilled_asp ?? '',
+      ...[0, 1, 2].flatMap(i => { const it = (c.top_items || [])[i]; return it ? [it.item_name, it.qty, it.asp ?? ''] : ['', '', '']; }),
     ]);
     const ws4 = XLSX.utils.aoa_to_sheet([custHeader, ...custRows]);
-    ws4['!cols'] = [{ wch: 14 }, { wch: 28 }, { wch: 16 }, { wch: 22 }, { wch: 12 }, { wch: 12 }, { wch: 16 }, { wch: 12 }];
+    ws4['!cols'] = [{ wch: 14 }, { wch: 28 }, { wch: 16 }, { wch: 22 }, { wch: 12 }, { wch: 12 }, { wch: 16 }, { wch: 12 },
+      { wch: 14 }, { wch: 14 }, ...[1, 2, 3].flatMap(() => [{ wch: 26 }, { wch: 10 }, { wch: 12 }])];
     XLSX.utils.book_append_sheet(wb, ws4, 'العملاء');
 
     /* ── Sheet: Items ── */
@@ -2791,6 +2796,11 @@ export default function SpecialCustomersPage() {
                       <Th col="total_returns"  sortCol={custSort.col} sortDir={custSort.dir} onSort={handleCustSort}>المرتجعات</Th>
                       <Th col="returns_pct"    sortCol={custSort.col} sortDir={custSort.dir} onSort={handleCustSort}>نسبة المرتجعات</Th>
                       <Th col="invoice_count"  sortCol={custSort.col} sortDir={custSort.dir} onSort={handleCustSort}>الفواتير</Th>
+                      <Th col="asp"            sortCol={custSort.col} sortDir={custSort.dir} onSort={handleCustSort}>متوسط السعر العام</Th>
+                      <Th col="chilled_asp"    sortCol={custSort.col} sortDir={custSort.dir} onSort={handleCustSort}>متوسط سعر المبرد</Th>
+                      <th>الصنف الأول</th>
+                      <th>الصنف الثاني</th>
+                      <th>الصنف الثالث</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -2816,10 +2826,25 @@ export default function SpecialCustomersPage() {
                             : <span className="ds-dash">—</span>}
                         </td>
                         <td className="ds-td-num ds-td-muted">{fmt(c.invoice_count)}</td>
+                        <td className="ds-td-num ds-td-bold">{c.asp != null ? c.asp.toFixed(2) : <span className="ds-dash">—</span>}</td>
+                        <td className="ds-td-num">{c.chilled_asp != null ? c.chilled_asp.toFixed(2) : <span className="ds-dash">—</span>}</td>
+                        {[0, 1, 2].map(idx => {
+                          const it = (c.top_items || [])[idx];
+                          return (
+                            <td key={idx} className="ds-top-item">
+                              {it ? (
+                                <>
+                                  <div className="ds-top-item-name" title={it.item_name_en}>{it.item_name}</div>
+                                  <div className="ds-top-item-meta">{fmt(it.qty)} · <b>{it.asp != null ? it.asp.toFixed(2) : '—'}</b> ر.س</div>
+                                </>
+                              ) : <span className="ds-dash">—</span>}
+                            </td>
+                          );
+                        })}
                       </tr>
                     ))}
                     {sortedCusts.length === 0 && (
-                      <tr><td colSpan={8} className="ds-empty">لا توجد بيانات</td></tr>
+                      <tr><td colSpan={13} className="ds-empty">لا توجد بيانات</td></tr>
                     )}
                   </tbody>
                 </table>

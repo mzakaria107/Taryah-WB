@@ -2347,7 +2347,8 @@ export default function SpecialCustomersPage() {
               ['chicken_promo', 'سيناريو مجانيات 10+1 (دجاج مبرد)'],
               ['incentive_promo', 'سيناريو حافز % من المبيعات'],
               ['incentive_monthly', 'صافي المبيعات الشهري للعملاء'],
-              ['contract', 'طباعة عقد عميل'],
+              // «طباعة عقد عميل» removed from this page at the user's request (17 Nov 2026); the
+              // contract code below is now unreachable and the contracts table/endpoints are untouched.
             ].map(([k, l]) => (
               <button
                 key={k}

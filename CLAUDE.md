@@ -3763,6 +3763,9 @@ Only a customer with no data anywhere stays empty («غير محدد» in the ex
 panel shows an «المنطقة» column too. Verified locally on all four cases. Discount Shops' list unchanged.
 A «عملاء الاسبيشيال حسب المنطقة» card in the list panel counts the CURRENT list per resolved region
 (client-side from `/customer-list`, «غير محدد» last-resort bucket, count + share).
+The «طباعة عقد عميل» tab was removed from the special-customers page (tab button only — the contract
+JSX, `special_customer_contracts` table and `/contracts` endpoints are untouched, so it can be restored
+by re-adding the one tab entry). Discount Shops keeps its contract tab.
 
 ## Customers report (`/sales-activity`, «تقرير العملاء العام») — month filter (2 Nov 2026)
 

@@ -1470,3 +1470,13 @@
 .ds-top-item { min-width: 130px; max-width: 190px; }
 .ds-top-item-name { font-size: 0.74rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ds-top-item-meta { font-size: 0.7rem; color: var(--color-text-muted, #64748b); font-family: var(--font-en); white-space: nowrap; }
+/* Special customers — compact customers table so all columns fit the page width */
+.ds-table--cust-compact { font-size: 0.74rem; }
+.ds-table--cust-compact thead th { padding: 7px 5px; font-size: 0.68rem; white-space: normal; line-height: 1.2; }
+.ds-table--cust-compact td { padding: 5px 5px; }
+.ds-table--cust-compact .ds-td-name { max-width: 170px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ds-table--cust-compact td:nth-child(3), .ds-table--cust-compact td:nth-child(4) { max-width: 90px; font-size: 0.68rem !important; }
+.ds-table--cust-compact .ds-top-item { min-width: 0; max-width: 125px; }
+.ds-table--cust-compact .ds-top-item-name { font-size: 0.7rem; }
+.ds-table--cust-compact .ds-top-item-meta { font-size: 0.66rem; }
+.ds-table--cust-compact .ds-ret-badge, .ds-table--cust-compact .ds-ret-pct { padding: 1px 6px; font-size: 0.68rem; }

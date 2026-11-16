@@ -3776,6 +3776,8 @@ price); the Excel «العملاء» sheet has the same fields. Verified locally
 Item labels in those columns (screen + Excel) go through `shortItemName()`: product words + «وزن» + the
 weight number, dropping what follows it («دجاجة كاملة 1200 مبردة-طرية» → «دجاجة كاملة وزن 1200», «كبدة دجاج
 450 جم-طرية» → «كبدة دجاج وزن 450»); names without a number unchanged; the full name stays in the tooltip.
+The customers table uses `.ds-table--cust-compact` (smaller font / padding, wrapping headers, name
+170px and rep/region 90px with ellipsis, top-item cells ≤125px) so all 13 columns fit the page width.
 Discount Shops not changed.
 
 ## Customers report (`/sales-activity`, «تقرير العملاء العام») — month filter (2 Nov 2026)

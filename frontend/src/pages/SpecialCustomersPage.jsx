@@ -2793,7 +2793,7 @@ export default function SpecialCustomersPage() {
                 <span>إجمالي المرتجعات: <strong>{fmt(cur?.total_returns)}</strong></span>
               </div>
               <div className="ds-table-wrap">
-                <table className="ds-table">
+                <table className="ds-table ds-table--cust-compact">
                   <thead>
                     <tr>
                       <th style={{width:32}}>#</th>

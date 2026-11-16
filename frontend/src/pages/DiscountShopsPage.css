@@ -1480,3 +1480,9 @@
 .ds-table--cust-compact .ds-top-item-name { font-size: 0.7rem; }
 .ds-table--cust-compact .ds-top-item-meta { font-size: 0.66rem; }
 .ds-table--cust-compact .ds-ret-badge, .ds-table--cust-compact .ds-ret-pct { padding: 1px 6px; font-size: 0.68rem; }
+/* Special customers — qty filter + "no sales" tag */
+.ds-cust-qty-filter { display: inline-flex; gap: 6px; margin-inline-start: auto; flex-wrap: wrap; }
+.ds-cust-qty-btn { border: 1px solid var(--color-border, #e2e8f0); background: #fff; border-radius: 14px; padding: 3px 10px; font-size: 0.74rem; cursor: pointer; color: #475569; }
+.ds-cust-qty-btn.is-on { background: #1e293b; color: #fff; border-color: #1e293b; }
+.ds-cust-qty-btn.is-zero.is-on { background: #b91c1c; border-color: #b91c1c; }
+.ds-no-sales-tag { font-size: 0.66rem; color: #b91c1c; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

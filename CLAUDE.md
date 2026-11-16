@@ -3778,6 +3778,12 @@ weight number, dropping what follows it («دجاجة كاملة 1200 مبردة
 450 جم-طرية» → «كبدة دجاج وزن 450»); names without a number unchanged; the full name stays in the tooltip.
 The customers table uses `.ds-table--cust-compact` (smaller font / padding, wrapping headers, name
 170px and rep/region 90px with ellipsis, top-item cells ≤125px) so all 13 columns fit the page width.
+**Zero / negative customers (17 Nov 2026)**: `topCustomers()` used to return only customers with a sales
+line in the period, so list customers who bought nothing were invisible. It now appends every list
+customer with no line in the period as a zero row (`no_sales: true`, `last_sale_date`, region = master →
+latest sale's branch → invoices, rep = latest sale's rep; the page's branch / rep filters apply to them).
+The tab has «الكل / بمبيعات / مبيعات صفر أو سالبة» pills (counts on each), and no-sales rows carry a red
+«بدون مبيعات في الفترة · آخر بيع …» tag. KPI cards are unaffected (they come from `monthAgg`).
 Discount Shops not changed.
 
 ## Customers report (`/sales-activity`, «تقرير العملاء العام») — month filter (2 Nov 2026)

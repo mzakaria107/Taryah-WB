@@ -522,6 +522,38 @@ router.get('/summary', verifyToken, applyRegionFilter, async (req, res) => {
         });
       });
       r.rows.forEach(c => { c.top_items = topByCust[c.customer_code] || []; });
+
+      /* List customers with NO sales line in the period (zero sales) — appended with zeros so the
+         tab shows every customer of the list. Region = master → latest sale's branch → invoices
+         (same as /customer-list); rep = rep of the latest sale. Branch / rep filters apply to those. */
+      const seen = new Set(r.rows.map(x => x.customer_code));
+      const z = await pool.query(`
+        SELECT d.customer_code, d.customer_name,
+               COALESCE(rg.name_ar, ls.branch_name, ir.name_ar) AS branch_name,
+               ls.salesrep_name, ls.last_date
+        FROM special_customers d
+        LEFT JOIN customers c ON c.customer_code = d.customer_code
+        LEFT JOIN regions rg ON rg.id = c.region_id
+        LEFT JOIN LATERAL (
+          SELECT NULLIF(TRIM(sa.branch_name),'') AS branch_name, NULLIF(TRIM(sa.salesrep_name),'') AS salesrep_name,
+                 make_date(sa.report_year::int, sa.month_num::int, COALESCE(sa.day,1)::int)::text AS last_date
+          FROM sales_activity sa WHERE sa.customer_code = d.customer_code
+          ORDER BY sa.report_year DESC, sa.month_num DESC, sa.day DESC NULLS LAST LIMIT 1
+        ) ls ON true
+        LEFT JOIN LATERAL (
+          SELECT g.name_ar FROM invoices i JOIN regions g ON g.id = i.region_id
+          WHERE i.customer_id = d.customer_code GROUP BY g.name_ar ORDER BY COUNT(*) DESC LIMIT 1
+        ) ir ON true`);
+      const branchSet = branch ? new Set([].concat(branch)) : null;
+      z.rows.filter(x => !seen.has(x.customer_code))
+        .filter(x => !branchSet || branchSet.has(x.branch_name))
+        .filter(x => !rep || x.salesrep_name === rep)
+        .forEach(x => r.rows.push({
+          customer_code: x.customer_code, customer_name: x.customer_name,
+          branch_name: x.branch_name, salesrep_name: x.salesrep_name,
+          total_qty: 0, total_returns: 0, invoice_count: 0, revenue: 0, chilled_qty: 0, chilled_revenue: 0,
+          top_items: [], no_sales: true, last_sale_date: x.last_date || null,
+        }));
       return r.rows;
     }
 
@@ -661,6 +693,8 @@ router.get('/summary', verifyToken, applyRegionFilter, async (req, res) => {
         asp:         Number(c.total_qty) > 0 ? +(Number(c.revenue) / Number(c.total_qty)).toFixed(2) : null,
         chilled_asp: Number(c.chilled_qty) > 0 ? +(Number(c.chilled_revenue) / Number(c.chilled_qty)).toFixed(2) : null,
         top_items:   c.top_items || [],
+        no_sales:    !!c.no_sales,               // in the list but no sales line at all in the period
+        last_sale_date: c.last_sale_date || null,
       })),
     });
 

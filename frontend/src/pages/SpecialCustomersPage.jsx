@@ -1828,11 +1828,16 @@ export default function SpecialCustomersPage() {
     return [...data.by_rep].sort((a, b) => (Number(b[repSort.col]) - Number(a[repSort.col])) * dir);
   }, [data, repSort]);
 
+  // 'all' | 'zero' (net qty ≤ 0 in the period, incl. list customers with no sales at all) | 'positive'
+  const [custQtyFilter, setCustQtyFilter] = useState('all');
   const sortedCusts = useMemo(() => {
     if (!data?.customers) return [];
     const dir = custSort.dir === 'desc' ? -1 : 1;
-    return [...data.customers].sort((a, b) => (Number(b[custSort.col]) - Number(a[custSort.col])) * dir);
-  }, [data, custSort]);
+    let rows = data.customers;
+    if (custQtyFilter === 'zero') rows = rows.filter(c => Number(c.total_qty) <= 0);
+    else if (custQtyFilter === 'positive') rows = rows.filter(c => Number(c.total_qty) > 0);
+    return [...rows].sort((a, b) => (Number(b[custSort.col]) - Number(a[custSort.col])) * dir);
+  }, [data, custSort, custQtyFilter]);
 
   const sortedItems = useMemo(() => {
     if (!data?.by_item) return [];
@@ -2791,6 +2796,17 @@ export default function SpecialCustomersPage() {
                 <span>إجمالي العملاء: <strong>{fmt(d.customers.length)}</strong></span>
                 <span>إجمالي الكمية: <strong>{fmt(cur?.total_qty)}</strong></span>
                 <span>إجمالي المرتجعات: <strong>{fmt(cur?.total_returns)}</strong></span>
+                <span className="ds-cust-qty-filter">
+                  {[
+                    ['all', 'الكل', d.customers.length],
+                    ['positive', 'بمبيعات', d.customers.filter(c => Number(c.total_qty) > 0).length],
+                    ['zero', 'مبيعات صفر أو سالبة', d.customers.filter(c => Number(c.total_qty) <= 0).length],
+                  ].map(([k, l, n]) => (
+                    <button key={k} type="button"
+                      className={`ds-cust-qty-btn${custQtyFilter === k ? ' is-on' : ''}${k === 'zero' ? ' is-zero' : ''}`}
+                      onClick={() => setCustQtyFilter(k)}>{l} ({fmt(n)})</button>
+                  ))}
+                </span>
               </div>
               <div className="ds-table-wrap">
                 <table className="ds-table ds-table--cust-compact">
@@ -2819,6 +2835,11 @@ export default function SpecialCustomersPage() {
                         <td className="ds-td-name">
                           {c.customer_name}
                           <span className="ds-td-code"> ({c.customer_code})</span>
+                          {c.no_sales && (
+                            <div className="ds-no-sales-tag" title={c.last_sale_date ? `آخر بيع: ${c.last_sale_date}` : 'لا توجد مبيعات مسجلة'}>
+                              بدون مبيعات في الفترة{c.last_sale_date ? ` · آخر بيع ${c.last_sale_date}` : ''}
+                            </div>
+                          )}
                         </td>
                         <td className="ds-td-muted" style={{fontSize:'0.74rem'}}>{c.branch_name || '—'}</td>
                         <td className="ds-td-muted" style={{fontSize:'0.74rem'}}>{c.salesrep_name || '—'}</td>

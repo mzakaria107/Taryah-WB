@@ -337,6 +337,9 @@ weighted period ASP, `series` (days with qty ≥ min_qty and a positive price), 
 Same branch / customer-category / day scope as the tab but **ignoring the item-category chips**, so
 the two cards keep their meaning whatever items are picked. Verified locally: chilled 13→14 halfway
 gives last7 14.00 vs prev7 13.14 (+6.5%) while the table, filtered to frozen, stays 10.00.
+The sparkline became a labelled daily chart: one point per qualifying day with its ASP printed above
+and the day/month under it (46px per day, scrolls sideways inside the card for long periods), the
+period's highest point green and lowest red, and a dashed line at the period average.
 
 ### Period comparison tab (`GET /period-compare`)
 `/region-performance` → «مقارنة فترتين». A region × metric matrix comparing **two arbitrary

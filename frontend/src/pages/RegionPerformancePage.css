@@ -1978,6 +1978,7 @@
 
 /* ── Daily-ASP tab: chilled / overall ASP trend cards ── */
 .rp-aspk-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; margin: 4px 0 12px; }
+.rp-aspk { min-width: 0; }
 .rp-aspk { background: var(--color-surface, #fff); border: 1px solid var(--color-border, #e2e8f0); border-top: 3px solid #1d4ed8; border-radius: 12px; padding: 10px 14px; }
 .rp-aspk-title { font-size: 0.8rem; font-weight: 700; color: var(--color-text-muted, #64748b); }
 .rp-aspk-main { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px; margin: 2px 0; }
@@ -1987,6 +1988,9 @@
 .rp-aspk-trend--up   { background: #dcfce7; color: #15803d; }
 .rp-aspk-trend--down { background: #fee2e2; color: #b91c1c; }
 .rp-aspk-trend--flat, .rp-aspk-trend--none { background: #f1f5f9; color: #475569; }
-.rp-aspk-spark { width: 100%; height: 46px; display: block; margin: 4px 0; }
+.rp-aspk-chart { overflow-x: auto; margin: 6px 0 4px; direction: ltr; }
+.rp-aspk-chart svg { display: block; }
+.rp-aspk-pt  { font-size: 10px; font-weight: 700; font-family: var(--font-en); }
+.rp-aspk-day { font-size: 9px; fill: #94a3b8; font-family: var(--font-en); }
 .rp-aspk-sub { font-size: 0.72rem; color: #64748b; line-height: 1.5; }
 .rp-aspk-empty { color: #94a3b8; font-size: 0.85rem; padding: 10px 0; }

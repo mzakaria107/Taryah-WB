@@ -730,14 +730,23 @@ function AspTrendCard({ title, hint, k, minQty, accent }) {
   const ch = k.change_pct;
   const dir = ch == null ? 'none' : ch > 0.5 ? 'up' : ch < -0.5 ? 'down' : 'flat';
   const arrow = { up: '▲', down: '▼', flat: '►', none: '—' }[dir];
+  // Daily chart: one point per day with its ASP printed above and the day under it.
+  // ~46px per day; scrolls sideways inside the card when the period is long.
   const pts = k.series || [];
-  const W = 220, H = 46;
-  let path = '';
-  if (pts.length > 1) {
+  const STEP = 46, PADX = 22, TOP = 18, PLOT = 54, H = TOP + PLOT + 18;
+  const W = Math.max(220, PADX * 2 + Math.max(0, pts.length - 1) * STEP);
+  let coords = [];
+  if (pts.length) {
     const vals = pts.map(p => p.asp);
     const lo = Math.min(...vals), hi = Math.max(...vals), span = hi - lo || 1;
-    path = pts.map((p, i) => `${i ? 'L' : 'M'}${(i / (pts.length - 1)) * W},${H - 4 - ((p.asp - lo) / span) * (H - 8)}`).join(' ');
+    coords = pts.map((p, i) => ({
+      ...p,
+      x: pts.length === 1 ? W / 2 : PADX + i * STEP,
+      y: TOP + PLOT - ((p.asp - lo) / span) * PLOT,
+      isMax: p.asp === hi && hi !== lo, isMin: p.asp === lo && hi !== lo,
+    }));
   }
+  const path = coords.map((c, i) => `${i ? 'L' : 'M'}${c.x},${c.y}`).join(' ');
   return (
     <div className="rp-aspk" style={{ borderTopColor: accent }} title={hint}>
       <div className="rp-aspk-title">{title}</div>
@@ -748,10 +757,27 @@ function AspTrendCard({ title, hint, k, minQty, accent }) {
           {arrow} <bdi dir="ltr">{ch == null ? '' : `${ch > 0 ? '+' : ''}${ch.toFixed(1)}%`}</bdi>
         </span>
       </div>
-      {path && (
-        <svg className="rp-aspk-spark" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none">
-          <path d={path} fill="none" stroke={accent} strokeWidth="2" vectorEffect="non-scaling-stroke" />
-        </svg>
+      {coords.length > 0 && (
+        <div className="rp-aspk-chart">
+          <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`}>
+            {k.asp != null && (() => {
+              const vals = coords.map(c => c.asp), lo = Math.min(...vals), hi = Math.max(...vals), span = hi - lo || 1;
+              const y = TOP + PLOT - ((k.asp - lo) / span) * PLOT;
+              return y >= TOP - 2 && y <= TOP + PLOT + 2
+                ? <line x1={0} x2={W} y1={y} y2={y} stroke="#94a3b8" strokeDasharray="4 4" strokeWidth="1" />
+                : null;
+            })()}
+            <path d={path} fill="none" stroke={accent} strokeWidth="2" />
+            {coords.map(c => (
+              <g key={c.date}>
+                <circle cx={c.x} cy={c.y} r="3.2" fill={c.isMax ? '#15803d' : c.isMin ? '#b91c1c' : accent} />
+                <text x={c.x} y={c.y - 7} textAnchor="middle" className="rp-aspk-pt"
+                      fill={c.isMax ? '#15803d' : c.isMin ? '#b91c1c' : '#334155'}>{c.asp.toFixed(2)}</text>
+                <text x={c.x} y={H - 3} textAnchor="middle" className="rp-aspk-day">{Number(c.date.slice(8, 10))}/{Number(c.date.slice(5, 7))}</text>
+              </g>
+            ))}
+          </svg>
+        </div>
       )}
       <div className="rp-aspk-sub">
         {k.last7_asp != null && k.prev7_asp != null

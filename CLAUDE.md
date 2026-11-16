@@ -330,6 +330,14 @@ regions × that week's days + the week's own weighted average; a summary table b
   - **the whole ranking is suppressed when only one region is in scope** (`meta.rank_lowest`) —
     filtered to Riyadh it was "lowest" on 208 of 214 days, true but useless.
 
+**Trend KPI cards (16 Nov 2026)** — top of «تتبع ASP اليومي»: «متوسط سعر المبرد فقط» (item categories
+`LIKE 'دجاج مبرد%'`) and «المتوسط العام» (all items). `/asp-daily` returns `kpis.{chilled,overall}`:
+weighted period ASP, `series` (days with qty ≥ min_qty and a positive price), `last7_asp` / `prev7_asp`
+(weighted, over the last 14 qualifying days) and `change_pct` → ▲/▼/► arrow (±0.5% = flat) + sparkline.
+Same branch / customer-category / day scope as the tab but **ignoring the item-category chips**, so
+the two cards keep their meaning whatever items are picked. Verified locally: chilled 13→14 halfway
+gives last7 14.00 vs prev7 13.14 (+6.5%) while the table, filtered to frozen, stays 10.00.
+
 ### Period comparison tab (`GET /period-compare`)
 `/region-performance` → «مقارنة فترتين». A region × metric matrix comparing **two arbitrary
 date ranges**, each metric shown as ف1 · ف2 · الفرق · النمو% (7 metrics → 29 columns):

@@ -1753,10 +1753,23 @@ router.get('/asp-daily', verifyToken, applyRegionFilter, async (req, res) => {
       params.push(custCat);
       extra += ` AND LOWER(TRIM(COALESCE(sa.category_name,''))) = ANY($${p++}::text[])`;
     }
+    // Same scope WITHOUT the item-category filter — feeds the two KPI indicators (chilled-only /
+    // overall), which must not change meaning with the item-category chips.
+    const kpiParams = [...params];
+    const kpiExtra = extra;
     if (itemCats && itemCats.length) {
       params.push(itemCats);
       extra += ` AND TRIM(COALESCE(sa.item_category_en,'')) = ANY($${p++}::text[])`;
     }
+
+    const kpiQ = pool.query(`
+      SELECT to_char(make_date(sa.report_year::int, sa.month_num::int, sa.day::int), 'YYYY-MM-DD') AS d,
+             (TRIM(COALESCE(sa.item_category_en,'')) LIKE 'دجاج مبرد%') AS chilled,
+             COALESCE(SUM(sa.qty),0)::bigint AS qty, COALESCE(SUM(sa.net_revenue),0)::numeric AS revenue
+      FROM sales_activity sa
+      WHERE sa.report_year = $1 AND sa.month_num = ANY($2::int[]) AND sa.day IS NOT NULL${kpiExtra}
+      GROUP BY 1, 2 ORDER BY 1
+    `, kpiParams);
 
     const { rows } = await pool.query(`
       SELECT to_char(make_date(sa.report_year::int, sa.month_num::int, sa.day::int), 'YYYY-MM-DD') AS d,
@@ -1871,6 +1884,31 @@ router.get('/asp-daily', verifyToken, applyRegionFilter, async (req, res) => {
     const grandQty = cells.reduce((s, c) => s + c.qty, 0);
     const grandRev = cells.reduce((s, c) => s + c.revenue, 0);
 
+    /* ── KPI indicators: chilled-only («دجاج مبرد…» categories) and overall ASP ──
+       Each: weighted period ASP, daily series (days ≥ min_qty with a positive price), and a trend
+       arrow = weighted ASP of the last 7 days that have data vs the 7 before them. */
+    const kpiRows = (await kpiQ).rows.map(r => ({ d: r.d, chilled: r.chilled, qty: Number(r.qty), revenue: Number(r.revenue) }));
+    const buildKpi = filterFn => {
+      const byD = new Map();
+      kpiRows.filter(filterFn).forEach(r => {
+        const x = byD.get(r.d) || { qty: 0, revenue: 0 };
+        x.qty += r.qty; x.revenue += r.revenue; byD.set(r.d, x);
+      });
+      const series = [...byD.entries()].sort((a, b) => a[0].localeCompare(b[0]))
+        .map(([date, x]) => ({ date, qty: x.qty, revenue: x.revenue, asp: aspOf(x.revenue, x.qty) }));
+      const solid = series.filter(x => x.qty >= minQty && x.asp != null && x.asp > 0);
+      const w = list => aspOf(list.reduce((s, x) => s + x.revenue, 0), list.reduce((s, x) => s + x.qty, 0));
+      const last = solid.slice(-7), prev = solid.slice(-14, -7);
+      const lastAsp = last.length ? w(last) : null, prevAsp = prev.length ? w(prev) : null;
+      return {
+        asp: w(series), qty: series.reduce((s, x) => s + x.qty, 0), days: series.length,
+        last7_asp: lastAsp, prev7_asp: prevAsp,
+        change_pct: lastAsp != null && prevAsp ? ((lastAsp - prevAsp) / prevAsp) * 100 : null,
+        series: solid.map(x => ({ date: x.date, asp: x.asp })),
+      };
+    };
+    const kpis = { chilled: buildKpi(r => r.chilled), overall: buildKpi(() => true) };
+
     res.json({
       meta: { year, from_month: fromMonth, to_month: toMonth, min_qty: minQty,
               week_start_dow: WEEK_START_DOW, rank_lowest: rankLowest },
@@ -1882,6 +1920,7 @@ router.get('/asp-daily', verifyToken, applyRegionFilter, async (req, res) => {
       day_totals,
       region_totals,
       totals: { qty: grandQty, revenue: grandRev, asp: aspOf(grandRev, grandQty), days: dayKeys.length },
+      kpis,
     });
   } catch (err) {
     console.error('[RegionPerformance] asp-daily:', err);

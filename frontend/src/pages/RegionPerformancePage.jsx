@@ -721,6 +721,49 @@ function CustCatPicker({ all, value, onChange }) {
   );
 }
 
+/* KPI card for the daily-ASP tab: weighted period ASP + trend arrow (last 7 days with data vs the
+   7 before) + a sparkline of the daily ASP. A move under ±0.5% reads as flat. */
+function AspTrendCard({ title, hint, k, minQty, accent }) {
+  if (!k || k.asp == null) {
+    return <div className="rp-aspk"><div className="rp-aspk-title">{title}</div><div className="rp-aspk-empty">لا توجد مبيعات</div></div>;
+  }
+  const ch = k.change_pct;
+  const dir = ch == null ? 'none' : ch > 0.5 ? 'up' : ch < -0.5 ? 'down' : 'flat';
+  const arrow = { up: '▲', down: '▼', flat: '►', none: '—' }[dir];
+  const pts = k.series || [];
+  const W = 220, H = 46;
+  let path = '';
+  if (pts.length > 1) {
+    const vals = pts.map(p => p.asp);
+    const lo = Math.min(...vals), hi = Math.max(...vals), span = hi - lo || 1;
+    path = pts.map((p, i) => `${i ? 'L' : 'M'}${(i / (pts.length - 1)) * W},${H - 4 - ((p.asp - lo) / span) * (H - 8)}`).join(' ');
+  }
+  return (
+    <div className="rp-aspk" style={{ borderTopColor: accent }} title={hint}>
+      <div className="rp-aspk-title">{title}</div>
+      <div className="rp-aspk-main">
+        <span className="rp-aspk-val" style={{ color: accent }}>{k.asp.toFixed(2)}</span>
+        <span className="rp-aspk-unit">ر.س / وحدة</span>
+        <span className={`rp-aspk-trend rp-aspk-trend--${dir}`}>
+          {arrow} <bdi dir="ltr">{ch == null ? '' : `${ch > 0 ? '+' : ''}${ch.toFixed(1)}%`}</bdi>
+        </span>
+      </div>
+      {path && (
+        <svg className="rp-aspk-spark" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none">
+          <path d={path} fill="none" stroke={accent} strokeWidth="2" vectorEffect="non-scaling-stroke" />
+        </svg>
+      )}
+      <div className="rp-aspk-sub">
+        {k.last7_asp != null && k.prev7_asp != null
+          ? <>آخر 7 أيام {k.last7_asp.toFixed(2)} مقابل {k.prev7_asp.toFixed(2)} للـ7 أيام السابقة</>
+          : <>لا توجد أيام كافية للمقارنة</>}
+        {' · '}{Number(k.qty).toLocaleString('en-US')} وحدة · {k.days} يوم
+        {minQty ? <> · الخط للأيام ≥ {minQty} وحدة</> : null}
+      </div>
+    </div>
+  );
+}
+
 function AspDailyTab({ branchParams, custCatParams, itemCatParams, year, fromMonth, toMonth, fromDay, toDay }) {
   const [minQty, setMinQty]   = useState(100);
   const [openWeeks, setOpenWeeks] = useState(null);   // null = all open
@@ -792,6 +835,12 @@ function AspDailyTab({ branchParams, custCatParams, itemCatParams, year, fromMon
       )}
 
       {data && !isLoading && data.days.length > 0 && (<>
+        {data.kpis && (
+          <div className="rp-aspk-row">
+            <AspTrendCard title="متوسط سعر المبرد فقط" hint="فئات «دجاج مبرد…» فقط — لا يتأثر باختيار فئات الأصناف" k={data.kpis.chilled} minQty={data.meta?.min_qty} accent="#0e7490" />
+            <AspTrendCard title="المتوسط العام" hint="كل الأصناف — لا يتأثر باختيار فئات الأصناف" k={data.kpis.overall} minQty={data.meta?.min_qty} accent="#1d4ed8" />
+          </div>
+        )}
         <div className="rp-legend">
           <span className="rp-aspd-cell rp-aspd-low">00.00</span> الأدنى في اليوم ·
           <span className="rp-aspd-cell rp-aspd-thin">00.00؟</span> كمية أقل من الحد ·

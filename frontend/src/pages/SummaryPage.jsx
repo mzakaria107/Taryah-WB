@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { ExternalLink } from 'lucide-react';
@@ -112,6 +112,39 @@ function Th({ col, sortCol, sortDir, onSort, children, align = 'right' }) {
 /* ═══════════════════════════════════════════════════════════
    Main Page
 ═══════════════════════════════════════════════════════════ */
+/* Multi-select dropdown (checkboxes). Empty selection = all. «فقط» picks a single option. */
+function SmMultiSelect({ options, selected, onChange, allLabel, unit }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  useEffect(() => {
+    const onDoc = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, []);
+  const toggle = v => onChange(selected.includes(v) ? selected.filter(x => x !== v) : [...selected, v]);
+  const label = !selected.length ? allLabel : selected.length === 1 ? selected[0] : `${selected.length} ${unit}`;
+  return (
+    <div className="sm-ms" ref={ref}>
+      <button type="button" className="sm-ms__btn" onClick={() => setOpen(o => !o)} title={selected.join('، ')}>
+        <span className="sm-ms__lbl">{label}</span><span className="sm-ms__caret">▾</span>
+      </button>
+      {open && (
+        <div className="sm-ms__panel">
+          <div className="sm-ms__actions">
+            <button type="button" onClick={() => onChange([])}>{allLabel}</button>
+          </div>
+          {options.map(o => (
+            <div key={o} className="sm-ms__opt">
+              <label><input type="checkbox" checked={selected.includes(o)} onChange={() => toggle(o)} /><span>{o}</span></label>
+              <button type="button" className="sm-ms__only" onClick={() => onChange([o])}>فقط</button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function SummaryPage() {
   const navigate = useNavigate();
   /* ── Filter state ─────────────────────────────────────── */
@@ -120,7 +153,7 @@ export default function SummaryPage() {
   const [branchName,   setBranchName]   = useState('');
   const [repName,      setRepName]      = useState('');
   const [customerType, setCustomerType] = useState('');
-  const [categoryName, setCategoryName] = useState('');
+  const [categoryName, setCategoryName] = useState([]); // item categories to keep; [] = all
   const [filterFrom,   setFilterFrom]   = useState('');
   const [filterTo,     setFilterTo]     = useState('');
   const [activeTab,  setActiveTab]  = useState('overview'); // overview | regions | reps | debt
@@ -156,13 +189,13 @@ export default function SummaryPage() {
   if (branchName)   params.set('branch_name',    branchName);
   if (repName)      params.set('salesrep_name',  repName);
   if (customerType) params.set('cust_category',  customerType);
-  if (categoryName) params.set('item_category_en', categoryName);
+  categoryName.forEach(c => params.append('item_category_en', c));
   if (filterFrom)   params.set('date_from',       filterFrom);
   if (filterTo)     params.set('date_to',         filterTo);
   if (excludeCarrefour) params.set('exclude_carrefour', '1');
 
   const { data, isLoading, isError } = useQuery({
-    queryKey: ['summary', year, month, branchName, repName, customerType, categoryName, filterFrom, filterTo, excludeCarrefour],
+    queryKey: ['summary', year, month, branchName, repName, customerType, categoryName.join('|'), filterFrom, filterTo, excludeCarrefour],
     queryFn: () => client.get(`/summary?${params}`).then(r => r.data),
     staleTime: 2 * 60 * 1000,
   });
@@ -314,7 +347,7 @@ export default function SummaryPage() {
     setBranchName('');
     setRepName('');
     setCustomerType('');
-    setCategoryName('');
+    setCategoryName([]);
     setFilterFrom('');
     setFilterTo('');
   }
@@ -399,12 +432,8 @@ export default function SummaryPage() {
         </div>
         <div className="sm-filter-group">
           <label>فئة الأصناف</label>
-          <select value={categoryName} onChange={e => setCategoryName(e.target.value)}>
-            <option value="">جميع الفئات</option>
-            {(filters?.categories || []).map(c => (
-              <option key={c} value={c}>{c}</option>
-            ))}
-          </select>
+          <SmMultiSelect options={filters?.categories || []} selected={categoryName}
+                         onChange={setCategoryName} allLabel="جميع الفئات" unit="فئات" />
         </div>
 
         {/* ── Date range inputs ─────────────────────────── */}
@@ -429,7 +458,7 @@ export default function SummaryPage() {
           />
         </div>
 
-        {(branchName || repName || customerType || categoryName || filterFrom || filterTo) && (
+        {(branchName || repName || customerType || categoryName.length || filterFrom || filterTo) && (
           <button className="sm-btn sm-btn--ghost sm-no-print" onClick={resetFilters}>✕ إعادة تعيين</button>
         )}
       </div>

@@ -3622,6 +3622,13 @@ two halves always add up to the full list. Footer totals and the Excel export fo
 header again reverses (▲/▼ marker, ⇅ on inactive headers). Month headers are sortable too
 (`m:<key>` → that month's qty, no sales = 0).
 
+## Summary page — «فئة الأصناف» multi-select (17 Nov 2026)
+
+`/summary` takes repeated `item_category_en` (lower-cased, de-duplicated; empty = all) and every one
+of its 7 category fragments now matches `= ANY($n::text[])` instead of `= LOWER($n)` (a single value
+still works). UI: `SmMultiSelect` in SummaryPage.jsx (checkboxes, «جميع الفئات» resets, «فقط» per row).
+Verified locally: one category 160, two 210 (= +50 of the second), all 217.
+
 ## Debt aging page — compact customers table (17 Nov 2026)
 
 `.age-table--cust` overrides (end of AgingPage.css): smaller font / padding, wrapping headers, code

@@ -70,7 +70,10 @@ router.get('/', verifyToken, applyRegionFilter, async (req, res) => {
   const dateFrom     = (req.query.date_from      || '').trim() || null;
   const dateTo       = (req.query.date_to        || '').trim() || null;
   const custCat      = (req.query.cust_category   || '').trim() || null;
-  const itemCategory = (req.query.item_category_en || '').trim() || null;
+  // «فئة الأصناف» — repeated item_category_en (multi-select), matched case-insensitively; empty = all
+  const itemCategoryList = [...new Set([].concat(req.query.item_category_en || [])
+    .map(v => String(v).trim().toLowerCase()).filter(Boolean))];
+  const itemCategory = itemCategoryList.length ? itemCategoryList : null;
   const excludeCarrefour = req.query.exclude_carrefour === '1' || req.query.exclude_carrefour === 'true';
 
   const prevMonth = month === 1 ? 12 : month - 1;
@@ -114,8 +117,8 @@ router.get('/', verifyToken, applyRegionFilter, async (req, res) => {
       if (itemCategory) {
         params.push(itemCategory);
         const catIdx = params.length;
-        catSql  = ` AND LOWER(TRIM(COALESCE(sa.item_category_en,'')))  = LOWER($${catIdx})`;
-        catSql2 = ` AND LOWER(TRIM(COALESCE(sa2.item_category_en,''))) = LOWER($${catIdx})`;
+        catSql  = ` AND LOWER(TRIM(COALESCE(sa.item_category_en,'')))  = ANY($${catIdx}::text[])`;
+        catSql2 = ` AND LOWER(TRIM(COALESCE(sa2.item_category_en,''))) = ANY($${catIdx}::text[])`;
       }
 
       const r = await pool.query(`
@@ -198,7 +201,7 @@ router.get('/', verifyToken, applyRegionFilter, async (req, res) => {
       let catSql = '';
       if (itemCategory) {
         params.push(itemCategory);
-        catSql = ` AND LOWER(TRIM(COALESCE(item_category_en,''))) = LOWER($${params.length})`;
+        catSql = ` AND LOWER(TRIM(COALESCE(item_category_en,''))) = ANY($${params.length}::text[])`;
       }
 
       const r = await pool.query(`
@@ -227,7 +230,7 @@ router.get('/', verifyToken, applyRegionFilter, async (req, res) => {
       let catSql = '';
       if (itemCategory) {
         params.push(itemCategory);
-        catSql = ` AND LOWER(TRIM(COALESCE(item_category_en,''))) = LOWER($${params.length})`;
+        catSql = ` AND LOWER(TRIM(COALESCE(item_category_en,''))) = ANY($${params.length}::text[])`;
       }
 
       const r = await pool.query(`
@@ -259,7 +262,7 @@ router.get('/', verifyToken, applyRegionFilter, async (req, res) => {
       let catSql = '';
       if (itemCategory) {
         params.push(itemCategory);
-        catSql = ` AND LOWER(TRIM(COALESCE(sa.item_category_en,''))) = LOWER($${params.length})`;
+        catSql = ` AND LOWER(TRIM(COALESCE(sa.item_category_en,''))) = ANY($${params.length}::text[])`;
       }
 
       const r = await pool.query(`
@@ -301,7 +304,7 @@ router.get('/', verifyToken, applyRegionFilter, async (req, res) => {
       let catSql = '';
       if (itemCategory) {
         params.push(itemCategory);
-        catSql = ` AND LOWER(TRIM(COALESCE(sa.item_category_en,''))) = LOWER($${params.length})`;
+        catSql = ` AND LOWER(TRIM(COALESCE(sa.item_category_en,''))) = ANY($${params.length}::text[])`;
       }
 
       const r = await pool.query(`
@@ -339,7 +342,7 @@ router.get('/', verifyToken, applyRegionFilter, async (req, res) => {
       let catSql = '';
       if (itemCategory) {
         params.push(itemCategory);
-        catSql = ` AND LOWER(TRIM(COALESCE(sa.item_category_en,''))) = LOWER($${params.length})`;
+        catSql = ` AND LOWER(TRIM(COALESCE(sa.item_category_en,''))) = ANY($${params.length}::text[])`;
       }
 
       const r = await pool.query(`

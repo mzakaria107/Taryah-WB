@@ -1989,7 +1989,11 @@
 .rp-aspk-trend--down { background: #fee2e2; color: #b91c1c; }
 .rp-aspk-trend--flat, .rp-aspk-trend--none { background: #f1f5f9; color: #475569; }
 .rp-aspk-chart { overflow-x: auto; margin: 6px 0 4px; direction: ltr; }
-.rp-aspk-chart svg { display: block; }
+.rp-aspk-chart svg { display: block; flex: none; }
+/* Print can't scroll: right-align the chart so a long period clips the OLDEST days (left), keeping the newest visible */
+@media print {
+  .rp-aspk-chart { overflow: hidden; display: flex; justify-content: flex-end; }
+}
 .rp-aspk-pt  { font-size: 10px; font-weight: 700; font-family: var(--font-en); }
 .rp-aspk-day { font-size: 9px; fill: #94a3b8; font-family: var(--font-en); }
 .rp-aspk-sub { font-size: 0.72rem; color: #64748b; line-height: 1.5; }

@@ -340,6 +340,9 @@ gives last7 14.00 vs prev7 13.14 (+6.5%) while the table, filtered to frozen, st
 The sparkline became a labelled daily chart: one point per qualifying day with its ASP printed above
 and the day/month under it (46px per day, scrolls sideways inside the card for long periods), the
 period's highest point green and lowest red, and a dashed line at the period average.
+The chart opens scrolled to the newest day (callback ref sets `scrollLeft = scrollWidth`), and in print
+`.rp-aspk-chart` becomes `display:flex; justify-content:flex-end; overflow:hidden`, so a period too long
+for the card clips the OLDEST days and the newest stay on paper (checked headless).
 
 ### Period comparison tab (`GET /period-compare`)
 `/region-performance` → «مقارنة فترتين». A region × metric matrix comparing **two arbitrary

@@ -758,7 +758,8 @@ function AspTrendCard({ title, hint, k, minQty, accent }) {
         </span>
       </div>
       {coords.length > 0 && (
-        <div className="rp-aspk-chart">
+        // Open scrolled to the newest day (right end); print keeps the right end too (CSS)
+        <div className="rp-aspk-chart" ref={el => { if (el) el.scrollLeft = el.scrollWidth; }}>
           <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`}>
             {k.asp != null && (() => {
               const vals = coords.map(c => c.asp), lo = Math.min(...vals), hi = Math.max(...vals), span = hi - lo || 1;
